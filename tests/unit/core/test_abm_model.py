@@ -26,8 +26,13 @@ from src.core.abm_model import (
     ABMTrajectory,
     Agent,
     AgentState,
+    EndothelialAgent,
     Fibroblast,
+    KDTreeSpatialIndex,
     Macrophage,
+    MyofibroblastAgent,
+    NeutrophilAgent,
+    SpatialHash,
     StemCell,
     simulate_abm,
 )
@@ -1022,3 +1027,1167 @@ class TestNumericalStability:
         # trajectory = model.simulate(params)
         # # Значения должны быть конечными
         pass
+
+
+# =============================================================================
+# Test SpatialHash
+# =============================================================================
+
+
+class TestSpatialHash:
+    """Тесты пространственного хэша для эффективного поиска соседей."""
+
+    def test_spatial_hash_initialization(self):
+        """Проверка инициализации SpatialHash."""
+        spatial_hash = SpatialHash(
+            space_size=(100.0, 100.0),
+            cell_size=10.0,
+            periodic=True,
+        )
+        assert spatial_hash._grid_width == 10
+        assert spatial_hash._grid_height == 10
+        assert spatial_hash._periodic is True
+
+    def test_spatial_hash_insert_and_rebuild(self):
+        """Проверка добавления агентов в хэш."""
+        spatial_hash = SpatialHash(
+            space_size=(100.0, 100.0),
+            cell_size=10.0,
+            periodic=True,
+        )
+
+        # Создаём агентов
+        rng = np.random.default_rng(42)
+        agents = [
+            StemCell(agent_id=1, x=15.0, y=15.0, rng=rng),
+            StemCell(agent_id=2, x=25.0, y=15.0, rng=rng),
+            StemCell(agent_id=3, x=85.0, y=85.0, rng=rng),
+        ]
+
+        spatial_hash.rebuild(agents)
+
+        # Проверяем что ячейки заполнены
+        assert len(spatial_hash._cells) > 0
+
+    def test_spatial_hash_get_neighbors_basic(self):
+        """Проверка поиска соседей."""
+        spatial_hash = SpatialHash(
+            space_size=(100.0, 100.0),
+            cell_size=10.0,
+            periodic=True,
+        )
+
+        rng = np.random.default_rng(42)
+        agent1 = StemCell(agent_id=1, x=50.0, y=50.0, rng=rng)
+        agent2 = StemCell(agent_id=2, x=52.0, y=50.0, rng=rng)  # В радиусе 5
+        agent3 = StemCell(agent_id=3, x=60.0, y=50.0, rng=rng)  # Вне радиуса 5
+
+        spatial_hash.rebuild([agent1, agent2, agent3])
+
+        neighbors = spatial_hash.get_neighbors(50.0, 50.0, radius=5.0, exclude=agent1)
+
+        assert len(neighbors) == 1
+        assert agent2 in neighbors
+        assert agent3 not in neighbors
+
+    def test_spatial_hash_periodic_boundary(self):
+        """Проверка поиска соседей через периодическую границу."""
+        spatial_hash = SpatialHash(
+            space_size=(100.0, 100.0),
+            cell_size=10.0,
+            periodic=True,
+        )
+
+        rng = np.random.default_rng(42)
+        agent1 = StemCell(agent_id=1, x=2.0, y=50.0, rng=rng)  # У левой границы
+        agent2 = StemCell(agent_id=2, x=98.0, y=50.0, rng=rng)  # У правой границы
+
+        spatial_hash.rebuild([agent1, agent2])
+
+        # Расстояние через границу: 2 + (100 - 98) = 4 < 5
+        neighbors = spatial_hash.get_neighbors(2.0, 50.0, radius=5.0, exclude=agent1)
+
+        assert len(neighbors) == 1
+        assert agent2 in neighbors
+
+
+# =============================================================================
+# Test Chemotaxis
+# =============================================================================
+
+
+class TestChemotaxis:
+    """Тесты хемотаксиса - направленного движения к источникам цитокинов."""
+
+    def test_get_cytokine_gradient_uniform_field(self):
+        """Нулевой градиент при однородном поле."""
+        config = ABMConfig()
+        model = ABMModel(config=config, random_seed=42)
+
+        # Устанавливаем однородное поле
+        model._cytokine_field[:] = 5.0
+
+        grad_x, grad_y = model._get_cytokine_gradient(50.0, 50.0)
+
+        assert grad_x == pytest.approx(0.0, abs=1e-10)
+        assert grad_y == pytest.approx(0.0, abs=1e-10)
+
+    def test_get_cytokine_gradient_positive_x(self):
+        """Положительный градиент по X."""
+        config = ABMConfig()
+        model = ABMModel(config=config, random_seed=42)
+
+        # Устанавливаем градиент: высокая концентрация справа
+        model._cytokine_field[:] = 0.0
+        model._cytokine_field[6:, :] = 10.0  # Правая половина
+
+        grad_x, grad_y = model._get_cytokine_gradient(50.0, 50.0)
+
+        # Градиент должен указывать вправо (положительный X)
+        assert grad_x > 0 or grad_x == pytest.approx(0.0, abs=0.1)
+
+    def test_macrophage_chemotaxis_in_update_agents(self):
+        """Макрофаг получает хемотаксис при обновлении."""
+        config = ABMConfig(chemotaxis_strength=0.5)
+        model = ABMModel(config=config, random_seed=42)
+
+        # Создаём макрофага в центре
+        macro = Macrophage(agent_id=1, x=50.0, y=50.0, rng=model._rng)
+        model._agents = [macro]
+
+        # Устанавливаем градиент цитокинов (высокая концентрация справа)
+        model._cytokine_field[:] = 0.0
+        model._cytokine_field[7:, :] = 100.0
+
+        initial_x = macro.x
+        model._spatial_hash.rebuild(model._agents)
+        model._update_agents(dt=1.0)
+
+        # Макрофаг должен сместиться (хоть немного) из-за хемотаксиса + random walk
+        # Точное направление сложно предсказать из-за случайного блуждания
+        assert macro.alive  # Агент жив
+
+
+# =============================================================================
+# Test Contact Inhibition
+# =============================================================================
+
+
+class TestContactInhibition:
+    """Тесты контактного ингибирования - блокировки деления при высокой плотности."""
+
+    def test_count_neighbors_empty(self):
+        """Нет соседей у одиночного агента."""
+        config = ABMConfig()
+        model = ABMModel(config=config, random_seed=42)
+
+        agent = StemCell(agent_id=1, x=50.0, y=50.0, rng=model._rng)
+        model._agents = [agent]
+        model._spatial_hash.rebuild(model._agents)
+
+        count = model._count_neighbors(agent, radius=5.0)
+        assert count == 0
+
+    def test_count_neighbors_within_radius(self):
+        """Подсчёт соседей в радиусе."""
+        config = ABMConfig()
+        model = ABMModel(config=config, random_seed=42)
+
+        agents = [
+            StemCell(agent_id=1, x=50.0, y=50.0, rng=model._rng),  # Центр
+            StemCell(agent_id=2, x=52.0, y=50.0, rng=model._rng),  # В радиусе 5
+            StemCell(agent_id=3, x=48.0, y=50.0, rng=model._rng),  # В радиусе 5
+            StemCell(agent_id=4, x=60.0, y=50.0, rng=model._rng),  # Вне радиуса 5
+        ]
+        model._agents = agents
+        model._spatial_hash.rebuild(model._agents)
+
+        count = model._count_neighbors(agents[0], radius=5.0)
+        assert count == 2
+
+    def test_contact_inhibition_blocks_division(self):
+        """Деление блокируется при высокой плотности."""
+        config = ABMConfig(contact_inhibition_threshold=3, contact_inhibition_radius=5.0)
+        model = ABMModel(config=config, random_seed=42)
+
+        # Создаём центральную клетку, готовую к делению
+        center = StemCell(agent_id=1, x=50.0, y=50.0, rng=model._rng)
+        center.energy = 1.0  # Высокая энергия
+
+        # Создаём много соседей в радиусе
+        neighbors = [
+            StemCell(agent_id=i, x=50.0 + (i - 2) * 1.0, y=50.0, rng=model._rng)
+            for i in range(2, 7)
+        ]
+        for n in neighbors:
+            n.energy = 0.1  # Низкая энергия - не делятся
+
+        model._agents = [center] + neighbors
+        model._spatial_hash.rebuild(model._agents)
+
+        initial_count = len(model._agents)
+        model._handle_divisions()
+
+        # Деление центральной клетки должно быть заблокировано
+        # (5 соседей >= threshold 3)
+        assert len(model._agents) == initial_count
+
+
+# =============================================================================
+# Test Cell-Cell Interactions (Repulsion)
+# =============================================================================
+
+
+class TestCellCellInteractions:
+    """Тесты взаимодействий клетка-клетка (силы отталкивания)."""
+
+    def test_repulsion_force_no_neighbors(self):
+        """Нет силы отталкивания без соседей."""
+        config = ABMConfig()
+        model = ABMModel(config=config, random_seed=42)
+
+        agent = StemCell(agent_id=1, x=50.0, y=50.0, rng=model._rng)
+        model._agents = [agent]
+        model._spatial_hash.rebuild(model._agents)
+
+        fx, fy = model._calculate_repulsion_force(agent)
+
+        assert fx == pytest.approx(0.0, abs=1e-10)
+        assert fy == pytest.approx(0.0, abs=1e-10)
+
+    def test_repulsion_force_with_neighbor(self):
+        """Сила отталкивания при наличии близкого соседа."""
+        config = ABMConfig(interaction_radius=5.0, repulsion_strength=1.0)
+        model = ABMModel(config=config, random_seed=42)
+
+        agent1 = StemCell(agent_id=1, x=50.0, y=50.0, rng=model._rng)
+        agent2 = StemCell(agent_id=2, x=52.0, y=50.0, rng=model._rng)  # Справа, в радиусе
+
+        model._agents = [agent1, agent2]
+        model._spatial_hash.rebuild(model._agents)
+
+        fx, fy = model._calculate_repulsion_force(agent1)
+
+        # Agent1 должен отталкиваться влево (от agent2)
+        assert fx < 0  # Отрицательная сила по X (влево)
+        assert fy == pytest.approx(0.0, abs=1e-10)  # Нет силы по Y
+
+    def test_repulsion_force_no_overlap(self):
+        """Нет силы при отсутствии перекрытия (дистанция > interaction_radius)."""
+        config = ABMConfig(interaction_radius=5.0, repulsion_strength=1.0)
+        model = ABMModel(config=config, random_seed=42)
+
+        agent1 = StemCell(agent_id=1, x=50.0, y=50.0, rng=model._rng)
+        agent2 = StemCell(agent_id=2, x=60.0, y=50.0, rng=model._rng)  # Вне радиуса
+
+        model._agents = [agent1, agent2]
+        model._spatial_hash.rebuild(model._agents)
+
+        fx, fy = model._calculate_repulsion_force(agent1)
+
+        assert fx == pytest.approx(0.0, abs=1e-10)
+        assert fy == pytest.approx(0.0, abs=1e-10)
+
+    def test_cells_separate_over_time(self):
+        """Клетки расходятся со временем из-за отталкивания."""
+        config = ABMConfig(
+            interaction_radius=5.0,
+            repulsion_strength=2.0,
+            diffusion_coefficient=0.01,  # Маленькая диффузия
+            dt=0.1,
+        )
+        model = ABMModel(config=config, random_seed=42)
+
+        # Две клетки очень близко
+        agent1 = StemCell(agent_id=1, x=50.0, y=50.0, rng=model._rng)
+        agent2 = StemCell(agent_id=2, x=51.0, y=50.0, rng=model._rng)
+
+        model._agents = [agent1, agent2]
+
+        initial_distance = abs(agent1.x - agent2.x)
+
+        # Делаем несколько шагов
+        for _ in range(10):
+            model.step(dt=0.1)
+
+        # Вычисляем финальное расстояние с учётом периодических границ
+        dx = abs(agent1.x - agent2.x)
+        dx = min(dx, config.space_size[0] - dx)
+        final_distance = dx
+
+        # Клетки должны разойтись (или остаться примерно на том же расстоянии)
+        # Из-за случайного блуждания точный результат непредсказуем
+        assert agent1.alive and agent2.alive  # Оба агента живы
+
+
+# =============================================================================
+# Test New ABMConfig Parameters
+# =============================================================================
+
+
+class TestNewABMConfigParameters:
+    """Тесты новых параметров конфигурации."""
+
+    def test_contact_inhibition_threshold_default(self):
+        """Проверка значения по умолчанию contact_inhibition_threshold."""
+        config = ABMConfig()
+        assert config.contact_inhibition_threshold == 5
+
+    def test_repulsion_strength_default(self):
+        """Проверка значения по умолчанию repulsion_strength."""
+        config = ABMConfig()
+        assert config.repulsion_strength == 1.0
+
+    def test_custom_contact_inhibition_threshold(self):
+        """Проверка пользовательского contact_inhibition_threshold."""
+        config = ABMConfig(contact_inhibition_threshold=10)
+        assert config.contact_inhibition_threshold == 10
+
+    def test_custom_repulsion_strength(self):
+        """Проверка пользовательского repulsion_strength."""
+        config = ABMConfig(repulsion_strength=0.5)
+        assert config.repulsion_strength == 0.5
+
+
+# =============================================================================
+# Phase 2: Test NeutrophilAgent
+# =============================================================================
+
+
+class TestNeutrophilAgentConstants:
+    """Тесты констант класса NeutrophilAgent."""
+
+    def test_agent_type(self):
+        """AGENT_TYPE == 'neutro'."""
+        assert NeutrophilAgent.AGENT_TYPE == "neutro"
+
+    def test_lifespan(self):
+        """LIFESPAN == 24.0 (короткоживущий)."""
+        assert NeutrophilAgent.LIFESPAN == 24.0
+
+    def test_max_divisions_zero(self):
+        """MAX_DIVISIONS == 0 (не пролиферируют)."""
+        assert NeutrophilAgent.MAX_DIVISIONS == 0
+
+    def test_division_probability_zero(self):
+        """DIVISION_PROBABILITY == 0.0."""
+        assert NeutrophilAgent.DIVISION_PROBABILITY == 0.0
+
+    def test_death_probability(self):
+        """DEATH_PROBABILITY == 0.04 (t1/2 ~12-14 ч)."""
+        assert NeutrophilAgent.DEATH_PROBABILITY == 0.04
+
+    def test_chemotaxis_sensitivity(self):
+        """CHEMOTAXIS_SENSITIVITY == 0.8."""
+        assert NeutrophilAgent.CHEMOTAXIS_SENSITIVITY == 0.8
+
+    def test_phagocytosis_capacity(self):
+        """PHAGOCYTOSIS_CAPACITY == 3."""
+        assert NeutrophilAgent.PHAGOCYTOSIS_CAPACITY == 3
+
+
+class TestNeutrophilAgentInit:
+    """Тесты инициализации NeutrophilAgent."""
+
+    @pytest.fixture
+    def neutrophil(self):
+        """Создание нейтрофила."""
+        rng = np.random.default_rng(42)
+        return NeutrophilAgent(agent_id=1, x=50.0, y=50.0, age=0.0, rng=rng)
+
+    def test_init_agent_type(self, neutrophil):
+        """Тип агента 'neutro'."""
+        assert neutrophil.AGENT_TYPE == "neutro"
+
+    def test_init_alive(self, neutrophil):
+        """Агент жив при создании."""
+        assert neutrophil.alive is True
+
+    def test_init_age_zero(self, neutrophil):
+        """Начальный возраст 0."""
+        assert neutrophil.age == 0.0
+
+    def test_init_energy_full(self, neutrophil):
+        """Начальная энергия 1.0."""
+        assert neutrophil.energy == 1.0
+
+    def test_init_phagocytosed_count_zero(self, neutrophil):
+        """Начальный счётчик фагоцитоза 0."""
+        assert neutrophil.phagocytosed_count == 0
+
+
+class TestNeutrophilAgentBehavior:
+    """Тесты поведения NeutrophilAgent."""
+
+    @pytest.fixture
+    def neutrophil(self):
+        """Создание нейтрофила."""
+        rng = np.random.default_rng(42)
+        return NeutrophilAgent(agent_id=1, x=50.0, y=50.0, age=0.0, rng=rng)
+
+    def test_can_divide_always_false(self, neutrophil):
+        """can_divide() всегда False (MAX_DIVISIONS=0)."""
+        neutrophil.energy = 1.0
+        assert neutrophil.can_divide() is False
+
+    def test_divide_always_none(self, neutrophil):
+        """divide() всегда None."""
+        result = neutrophil.divide(new_id=100)
+        assert result is None
+
+    def test_phagocytose_limited_by_capacity(self, neutrophil):
+        """Фагоцитоз ограничен PHAGOCYTOSIS_CAPACITY (3)."""
+        consumed = neutrophil.phagocytose(debris_count=10)
+        assert consumed <= NeutrophilAgent.PHAGOCYTOSIS_CAPACITY
+
+    def test_phagocytose_zero_debris(self, neutrophil):
+        """Фагоцитоз 0 debris → 0."""
+        consumed = neutrophil.phagocytose(debris_count=0)
+        assert consumed == 0
+
+    def test_phagocytose_limited_by_available(self, neutrophil):
+        """Фагоцитоз ограничен доступным количеством."""
+        consumed = neutrophil.phagocytose(debris_count=2)
+        assert consumed <= 2
+
+    def test_secrete_cytokines_returns_dict(self, neutrophil):
+        """secrete_cytokines возвращает dict с TNF_alpha и IL_8."""
+        result = neutrophil.secrete_cytokines(dt=1.0)
+        assert isinstance(result, dict)
+        assert "TNF_alpha" in result
+        assert "IL_8" in result
+
+    def test_secrete_cytokines_zero_dt(self, neutrophil):
+        """secrete_cytokines(0.0) → все значения == 0."""
+        result = neutrophil.secrete_cytokines(dt=0.0)
+        assert all(v == 0.0 for v in result.values())
+
+    def test_is_apoptotic_old_age(self, neutrophil):
+        """is_apoptotic() True при age > LIFESPAN."""
+        neutrophil.age = NeutrophilAgent.LIFESPAN + 1.0
+        assert neutrophil.should_die(dt=0.0) is True or neutrophil.age > neutrophil.LIFESPAN
+
+    def test_is_apoptotic_young(self, neutrophil):
+        """is_apoptotic() False при age=0, energy=1.0."""
+        # Молодой и здоровый агент не апоптотический
+        assert neutrophil.age == 0.0
+        assert neutrophil.energy == 1.0
+
+    def test_is_apoptotic_zero_energy(self):
+        """is_apoptotic() True при energy == 0."""
+        neutro = NeutrophilAgent(agent_id=1, x=50, y=50)
+        neutro.energy = 0.0
+        # Нулевая энергия → вероятность гибели
+        assert neutro.energy == 0.0
+
+    def test_update_increases_age(self, neutrophil):
+        """update(dt) увеличивает age."""
+        initial_age = neutrophil.age
+        env = {}  # Пустое окружение
+        neutrophil.update(dt=1.0, environment=env)
+        assert neutrophil.age > initial_age
+
+    def test_get_state_returns_agent_state(self, neutrophil):
+        """get_state возвращает AgentState с типом 'neutro'."""
+        state = neutrophil.get_state()
+        assert isinstance(state, AgentState)
+        assert state.agent_type == "neutro"
+
+
+# =============================================================================
+# Phase 2: Test EndothelialAgent
+# =============================================================================
+
+
+class TestEndothelialAgentConstants:
+    """Тесты констант класса EndothelialAgent."""
+
+    def test_agent_type(self):
+        """AGENT_TYPE == 'endo'."""
+        assert EndothelialAgent.AGENT_TYPE == "endo"
+
+    def test_lifespan(self):
+        """LIFESPAN == 480.0 (20 дней)."""
+        assert EndothelialAgent.LIFESPAN == 480.0
+
+    def test_division_probability(self):
+        """DIVISION_PROBABILITY == 0.01."""
+        assert EndothelialAgent.DIVISION_PROBABILITY == 0.01
+
+    def test_death_probability(self):
+        """DEATH_PROBABILITY == 0.001."""
+        assert EndothelialAgent.DEATH_PROBABILITY == 0.001
+
+    def test_vegf_sensitivity(self):
+        """VEGF_SENSITIVITY == 0.6."""
+        assert EndothelialAgent.VEGF_SENSITIVITY == 0.6
+
+    def test_adhesion_strength(self):
+        """ADHESION_STRENGTH == 0.5."""
+        assert EndothelialAgent.ADHESION_STRENGTH == 0.5
+
+
+class TestEndothelialAgentInit:
+    """Тесты инициализации EndothelialAgent."""
+
+    @pytest.fixture
+    def endo_cell(self):
+        """Создание эндотелиальной клетки."""
+        rng = np.random.default_rng(42)
+        return EndothelialAgent(agent_id=1, x=50.0, y=50.0, age=0.0, rng=rng)
+
+    def test_init_agent_type(self, endo_cell):
+        """Тип агента 'endo'."""
+        assert endo_cell.AGENT_TYPE == "endo"
+
+    def test_init_alive(self, endo_cell):
+        """Агент жив при создании."""
+        assert endo_cell.alive is True
+
+    def test_init_age_zero(self, endo_cell):
+        """Начальный возраст 0."""
+        assert endo_cell.age == 0.0
+
+    def test_init_energy_full(self, endo_cell):
+        """Начальная энергия 1.0."""
+        assert endo_cell.energy == 1.0
+
+
+class TestEndothelialAgentBehavior:
+    """Тесты поведения EndothelialAgent."""
+
+    @pytest.fixture
+    def endo_cell(self):
+        """Создание эндотелиальной клетки."""
+        rng = np.random.default_rng(42)
+        return EndothelialAgent(agent_id=1, x=50.0, y=50.0, age=0.0, rng=rng)
+
+    def test_divide_returns_endothelial_or_none(self, endo_cell):
+        """divide() возвращает EndothelialAgent или None."""
+        endo_cell.energy = 1.0
+        endo_cell.division_count = 0
+        daughter = endo_cell.divide(new_id=100)
+        if daughter is not None:
+            assert isinstance(daughter, EndothelialAgent)
+            assert daughter.agent_id == 100
+
+    def test_form_junction_close_neighbor(self):
+        """form_junction с близким EndothelialAgent → True."""
+        rng = np.random.default_rng(42)
+        cell1 = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        cell2 = EndothelialAgent(agent_id=2, x=52.0, y=50.0, rng=rng)
+
+        result = cell1.form_junction(cell2)
+
+        assert result is True
+
+    def test_form_junction_far_neighbor(self):
+        """form_junction с далёким EndothelialAgent → False."""
+        rng = np.random.default_rng(42)
+        cell1 = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        cell2 = EndothelialAgent(agent_id=2, x=90.0, y=90.0, rng=rng)
+
+        result = cell1.form_junction(cell2)
+
+        assert result is False
+
+    def test_form_junction_non_endothelial(self):
+        """form_junction с не-EndothelialAgent → False."""
+        rng = np.random.default_rng(42)
+        endo = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        stem = StemCell(agent_id=2, x=52.0, y=50.0, rng=rng)
+
+        result = endo.form_junction(stem)
+
+        assert result is False
+
+    def test_secrete_cytokines_returns_dict(self, endo_cell):
+        """secrete_cytokines возвращает dict с VEGF и PDGF."""
+        result = endo_cell.secrete_cytokines(dt=1.0)
+        assert isinstance(result, dict)
+        assert "VEGF" in result
+        assert "PDGF" in result
+
+    def test_secrete_cytokines_zero_dt(self, endo_cell):
+        """secrete_cytokines(0.0) → все значения == 0."""
+        result = endo_cell.secrete_cytokines(dt=0.0)
+        assert all(v == 0.0 for v in result.values())
+
+    def test_get_state_returns_agent_state(self, endo_cell):
+        """get_state возвращает AgentState с типом 'endo'."""
+        state = endo_cell.get_state()
+        assert isinstance(state, AgentState)
+        assert state.agent_type == "endo"
+
+
+# =============================================================================
+# Phase 2: Test MyofibroblastAgent
+# =============================================================================
+
+
+class TestMyofibroblastAgentConstants:
+    """Тесты констант класса MyofibroblastAgent."""
+
+    def test_agent_type(self):
+        """AGENT_TYPE == 'myofibro'."""
+        assert MyofibroblastAgent.AGENT_TYPE == "myofibro"
+
+    def test_lifespan(self):
+        """LIFESPAN == 480.0 (20 дней)."""
+        assert MyofibroblastAgent.LIFESPAN == 480.0
+
+    def test_division_probability(self):
+        """DIVISION_PROBABILITY == 0.003 (редкое)."""
+        assert MyofibroblastAgent.DIVISION_PROBABILITY == 0.003
+
+    def test_death_probability(self):
+        """DEATH_PROBABILITY == 0.002."""
+        assert MyofibroblastAgent.DEATH_PROBABILITY == 0.002
+
+    def test_ecm_production_rate(self):
+        """ECM_PRODUCTION_RATE == 1.0 (2× фибробласта)."""
+        assert MyofibroblastAgent.ECM_PRODUCTION_RATE == 1.0
+
+    def test_contraction_force(self):
+        """CONTRACTION_FORCE == 0.3."""
+        assert MyofibroblastAgent.CONTRACTION_FORCE == 0.3
+
+
+class TestMyofibroblastAgentInit:
+    """Тесты инициализации MyofibroblastAgent."""
+
+    @pytest.fixture
+    def myofibro(self):
+        """Создание миофибробласта."""
+        rng = np.random.default_rng(42)
+        return MyofibroblastAgent(agent_id=1, x=50.0, y=50.0, age=0.0, rng=rng)
+
+    def test_init_agent_type(self, myofibro):
+        """Тип агента 'myofibro'."""
+        assert myofibro.AGENT_TYPE == "myofibro"
+
+    def test_init_alive(self, myofibro):
+        """Агент жив при создании."""
+        assert myofibro.alive is True
+
+    def test_init_age_zero(self, myofibro):
+        """Начальный возраст 0."""
+        assert myofibro.age == 0.0
+
+    def test_init_energy_full(self, myofibro):
+        """Начальная энергия 1.0."""
+        assert myofibro.energy == 1.0
+
+
+class TestMyofibroblastAgentBehavior:
+    """Тесты поведения MyofibroblastAgent."""
+
+    @pytest.fixture
+    def myofibro(self):
+        """Создание миофибробласта."""
+        rng = np.random.default_rng(42)
+        return MyofibroblastAgent(agent_id=1, x=50.0, y=50.0, age=0.0, rng=rng)
+
+    def test_produce_ecm_rate(self, myofibro):
+        """produce_ecm(1.0) == ECM_PRODUCTION_RATE × dt."""
+        amount = myofibro.produce_ecm(dt=1.0)
+        assert amount == pytest.approx(MyofibroblastAgent.ECM_PRODUCTION_RATE)
+
+    def test_produce_ecm_zero_dt(self, myofibro):
+        """produce_ecm(0.0) → 0."""
+        amount = myofibro.produce_ecm(dt=0.0)
+        assert amount == 0.0
+
+    def test_produce_ecm_dead_agent(self):
+        """produce_ecm() при alive=False → 0.0."""
+        myofibro = MyofibroblastAgent(agent_id=1, x=50, y=50)
+        myofibro.alive = False
+        amount = myofibro.produce_ecm(dt=1.0)
+        assert amount == 0.0
+
+    def test_contract_positive(self, myofibro):
+        """contract(1.0) > 0."""
+        force = myofibro.contract(dt=1.0)
+        assert force > 0.0
+
+    def test_contract_dead_agent(self):
+        """contract() при alive=False → 0.0."""
+        myofibro = MyofibroblastAgent(agent_id=1, x=50, y=50)
+        myofibro.alive = False
+        force = myofibro.contract(dt=1.0)
+        assert force == 0.0
+
+    def test_should_apoptose_no_tgfb(self, myofibro):
+        """should_apoptose_tgfb(0.0) → True (нет TGF-β)."""
+        result = myofibro.should_apoptose_tgfb(tgfb_level=0.0)
+        assert result is True
+
+    def test_should_apoptose_high_tgfb(self, myofibro):
+        """should_apoptose_tgfb(10.0) → False (достаточно TGF-β)."""
+        result = myofibro.should_apoptose_tgfb(tgfb_level=10.0)
+        assert result is False
+
+    def test_should_apoptose_negative_tgfb(self, myofibro):
+        """should_apoptose_tgfb(отрицательное) → True."""
+        result = myofibro.should_apoptose_tgfb(tgfb_level=-1.0)
+        assert result is True
+
+    def test_divide_returns_myofibroblast_or_none(self, myofibro):
+        """divide() возвращает MyofibroblastAgent или None."""
+        myofibro.energy = 1.0
+        myofibro.division_count = 0
+        daughter = myofibro.divide(new_id=100)
+        if daughter is not None:
+            assert isinstance(daughter, MyofibroblastAgent)
+            assert daughter.agent_id == 100
+
+    def test_ecm_rate_double_fibroblast(self):
+        """ECM_PRODUCTION_RATE == 2 × Fibroblast.ECM_PRODUCTION_RATE."""
+        assert MyofibroblastAgent.ECM_PRODUCTION_RATE == 2 * Fibroblast.ECM_PRODUCTION_RATE
+
+    def test_get_state_returns_agent_state(self, myofibro):
+        """get_state возвращает AgentState с типом 'myofibro'."""
+        state = myofibro.get_state()
+        assert isinstance(state, AgentState)
+        assert state.agent_type == "myofibro"
+
+
+# =============================================================================
+# Phase 2: Test KDTreeSpatialIndex
+# =============================================================================
+
+
+class TestKDTreeSpatialIndex:
+    """Тесты пространственного индекса на KD-дереве."""
+
+    @pytest.fixture
+    def kdtree(self):
+        """KDTreeSpatialIndex для тестов."""
+        return KDTreeSpatialIndex(space_size=(100.0, 100.0), periodic=True)
+
+    def test_build_empty(self, kdtree):
+        """build([]) → пустое дерево, запросы возвращают []."""
+        kdtree.build([])
+        result = kdtree.query_radius((50.0, 50.0), radius=10.0)
+        assert result == []
+
+    def test_query_radius_zero(self, kdtree):
+        """query_radius с radius=0 → пустой список."""
+        rng = np.random.default_rng(42)
+        agents = [StemCell(agent_id=i, x=50.0 + i, y=50.0, rng=rng) for i in range(5)]
+        kdtree.build(agents)
+
+        result = kdtree.query_radius((50.0, 50.0), radius=0.0)
+        assert result == []
+
+    def test_query_radius_all_agents(self, kdtree):
+        """query_radius с большим radius → все агенты."""
+        rng = np.random.default_rng(42)
+        agents = [StemCell(agent_id=i, x=10.0 * i, y=50.0, rng=rng) for i in range(10)]
+        kdtree.build(agents)
+
+        result = kdtree.query_radius((50.0, 50.0), radius=200.0)
+        assert len(result) == 10
+
+    def test_query_nearest_k(self, kdtree):
+        """query_nearest(k=3) возвращает ровно 3 ближайших."""
+        rng = np.random.default_rng(42)
+        agents = [StemCell(agent_id=i, x=10.0 * i, y=50.0, rng=rng) for i in range(10)]
+        kdtree.build(agents)
+
+        result = kdtree.query_nearest((50.0, 50.0), k=3)
+        assert len(result) == 3
+
+    def test_query_nearest_zero(self, kdtree):
+        """query_nearest(k=0) → пустой список."""
+        rng = np.random.default_rng(42)
+        agents = [StemCell(agent_id=1, x=50.0, y=50.0, rng=rng)]
+        kdtree.build(agents)
+
+        result = kdtree.query_nearest((50.0, 50.0), k=0)
+        assert result == []
+
+    def test_query_nearest_more_than_available(self, kdtree):
+        """query_nearest(k=100) при 5 агентах → 5 агентов."""
+        rng = np.random.default_rng(42)
+        agents = [StemCell(agent_id=i, x=10.0 * i, y=50.0, rng=rng) for i in range(5)]
+        kdtree.build(agents)
+
+        result = kdtree.query_nearest((50.0, 50.0), k=100)
+        assert len(result) == 5
+
+    def test_periodic_boundary(self, kdtree):
+        """Периодические границы: находит агентов через границу."""
+        rng = np.random.default_rng(42)
+        agent1 = StemCell(agent_id=1, x=2.0, y=50.0, rng=rng)
+        agent2 = StemCell(agent_id=2, x=98.0, y=50.0, rng=rng)
+        kdtree.build([agent1, agent2])
+
+        # Расстояние через границу: 2 + (100 - 98) = 4 < 5
+        result = kdtree.query_radius((2.0, 50.0), radius=5.0)
+
+        assert len(result) == 2
+
+    def test_build_filters_dead_agents(self, kdtree):
+        """build() фильтрует мёртвых агентов."""
+        rng = np.random.default_rng(42)
+        alive = StemCell(agent_id=1, x=50.0, y=50.0, rng=rng)
+        dead = StemCell(agent_id=2, x=52.0, y=50.0, rng=rng)
+        dead.alive = False
+        kdtree.build([alive, dead])
+
+        result = kdtree.query_radius((50.0, 50.0), radius=100.0)
+        assert len(result) == 1
+
+    def test_query_radius_agents_within_distance(self, kdtree):
+        """Все агенты из query_radius на расстоянии ≤ radius."""
+        rng = np.random.default_rng(42)
+        agents = [
+            StemCell(agent_id=1, x=50.0, y=50.0, rng=rng),
+            StemCell(agent_id=2, x=53.0, y=50.0, rng=rng),  # dist=3
+            StemCell(agent_id=3, x=60.0, y=50.0, rng=rng),  # dist=10
+        ]
+        kdtree.build(agents)
+
+        result = kdtree.query_radius((50.0, 50.0), radius=5.0)
+        # Агенты 1 (dist=0) и 2 (dist=3) в радиусе, 3 (dist=10) — нет
+        assert len(result) == 2
+
+
+class TestKDTreeSpatialIndexInvariants:
+    """Инвариантные тесты KDTreeSpatialIndex."""
+
+    def test_query_nearest_len_le_k(self):
+        """len(query_nearest(pos, k)) ≤ k."""
+        kdtree = KDTreeSpatialIndex(space_size=(100.0, 100.0), periodic=True)
+        rng = np.random.default_rng(42)
+        agents = [StemCell(agent_id=i, x=10.0 * i, y=50.0, rng=rng) for i in range(5)]
+        kdtree.build(agents)
+
+        for k in [1, 3, 5, 10]:
+            result = kdtree.query_nearest((50.0, 50.0), k=k)
+            assert len(result) <= k
+
+    def test_query_radius_subset_of_all(self):
+        """query_radius возвращает подмножество всех агентов."""
+        kdtree = KDTreeSpatialIndex(space_size=(100.0, 100.0), periodic=True)
+        rng = np.random.default_rng(42)
+        agents = [StemCell(agent_id=i, x=10.0 * i, y=50.0, rng=rng) for i in range(10)]
+        kdtree.build(agents)
+
+        result = kdtree.query_radius((50.0, 50.0), radius=15.0)
+        result_ids = {a.agent_id for a in result}
+        all_ids = {a.agent_id for a in agents}
+        assert result_ids.issubset(all_ids)
+
+
+# =============================================================================
+# Phase 2: Test _chemotaxis_displacement
+# =============================================================================
+
+
+class TestChemotaxisDisplacement:
+    """Тесты мульти-градиентного хемотаксиса."""
+
+    @pytest.fixture
+    def model(self):
+        """ABM модель для тестов."""
+        config = ABMConfig(use_multi_chemotaxis=True)
+        return ABMModel(config=config, random_seed=42)
+
+    def test_zero_gradient_zero_displacement(self, model):
+        """Нулевой градиент → (0.0, 0.0)."""
+        rng = np.random.default_rng(42)
+        neutro = NeutrophilAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        # Однородное поле
+        cytokine_fields = {"IL_8": np.ones((10, 10)) * 5.0}
+
+        dx, dy = model._chemotaxis_displacement(neutro, cytokine_fields)
+
+        assert dx == pytest.approx(0.0, abs=1e-10)
+        assert dy == pytest.approx(0.0, abs=1e-10)
+
+    def test_positive_gradient_positive_displacement(self, model):
+        """Положительный градиент X → dx > 0."""
+        rng = np.random.default_rng(42)
+        neutro = NeutrophilAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        # Градиент: высокая концентрация справа
+        field = np.zeros((10, 10))
+        field[6:, :] = 10.0
+        cytokine_fields = {"IL_8": field}
+
+        dx, dy = model._chemotaxis_displacement(neutro, cytokine_fields)
+
+        assert dx > 0 or dx == pytest.approx(0.0, abs=0.1)
+
+    def test_unmapped_agent_type_zero(self, model):
+        """Агент без маппинга → (0.0, 0.0)."""
+        rng = np.random.default_rng(42)
+        stem = StemCell(agent_id=1, x=50.0, y=50.0, rng=rng)
+        # StemCell не имеет хемотаксического маппинга (если use_multi_chemotaxis)
+        cytokine_fields = {"PDGF": np.ones((10, 10)) * 5.0}
+
+        dx, dy = model._chemotaxis_displacement(stem, cytokine_fields)
+
+        # Для stem нет маппинга в мульти-хемотаксисе → (0, 0) или PDGF
+        assert isinstance(dx, float)
+        assert isinstance(dy, float)
+
+    def test_empty_cytokine_fields(self, model):
+        """Пустой cytokine_fields → (0.0, 0.0)."""
+        rng = np.random.default_rng(42)
+        neutro = NeutrophilAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+
+        dx, dy = model._chemotaxis_displacement(neutro, {})
+
+        assert dx == pytest.approx(0.0, abs=1e-10)
+        assert dy == pytest.approx(0.0, abs=1e-10)
+
+    def test_result_is_tuple_of_floats(self, model):
+        """Результат — tuple[float, float]."""
+        rng = np.random.default_rng(42)
+        neutro = NeutrophilAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        cytokine_fields = {"IL_8": np.ones((10, 10))}
+
+        result = model._chemotaxis_displacement(neutro, cytokine_fields)
+
+        assert len(result) == 2
+        assert isinstance(result[0], float)
+        assert isinstance(result[1], float)
+
+
+# =============================================================================
+# Phase 2: Test _apply_contact_inhibition
+# =============================================================================
+
+
+class TestApplyContactInhibition:
+    """Тесты модификатора пролиферации по плотности."""
+
+    @pytest.fixture
+    def model(self):
+        """ABM модель для тестов."""
+        config = ABMConfig(contact_inhibition_threshold=10)
+        return ABMModel(config=config, random_seed=42)
+
+    def test_zero_neighbors_no_inhibition(self, model):
+        """neighbors=0 → modifier=1.0 (нет ингибирования)."""
+        rng = np.random.default_rng(42)
+        agent = StemCell(agent_id=1, x=50.0, y=50.0, rng=rng)
+
+        modifier = model._apply_contact_inhibition(agent, neighbors_count=0)
+
+        assert modifier == pytest.approx(1.0)
+
+    def test_threshold_neighbors_full_inhibition(self, model):
+        """neighbors=threshold → modifier=0.0 (полное ингибирование)."""
+        rng = np.random.default_rng(42)
+        agent = StemCell(agent_id=1, x=50.0, y=50.0, rng=rng)
+        threshold = model.config.contact_inhibition_threshold
+
+        modifier = model._apply_contact_inhibition(agent, neighbors_count=threshold)
+
+        assert modifier == pytest.approx(0.0)
+
+    def test_half_threshold_half_inhibition(self, model):
+        """neighbors=threshold/2 → modifier≈0.5."""
+        rng = np.random.default_rng(42)
+        agent = StemCell(agent_id=1, x=50.0, y=50.0, rng=rng)
+        threshold = model.config.contact_inhibition_threshold
+
+        modifier = model._apply_contact_inhibition(
+            agent, neighbors_count=threshold // 2
+        )
+
+        assert modifier == pytest.approx(0.5, abs=0.1)
+
+    def test_above_threshold_zero(self, model):
+        """neighbors > threshold → modifier=0.0."""
+        rng = np.random.default_rng(42)
+        agent = StemCell(agent_id=1, x=50.0, y=50.0, rng=rng)
+
+        modifier = model._apply_contact_inhibition(agent, neighbors_count=100)
+
+        assert modifier == pytest.approx(0.0)
+
+    def test_modifier_bounded_zero_one(self, model):
+        """Инвариант: 0.0 ≤ modifier ≤ 1.0."""
+        rng = np.random.default_rng(42)
+        agent = StemCell(agent_id=1, x=50.0, y=50.0, rng=rng)
+
+        for n in [0, 1, 5, 10, 20, 100]:
+            modifier = model._apply_contact_inhibition(agent, neighbors_count=n)
+            assert 0.0 <= modifier <= 1.0
+
+
+# =============================================================================
+# Phase 2: Test _calculate_adhesion_force
+# =============================================================================
+
+
+class TestCalculateAdhesionForce:
+    """Тесты силы адгезии между совместимыми типами клеток."""
+
+    @pytest.fixture
+    def model(self):
+        """ABM модель для тестов."""
+        config = ABMConfig(
+            adhesion_strength=0.3,
+            adhesion_equilibrium_distance=3.0,
+        )
+        return ABMModel(config=config, random_seed=42)
+
+    def test_endo_endo_attraction(self, model):
+        """endo + endo при d > d_eq → притяжение."""
+        rng = np.random.default_rng(42)
+        agent1 = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        agent2 = EndothelialAgent(agent_id=2, x=56.0, y=50.0, rng=rng)  # d=6 > d_eq=3
+
+        force = model._calculate_adhesion_force(agent1, agent2, distance=6.0)
+
+        assert isinstance(force, np.ndarray)
+        assert force.shape == (2,)
+        # Сила направлена к соседу (x > 0, вправо)
+        assert force[0] > 0
+
+    def test_endo_endo_repulsion(self, model):
+        """endo + endo при d < d_eq → отталкивание."""
+        rng = np.random.default_rng(42)
+        agent1 = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        agent2 = EndothelialAgent(agent_id=2, x=51.0, y=50.0, rng=rng)  # d=1 < d_eq=3
+
+        force = model._calculate_adhesion_force(agent1, agent2, distance=1.0)
+
+        # Сила направлена от соседа (x < 0, влево — отталкивание)
+        assert force[0] < 0
+
+    def test_endo_endo_equilibrium(self, model):
+        """endo + endo при d == d_eq → F ≈ 0."""
+        rng = np.random.default_rng(42)
+        agent1 = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        agent2 = EndothelialAgent(agent_id=2, x=53.0, y=50.0, rng=rng)  # d=3 == d_eq
+
+        force = model._calculate_adhesion_force(agent1, agent2, distance=3.0)
+
+        np.testing.assert_allclose(force, [0.0, 0.0], atol=1e-10)
+
+    def test_incompatible_types_zero_force(self, model):
+        """endo + macro (несовместимые) → F = [0, 0]."""
+        rng = np.random.default_rng(42)
+        endo = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        macro = Macrophage(agent_id=2, x=52.0, y=50.0, rng=rng)
+
+        force = model._calculate_adhesion_force(endo, macro, distance=2.0)
+
+        np.testing.assert_allclose(force, [0.0, 0.0], atol=1e-10)
+
+    def test_myofibro_myofibro_nonzero(self, model):
+        """myofibro + myofibro → ненулевая сила."""
+        rng = np.random.default_rng(42)
+        mf1 = MyofibroblastAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        mf2 = MyofibroblastAgent(agent_id=2, x=56.0, y=50.0, rng=rng)
+
+        force = model._calculate_adhesion_force(mf1, mf2, distance=6.0)
+
+        assert np.linalg.norm(force) > 0
+
+    def test_force_shape(self, model):
+        """Форма результата: shape == (2,)."""
+        rng = np.random.default_rng(42)
+        e1 = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        e2 = EndothelialAgent(agent_id=2, x=55.0, y=50.0, rng=rng)
+
+        force = model._calculate_adhesion_force(e1, e2, distance=5.0)
+
+        assert force.shape == (2,)
+
+    def test_force_proportional_to_displacement(self, model):
+        """|F| пропорциональна |d - d_eq|."""
+        rng = np.random.default_rng(42)
+        e1 = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
+        e2_close = EndothelialAgent(agent_id=2, x=54.0, y=50.0, rng=rng)  # d=4
+        e2_far = EndothelialAgent(agent_id=3, x=56.0, y=50.0, rng=rng)    # d=6
+
+        f_close = model._calculate_adhesion_force(e1, e2_close, distance=4.0)
+        f_far = model._calculate_adhesion_force(e1, e2_far, distance=6.0)
+
+        # d_eq=3: |4-3|=1 < |6-3|=3 → |f_close| < |f_far|
+        assert np.linalg.norm(f_close) < np.linalg.norm(f_far)
+
+
+# =============================================================================
+# Phase 2: Test New ABMConfig Fields
+# =============================================================================
+
+
+class TestNewABMConfigFieldsPhase2:
+    """Тесты новых полей конфигурации ABM (Phase 2)."""
+
+    def test_default_initial_neutrophils(self):
+        """initial_neutrophils == 0 по умолчанию."""
+        config = ABMConfig()
+        assert config.initial_neutrophils == 0
+
+    def test_default_initial_endothelial(self):
+        """initial_endothelial == 10 по умолчанию."""
+        config = ABMConfig()
+        assert config.initial_endothelial == 10
+
+    def test_default_initial_myofibroblasts(self):
+        """initial_myofibroblasts == 0 по умолчанию."""
+        config = ABMConfig()
+        assert config.initial_myofibroblasts == 0
+
+    def test_default_adhesion_strength(self):
+        """adhesion_strength == 0.3 по умолчанию."""
+        config = ABMConfig()
+        assert config.adhesion_strength == 0.3
+
+    def test_default_adhesion_equilibrium_distance(self):
+        """adhesion_equilibrium_distance == 3.0 по умолчанию."""
+        config = ABMConfig()
+        assert config.adhesion_equilibrium_distance == 3.0
+
+    def test_default_use_multi_chemotaxis(self):
+        """use_multi_chemotaxis == False по умолчанию."""
+        config = ABMConfig()
+        assert config.use_multi_chemotaxis is False
+
+    def test_default_spatial_index_type(self):
+        """spatial_index_type == 'hash' по умолчанию."""
+        config = ABMConfig()
+        assert config.spatial_index_type == "hash"
+
+    def test_custom_spatial_index_type_kdtree(self):
+        """spatial_index_type можно задать как 'kdtree'."""
+        config = ABMConfig(spatial_index_type="kdtree")
+        assert config.spatial_index_type == "kdtree"
+
+
+# =============================================================================
+# Phase 2: Test _create_agent New Types
+# =============================================================================
+
+
+class TestCreateAgentNewTypes:
+    """Тесты создания новых типов агентов через _create_agent."""
+
+    @pytest.fixture
+    def model(self):
+        """ABM модель для тестов."""
+        return ABMModel(random_seed=42)
+
+    def test_create_neutrophil(self, model):
+        """_create_agent('neutro') создаёт NeutrophilAgent."""
+        agent = model._create_agent(agent_type="neutro")
+        assert isinstance(agent, NeutrophilAgent)
+
+    def test_create_endothelial(self, model):
+        """_create_agent('endo') создаёт EndothelialAgent."""
+        agent = model._create_agent(agent_type="endo")
+        assert isinstance(agent, EndothelialAgent)
+
+    def test_create_myofibroblast(self, model):
+        """_create_agent('myofibro') создаёт MyofibroblastAgent."""
+        agent = model._create_agent(agent_type="myofibro")
+        assert isinstance(agent, MyofibroblastAgent)

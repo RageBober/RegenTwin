@@ -29,6 +29,7 @@ from unittest.mock import Mock, MagicMock
 
 from src.data.parameter_extraction import (
     ModelParameters,
+    ExtendedModelParameters,
     ExtractionConfig,
     ParameterExtractor,
     extract_model_parameters,
@@ -869,3 +870,428 @@ class TestParameterExtractionScenarios:
         assert ranges["stem_cell_fraction"]["min"] <= params.stem_cell_fraction <= ranges["stem_cell_fraction"]["max"]
         assert ranges["macrophage_fraction"]["min"] <= params.macrophage_fraction <= ranges["macrophage_fraction"]["max"]
         assert ranges["apoptotic_fraction"]["min"] <= params.apoptotic_fraction <= ranges["apoptotic_fraction"]["max"]
+
+
+# =============================================================================
+# Тесты для ExtendedModelParameters (20 переменных)
+# =============================================================================
+
+class TestExtendedModelParameters:
+    """Тесты для dataclass ExtendedModelParameters."""
+
+    def test_creation_with_20_variables(self, mock_extended_model_parameters):
+        """Тест создания ExtendedModelParameters со всеми 20 переменными."""
+        params = mock_extended_model_parameters
+        assert params.P0 == 250000.0
+        assert params.Ne0 == 500.0
+        assert params.M1_0 == 105.0
+        assert params.M2_0 == 45.0
+        assert params.F0 == 500.0
+        assert params.Mf0 == 0.0
+        assert params.E0 == 300.0
+        assert params.S0 == 250.0
+        assert params.C_TNF == 0.16
+        assert params.O2 == 0.95
+
+    def test_to_dict_has_at_least_23_keys(self, mock_extended_model_parameters):
+        """Тест что to_dict возвращает словарь с ≥ 23 ключами."""
+        d = mock_extended_model_parameters.to_dict()
+        assert isinstance(d, dict)
+        assert len(d) >= 23
+        # Проверяем ключевые переменные
+        assert "P0" in d
+        assert "Ne0" in d
+        assert "C_TNF" in d
+        assert "rho_collagen" in d
+        assert "O2" in d
+
+    def test_validate_valid_returns_true(self, mock_extended_model_parameters):
+        """Тест что валидные параметры проходят validate()."""
+        assert mock_extended_model_parameters.validate() is True
+
+    def test_validate_negative_P0_raises(self):
+        """Тест что P0=-1 → ValueError."""
+        params = ExtendedModelParameters(
+            P0=-1.0, Ne0=500.0, M1_0=105.0, M2_0=45.0,
+            F0=500.0, Mf0=0.0, E0=300.0, S0=250.0,
+            C_TNF=0.1, C_IL10=0.05, C_PDGF=5.0, C_VEGF=0.5,
+            C_TGFb=1.0, C_MCP1=0.2, C_IL8=0.1,
+            rho_collagen=0.1, C_MMP=0.5, rho_fibrin=0.8,
+            D=1.0, O2=0.95,
+        )
+        with pytest.raises(ValueError, match="P0"):
+            params.validate()
+
+    def test_validate_negative_C_TNF_raises(self):
+        """Тест что C_TNF=-0.5 → ValueError."""
+        params = ExtendedModelParameters(
+            P0=250000.0, Ne0=500.0, M1_0=105.0, M2_0=45.0,
+            F0=500.0, Mf0=0.0, E0=300.0, S0=250.0,
+            C_TNF=-0.5, C_IL10=0.05, C_PDGF=5.0, C_VEGF=0.5,
+            C_TGFb=1.0, C_MCP1=0.2, C_IL8=0.1,
+            rho_collagen=0.1, C_MMP=0.5, rho_fibrin=0.8,
+            D=1.0, O2=0.95,
+        )
+        with pytest.raises(ValueError, match="C_TNF"):
+            params.validate()
+
+    def test_validate_O2_over_1_raises(self):
+        """Тест что O2=1.5 → ValueError."""
+        params = ExtendedModelParameters(
+            P0=250000.0, Ne0=500.0, M1_0=105.0, M2_0=45.0,
+            F0=500.0, Mf0=0.0, E0=300.0, S0=250.0,
+            C_TNF=0.1, C_IL10=0.05, C_PDGF=5.0, C_VEGF=0.5,
+            C_TGFb=1.0, C_MCP1=0.2, C_IL8=0.1,
+            rho_collagen=0.1, C_MMP=0.5, rho_fibrin=0.8,
+            D=1.0, O2=1.5,
+        )
+        with pytest.raises(ValueError, match="O2"):
+            params.validate()
+
+    def test_validate_rho_collagen_over_1_raises(self):
+        """Тест что rho_collagen=1.5 → ValueError."""
+        params = ExtendedModelParameters(
+            P0=250000.0, Ne0=500.0, M1_0=105.0, M2_0=45.0,
+            F0=500.0, Mf0=0.0, E0=300.0, S0=250.0,
+            C_TNF=0.1, C_IL10=0.05, C_PDGF=5.0, C_VEGF=0.5,
+            C_TGFb=1.0, C_MCP1=0.2, C_IL8=0.1,
+            rho_collagen=1.5, C_MMP=0.5, rho_fibrin=0.8,
+            D=1.0, O2=0.95,
+        )
+        with pytest.raises(ValueError, match="rho_collagen"):
+            params.validate()
+
+    def test_validate_boundary_values_ok(self):
+        """Тест что граничные значения 0 и 1 проходят валидацию."""
+        params = ExtendedModelParameters(
+            P0=0.0, Ne0=0.0, M1_0=0.0, M2_0=0.0,
+            F0=0.0, Mf0=0.0, E0=0.0, S0=0.0,
+            C_TNF=0.0, C_IL10=0.0, C_PDGF=0.0, C_VEGF=0.0,
+            C_TGFb=0.0, C_MCP1=0.0, C_IL8=0.0,
+            rho_collagen=1.0, C_MMP=0.0, rho_fibrin=0.0,
+            D=0.0, O2=0.0,
+        )
+        assert params.validate() is True
+
+        params2 = ExtendedModelParameters(
+            P0=250000.0, Ne0=500.0, M1_0=105.0, M2_0=45.0,
+            F0=500.0, Mf0=0.0, E0=300.0, S0=250.0,
+            C_TNF=0.1, C_IL10=0.05, C_PDGF=5.0, C_VEGF=0.5,
+            C_TGFb=1.0, C_MCP1=0.2, C_IL8=0.1,
+            rho_collagen=0.0, C_MMP=0.0, rho_fibrin=1.0,
+            D=0.0, O2=1.0,
+        )
+        assert params2.validate() is True
+
+
+# =============================================================================
+# Тесты для ExtendedModelParameters.from_basic_parameters
+# =============================================================================
+
+class TestFromBasicParameters:
+    """Тесты для classmethod from_basic_parameters."""
+
+    def test_from_basic_normal(self):
+        """Тест конвертации из стандартных ModelParameters."""
+        basic = ModelParameters(
+            n0=5000.0, c0=10.0,
+            stem_cell_fraction=0.05,
+            macrophage_fraction=0.03,
+            apoptotic_fraction=0.02,
+            inflammation_level=0.3,
+        )
+        extended = ExtendedModelParameters.from_basic_parameters(basic)
+        assert isinstance(extended, ExtendedModelParameters)
+        assert extended.validate() is True
+
+    def test_high_inflammation_high_C_TNF(self):
+        """Тест что высокое воспаление → повышенный C_TNF."""
+        basic = ModelParameters(
+            n0=5000.0, c0=10.0,
+            stem_cell_fraction=0.03,
+            macrophage_fraction=0.08,
+            apoptotic_fraction=0.05,
+            inflammation_level=0.8,
+        )
+        config = ExtractionConfig()
+        extended = ExtendedModelParameters.from_basic_parameters(basic)
+        assert extended.C_TNF > config.ref_TNF
+
+    def test_Ne0_is_zero_from_basic(self):
+        """Тест что Ne0=0.0 при конвертации из basic (нет CD66b)."""
+        basic = ModelParameters(
+            n0=5000.0, c0=10.0,
+            stem_cell_fraction=0.05,
+            macrophage_fraction=0.03,
+            apoptotic_fraction=0.02,
+            inflammation_level=0.3,
+        )
+        extended = ExtendedModelParameters.from_basic_parameters(basic)
+        assert extended.Ne0 == 0.0
+
+    def test_E0_is_zero_from_basic(self):
+        """Тест что E0=0.0 при конвертации из basic (нет CD31)."""
+        basic = ModelParameters(
+            n0=5000.0, c0=10.0,
+            stem_cell_fraction=0.05,
+            macrophage_fraction=0.03,
+            apoptotic_fraction=0.02,
+            inflammation_level=0.3,
+        )
+        extended = ExtendedModelParameters.from_basic_parameters(basic)
+        assert extended.E0 == 0.0
+
+    def test_total_cells_override(self):
+        """Тест что total_cells переопределяет n0."""
+        basic = ModelParameters(
+            n0=5000.0, c0=10.0,
+            stem_cell_fraction=0.05,
+            macrophage_fraction=0.03,
+            apoptotic_fraction=0.02,
+            inflammation_level=0.3,
+        )
+        ext_default = ExtendedModelParameters.from_basic_parameters(basic)
+        ext_override = ExtendedModelParameters.from_basic_parameters(
+            basic, total_cells=10000.0,
+        )
+        # При total_cells=10000 → M1_0 должен быть больше
+        assert ext_override.M1_0 > ext_default.M1_0
+
+
+# =============================================================================
+# Тесты для ExtendedModelParameters.to_basic_parameters
+# =============================================================================
+
+class TestToBasicParameters:
+    """Тесты для метода to_basic_parameters."""
+
+    def test_extended_to_basic(self, mock_extended_model_parameters):
+        """Тест конвертации Extended → Basic."""
+        basic = mock_extended_model_parameters.to_basic_parameters()
+        assert isinstance(basic, ModelParameters)
+        assert basic.n0 > 0
+
+    def test_basic_validates(self, mock_extended_model_parameters):
+        """Тест что результат проходит валидацию."""
+        basic = mock_extended_model_parameters.to_basic_parameters()
+        assert basic.validate() is True
+
+    def test_round_trip_basic_extended_basic(self):
+        """Тест round-trip: basic → extended → basic.
+
+        Примечание: F0 = n0 * (1 - sum_fractions) * 0.1 (из спецификации),
+        поэтому n0 при обратной конвертации (сумма всех клеток) будет
+        отличаться от исходного. Проверяем только что результат валиден
+        и фракции приблизительно корректны.
+        """
+        original = ModelParameters(
+            n0=5000.0, c0=10.0,
+            stem_cell_fraction=0.05,
+            macrophage_fraction=0.03,
+            apoptotic_fraction=0.02,
+            inflammation_level=0.3,
+        )
+        extended = ExtendedModelParameters.from_basic_parameters(original)
+        roundtrip = extended.to_basic_parameters()
+
+        assert roundtrip.validate() is True
+        assert roundtrip.n0 > 0
+
+
+# =============================================================================
+# Тесты для ExtendedModelParameters.to_sde_state_vector
+# =============================================================================
+
+class TestToSdeStateVector:
+    """Тесты для метода to_sde_state_vector."""
+
+    def test_shape_20(self, mock_extended_model_parameters):
+        """Тест что вектор имеет shape=(20,)."""
+        vec = mock_extended_model_parameters.to_sde_state_vector()
+        assert vec.shape == (20,)
+
+    def test_dtype_float64(self, mock_extended_model_parameters):
+        """Тест что dtype == float64."""
+        vec = mock_extended_model_parameters.to_sde_state_vector()
+        assert vec.dtype == np.float64
+
+    def test_order_P0_at_0_O2_at_19(self, mock_extended_model_parameters):
+        """Тест порядка: vec[0]=P0, vec[7]=S0, vec[19]=O2."""
+        params = mock_extended_model_parameters
+        vec = params.to_sde_state_vector()
+        assert vec[0] == params.P0
+        assert vec[7] == params.S0
+        assert vec[19] == params.O2
+
+    def test_all_zeros(self):
+        """Тест что нулевые параметры → нулевой вектор."""
+        params = ExtendedModelParameters(
+            P0=0.0, Ne0=0.0, M1_0=0.0, M2_0=0.0,
+            F0=0.0, Mf0=0.0, E0=0.0, S0=0.0,
+            C_TNF=0.0, C_IL10=0.0, C_PDGF=0.0, C_VEGF=0.0,
+            C_TGFb=0.0, C_MCP1=0.0, C_IL8=0.0,
+            rho_collagen=0.0, C_MMP=0.0, rho_fibrin=0.0,
+            D=0.0, O2=0.0,
+        )
+        vec = params.to_sde_state_vector()
+        np.testing.assert_array_equal(vec, np.zeros(20))
+
+
+# =============================================================================
+# Тесты для ParameterExtractor.extract_extended
+# =============================================================================
+
+class TestExtractExtended:
+    """Тесты для метода extract_extended."""
+
+    def test_8_gate_results_returns_extended(
+        self, mock_gating_results_extended_normal
+    ):
+        """Тест что 8-gate GatingResults → ExtendedModelParameters."""
+        extractor = ParameterExtractor()
+        result = extractor.extract_extended(mock_gating_results_extended_normal)
+        assert isinstance(result, ExtendedModelParameters)
+        assert result.validate() is True
+
+    def test_missing_neutrophils_gate_error(self, mock_gating_results_normal):
+        """Тест что отсутствие гейта 'neutrophils' → KeyError."""
+        extractor = ParameterExtractor()
+        with pytest.raises(KeyError):
+            extractor.extract_extended(mock_gating_results_normal)
+
+
+# =============================================================================
+# Тесты для ParameterExtractor.extract_neutrophil_fraction
+# =============================================================================
+
+class TestExtractNeutrophilFraction:
+    """Тесты для метода extract_neutrophil_fraction."""
+
+    def test_has_neutrophils_returns_float(
+        self, mock_gating_results_extended_normal
+    ):
+        """Тест что наличие neutrophils → float."""
+        extractor = ParameterExtractor()
+        result = extractor.extract_neutrophil_fraction(
+            mock_gating_results_extended_normal
+        )
+        assert isinstance(result, float)
+
+    def test_missing_neutrophils_raises_key_error(
+        self, mock_gating_results_normal
+    ):
+        """Тест что отсутствие neutrophils → KeyError."""
+        extractor = ParameterExtractor()
+        with pytest.raises(KeyError):
+            extractor.extract_neutrophil_fraction(mock_gating_results_normal)
+
+    def test_result_in_0_1(self, mock_gating_results_extended_normal):
+        """Тест что результат ∈ [0, 1]."""
+        extractor = ParameterExtractor()
+        result = extractor.extract_neutrophil_fraction(
+            mock_gating_results_extended_normal
+        )
+        assert 0 <= result <= 1
+
+
+# =============================================================================
+# Тесты для ParameterExtractor.extract_endothelial_fraction
+# =============================================================================
+
+class TestExtractEndothelialFraction:
+    """Тесты для метода extract_endothelial_fraction."""
+
+    def test_has_endothelial_returns_float(
+        self, mock_gating_results_extended_normal
+    ):
+        """Тест что наличие endothelial → float."""
+        extractor = ParameterExtractor()
+        result = extractor.extract_endothelial_fraction(
+            mock_gating_results_extended_normal
+        )
+        assert isinstance(result, float)
+
+    def test_missing_endothelial_raises_key_error(
+        self, mock_gating_results_normal
+    ):
+        """Тест что отсутствие endothelial → KeyError."""
+        extractor = ParameterExtractor()
+        with pytest.raises(KeyError):
+            extractor.extract_endothelial_fraction(mock_gating_results_normal)
+
+    def test_result_in_0_1(self, mock_gating_results_extended_normal):
+        """Тест что результат ∈ [0, 1]."""
+        extractor = ParameterExtractor()
+        result = extractor.extract_endothelial_fraction(
+            mock_gating_results_extended_normal
+        )
+        assert 0 <= result <= 1
+
+
+# =============================================================================
+# Тесты для ParameterExtractor.estimate_cytokine_profile
+# =============================================================================
+
+class TestEstimateCytokineProfile:
+    """Тесты для метода estimate_cytokine_profile."""
+
+    def test_standard_gates_7_keys(self, mock_gating_results_normal):
+        """Тест что стандартные гейты → словарь с 7 ключами."""
+        extractor = ParameterExtractor()
+        result = extractor.estimate_cytokine_profile(mock_gating_results_normal)
+        assert isinstance(result, dict)
+        assert len(result) == 7
+
+    def test_all_values_non_negative(self, mock_gating_results_normal):
+        """Тест что все значения ≥ 0."""
+        extractor = ParameterExtractor()
+        result = extractor.estimate_cytokine_profile(mock_gating_results_normal)
+        for key, value in result.items():
+            assert value >= 0, f"Cytokine {key} has negative value: {value}"
+
+    def test_high_macro_high_TNF(self, mock_gating_results_inflamed):
+        """Тест что высокая фракция макрофагов → повышенный TNF."""
+        config = ExtractionConfig()
+        extractor = ParameterExtractor()
+        result = extractor.estimate_cytokine_profile(
+            mock_gating_results_inflamed
+        )
+        # При macro=0.08 ожидаем TNF выше референсного
+        tnf_key = [k for k in result if "TNF" in k.upper()][0]
+        assert result[tnf_key] > config.ref_TNF
+
+
+# =============================================================================
+# Тесты для ParameterExtractor.estimate_ecm_state
+# =============================================================================
+
+class TestEstimateEcmState:
+    """Тесты для метода estimate_ecm_state."""
+
+    def test_any_gates_3_keys(self, mock_gating_results_normal):
+        """Тест что любые гейты → словарь с 3 ключами."""
+        extractor = ParameterExtractor()
+        result = extractor.estimate_ecm_state(mock_gating_results_normal)
+        assert isinstance(result, dict)
+        assert len(result) == 3
+        assert "rho_collagen" in result
+        assert "C_MMP" in result
+        assert "rho_fibrin" in result
+
+    def test_rho_collagen_in_0_1(self, mock_gating_results_normal):
+        """Тест что rho_collagen ∈ [0, 1]."""
+        extractor = ParameterExtractor()
+        result = extractor.estimate_ecm_state(mock_gating_results_normal)
+        assert 0 <= result["rho_collagen"] <= 1
+
+    def test_rho_fibrin_in_0_1(self, mock_gating_results_normal):
+        """Тест что rho_fibrin ∈ [0, 1]."""
+        extractor = ParameterExtractor()
+        result = extractor.estimate_ecm_state(mock_gating_results_normal)
+        assert 0 <= result["rho_fibrin"] <= 1
+
+    def test_C_MMP_non_negative(self, mock_gating_results_normal):
+        """Тест что C_MMP ≥ 0."""
+        extractor = ParameterExtractor()
+        result = extractor.estimate_ecm_state(mock_gating_results_normal)
+        assert result["C_MMP"] >= 0

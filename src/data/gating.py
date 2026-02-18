@@ -93,6 +93,8 @@ class GatingStrategy:
         "cd14": "CD14-PE",
         "cd68": "CD68-FITC",
         "annexin": "Annexin-V-Pacific Blue",
+        "cd66b": "CD66b-PE-Cy7",  # Нейтрофилы
+        "cd31": "CD31-BV421",  # Эндотелиальные клетки
     }
 
     def __init__(
@@ -134,6 +136,8 @@ class GatingStrategy:
         "cd14",        # index 4
         "cd68",        # index 5
         "annexin",     # index 6
+        "cd66b",       # index 7 — нейтрофилы
+        "cd31",        # index 8 — эндотелиальные клетки
     ]
 
     def apply(self, data: pd.DataFrame | np.ndarray) -> GatingResults:
@@ -457,3 +461,191 @@ class GatingStrategy:
         threshold = np.percentile(density, (1 - fraction) * 100)
 
         return density >= threshold
+
+    def neutrophil_gate(
+        self,
+        cd66b: np.ndarray,
+        threshold: float | None = None,
+        percentile: float = 95.0,
+    ) -> np.ndarray:
+        """Выделяет CD66b+ нейтрофилы из массива данных.
+
+        Применяет пороговое значение к каналу CD66b (CEACAM8) для идентификации
+        нейтрофилов. Возвращает boolean маску где True = CD66b+.
+        В контексте заживления раны нейтрофилы рекрутируются по градиенту
+        IL-8 в первые 24-48 часов (популяция Ne в модели).
+        Ожидаемая доля: ~5-10% от живых клеток.
+
+        Args:
+            cd66b: Массив значений CD66b
+            threshold: Порог позитивности (авто если None)
+            percentile: Перцентиль для автопорога (по умолчанию 95-й)
+
+        Returns:
+            Boolean маска (True = CD66b+ нейтрофилы)
+
+        Подробное описание: Description/Phase1/description_gating.md#neutrophil_gate
+        """
+        if len(cd66b) == 0:
+            return np.array([], dtype=bool)
+        if threshold is None:
+            threshold = np.percentile(cd66b, percentile)
+        return cd66b > threshold
+
+    def endothelial_gate(
+        self,
+        cd31: np.ndarray,
+        threshold: float | None = None,
+        percentile: float = 95.0,
+    ) -> np.ndarray:
+        """Выделяет CD31+ эндотелиальные клетки из массива данных.
+
+        Применяет пороговое значение к каналу CD31 (PECAM-1) для идентификации
+        эндотелиальных клеток. Возвращает boolean маску где True = CD31+.
+        Эндотелиальные клетки участвуют в ангиогенезе — критическом процессе
+        фазы пролиферации (популяция E в модели).
+        Ожидаемая доля: ~2-5% от живых клеток.
+
+        Args:
+            cd31: Массив значений CD31
+            threshold: Порог позитивности (авто если None)
+            percentile: Перцентиль для автопорога (по умолчанию 95-й)
+
+        Returns:
+            Boolean маска (True = CD31+ эндотелиальные клетки)
+
+        Подробное описание: Description/Phase1/description_gating.md#endothelial_gate
+        """
+        if len(cd31) == 0:
+            return np.array([], dtype=bool)
+        if threshold is None:
+            threshold = np.percentile(cd31, percentile)
+        return cd31 > threshold
+
+    def apply_extended(
+        self,
+        data: pd.DataFrame | np.ndarray,
+    ) -> GatingResults:
+        """Расширенное гейтирование с 9 каналами (включая CD66b и CD31).
+
+        Расширяет стандартный apply() дополнительными гейтами для полной
+        модели регенерации. Возвращает GatingResults с 8 популяциями:
+        non_debris, singlets, live_cells, cd34_positive, macrophages,
+        apoptotic, neutrophils (CD66b+), endothelial (CD31+).
+
+        Иерархия гейтов:
+        All events
+          └── Non-debris (FSC/SSC threshold)
+              └── Singlets (FSC-A vs FSC-H)
+                  └── Live cells (low Annexin-V)
+                      ├── CD34+ стволовые клетки
+                      ├── CD66b+ нейтрофилы
+                      ├── CD31+ эндотелиальные
+                      └── Макрофаги (CD14+/CD68+)
+                  └── Апоптотические (high Annexin-V)
+
+        Args:
+            data: DataFrame или ndarray с 9 каналами данных flow cytometry.
+                  Для ndarray порядок: [FSC-A, FSC-H, SSC-A, CD34, CD14,
+                  CD68, Annexin-V, CD66b, CD31]
+
+        Returns:
+            GatingResults с 8 популяциями (включая neutrophils и endothelial)
+
+        Подробное описание: Description/Phase1/description_gating.md#apply_extended
+        """
+        if isinstance(data, np.ndarray):
+            if data.shape[1] < 9:
+                raise ValueError(
+                    f"Expected at least 9 columns, got {data.shape[1]}"
+                )
+            fsc_a = data[:, 0]
+            fsc_h = data[:, 1]
+            ssc_a = data[:, 2]
+            cd34 = data[:, 3]
+            cd14 = data[:, 4]
+            cd68 = data[:, 5]
+            annexin = data[:, 6]
+            cd66b = data[:, 7]
+            cd31 = data[:, 8]
+            n_total = data.shape[0]
+        else:
+            fsc_a = data[self._channels["fsc_area"]].values
+            fsc_h = data[self._channels["fsc_height"]].values
+            ssc_a = data[self._channels["ssc_area"]].values
+
+            cd34_col = self._find_channel(data.columns, self._channels["cd34"])
+            cd14_col = self._find_channel(data.columns, self._channels["cd14"])
+            cd68_col = self._find_channel(data.columns, self._channels["cd68"])
+            annexin_col = self._find_channel(
+                data.columns, self._channels["annexin"]
+            )
+            cd66b_col = self._find_channel(
+                data.columns, self._channels["cd66b"]
+            )
+            cd31_col = self._find_channel(
+                data.columns, self._channels["cd31"]
+            )
+
+            cd34 = data[cd34_col].values
+            cd14 = data[cd14_col].values
+            cd68 = data[cd68_col].values
+            annexin = data[annexin_col].values
+            cd66b = data[cd66b_col].values
+            cd31 = data[cd31_col].values
+            n_total = len(data)
+
+        # Иерархическое гейтирование
+        non_debris = self.debris_gate(fsc_a, ssc_a)
+        singlets = self.singlets_gate(fsc_a, fsc_h) & non_debris
+        live = self.live_cells_gate(annexin) & singlets
+        cd34_pos = self.cd34_gate(cd34) & live
+        macrophages = self.macrophage_gate(cd14, cd68) & live
+        apoptotic = self.apoptotic_gate(annexin) & singlets
+        neutrophils = self.neutrophil_gate(cd66b) & live
+        endothelial = self.endothelial_gate(cd31) & live
+
+        gates = {
+            "non_debris": GateResult(
+                name="non_debris", mask=non_debris,
+                n_events=int(non_debris.sum()),
+                fraction=non_debris.sum() / n_total, parent=None,
+            ),
+            "singlets": GateResult(
+                name="singlets", mask=singlets,
+                n_events=int(singlets.sum()),
+                fraction=singlets.sum() / n_total, parent="non_debris",
+            ),
+            "live_cells": GateResult(
+                name="live_cells", mask=live,
+                n_events=int(live.sum()),
+                fraction=live.sum() / n_total, parent="singlets",
+            ),
+            "cd34_positive": GateResult(
+                name="cd34_positive", mask=cd34_pos,
+                n_events=int(cd34_pos.sum()),
+                fraction=cd34_pos.sum() / n_total, parent="live_cells",
+            ),
+            "macrophages": GateResult(
+                name="macrophages", mask=macrophages,
+                n_events=int(macrophages.sum()),
+                fraction=macrophages.sum() / n_total, parent="live_cells",
+            ),
+            "apoptotic": GateResult(
+                name="apoptotic", mask=apoptotic,
+                n_events=int(apoptotic.sum()),
+                fraction=apoptotic.sum() / n_total, parent="singlets",
+            ),
+            "neutrophils": GateResult(
+                name="neutrophils", mask=neutrophils,
+                n_events=int(neutrophils.sum()),
+                fraction=neutrophils.sum() / n_total, parent="live_cells",
+            ),
+            "endothelial": GateResult(
+                name="endothelial", mask=endothelial,
+                n_events=int(endothelial.sum()),
+                fraction=endothelial.sum() / n_total, parent="live_cells",
+            ),
+        }
+
+        return GatingResults(total_events=n_total, gates=gates)

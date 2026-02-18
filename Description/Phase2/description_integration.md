@@ -364,3 +364,147 @@ times, discrepancies = trajectory.get_discrepancy_timeseries()
 - src.core.sde_model
 - src.core.abm_model
 - src.data.parameter_extraction
+
+---
+
+## Расширенная синхронизация (Phase 2)
+
+### IntegratedModel._synchronize_cytokines
+
+**Назначение:** Двусторонняя синхронизация цитокинов ABM ↔ SDE. Дополняет текущую одностороннюю передачу (SDE→ABM).
+
+**Сигнатура:**
+
+```python
+def _synchronize_cytokines(
+    self, sde_C: float, abm_snapshot: ABMSnapshot
+) -> float
+```
+
+**Поведение:**
+1. abm_C_mean = mean(abm_snapshot.cytokine_field) × scaling_factor
+2. discrepancy = abm_C_mean - sde_C
+3. correction = coupling_strength × discrepancy
+4. return sde_C + correction
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| ABM и SDE совпадают (C=5.0) | коррекция ≈ 0, result ≈ 5.0 |
+| ABM >> SDE | C увеличивается |
+| ABM << SDE | C уменьшается |
+| coupling_strength=0 | result == sde_C (без коррекции) |
+| coupling_strength=1 | result ≈ abm_C_mean |
+
+**Инварианты:**
+- При coupling_strength=0 → result == sde_C
+- Коррекция пропорциональна coupling_strength
+- result ≥ 0 (концентрация неотрицательна)
+
+---
+
+### IntegratedModel._transfer_therapy_to_abm
+
+**Назначение:** Установка prp_active/pemf_active в ABM environment на основе TherapyProtocol и текущего времени.
+
+**Сигнатура:**
+
+```python
+def _transfer_therapy_to_abm(self, current_time_days: float) -> None
+```
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| Нет терапии (protocol=None) | prp_active=False, pemf_active=False |
+| PRP в окне [1, 5] дней, t=3 | prp_active=True |
+| PRP в окне [1, 5] дней, t=10 | prp_active=False |
+| PEMF в окне [2, 7], t=5 | pemf_active=True |
+| Комбинированная, t в пересечении | оба True |
+
+**Инварианты:**
+- Активен только в пределах временного окна
+- Не изменяет SDE состояние, только ABM environment
+
+---
+
+### IntegratedModel._spatial_scaling
+
+**Назначение:** Конвертация SDE скалярного C ↔ ABM 2D поле.
+
+**Сигнатура:**
+
+```python
+def _spatial_scaling(
+    self, sde_C: float, abm_field: np.ndarray, direction: str = "sde_to_abm"
+) -> np.ndarray | float
+```
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| sde_to_abm, C=5.0 | ndarray с mean ≈ 5.0 (с масштабированием) |
+| abm_to_sde, uniform field=5.0 | float ≈ 5.0 (с масштабированием) |
+| sde_to_abm, C=0.0 | Нулевое поле |
+| direction="invalid" | ValueError |
+
+**Инварианты:**
+- sde_to_abm → ndarray, abm_to_sde → float
+- abm_to_sde(sde_to_abm(C)) ≈ C (обратимость)
+
+---
+
+### IntegratedModel._lifting
+
+**Назначение:** Equation-Free: создание ABM микросостояния из SDE макропеременных.
+
+**Сигнатура:**
+
+```python
+def _lifting(self, macro_state: dict[str, float]) -> ABMSnapshot
+```
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| N=100 | snapshot.total_agents пропорционально 100 |
+| N=0 | snapshot.total_agents == 0 |
+| C=5.0 | cytokine_field не пустое, среднее ≈ 5.0 |
+| Все N=0, C=0 | Пустой snapshot |
+
+**Edge cases:**
+- N отрицательный → ValueError
+- C отрицательный → ValueError или clip к 0
+
+**Инварианты:**
+- _restricting(_lifting(state)) ≈ state (с точностью до дискретизации)
+
+---
+
+### IntegratedModel._restricting
+
+**Назначение:** Equation-Free: агрегация ABM snapshot → SDE макропеременные.
+
+**Сигнатура:**
+
+```python
+def _restricting(self, abm_snapshot: ABMSnapshot) -> dict[str, float]
+```
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| 100 агентов | result["N"] пропорционально 100 |
+| 0 агентов | result["N"] == 0 |
+| uniform cytokine_field=1.0 | result["C"] ≈ 1.0 |
+| Пустой snapshot | {"N": 0, "C": 0, ...} |
+
+**Инварианты:**
+- Все ключи N, C присутствуют
+- N ≥ 0, C ≥ 0
+- _restricting(_lifting(state)) ≈ state

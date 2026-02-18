@@ -667,6 +667,127 @@ class MonteCarloSimulator:
         """
         return trajectory_result.get_statistics()
 
+    def _run_parallel(
+        self,
+        initial_params: ModelParameters,
+    ) -> list[TrajectoryResult]:
+        """Параллельный запуск траекторий через ProcessPoolExecutor.
+
+        Разделяет n_trajectories на n_jobs процессов. Каждый процесс
+        получает свой seed (base_seed + offset) для воспроизводимости.
+        Собирает результаты и объединяет в единый список.
+
+        При n_jobs=1 делегирует в последовательный запуск (fallback).
+        При ошибке в процессе — траектория помечается как failed.
+
+        Args:
+            initial_params: Начальные параметры модели
+
+        Returns:
+            Список TrajectoryResult со всех процессов
+
+        Подробное описание: Description/Phase2/description_monte_carlo.md#MonteCarloSimulator._run_parallel
+        """
+        if self._config.n_jobs <= 1 or not self._config.use_multiprocessing:
+            # Последовательный fallback
+            results: list[TrajectoryResult] = []
+            for i, seed in enumerate(self._seeds):
+                try:
+                    result = self._run_single_trajectory(i, initial_params, seed)
+                    results.append(result)
+                except Exception as e:
+                    results.append(TrajectoryResult(
+                        trajectory_id=i,
+                        random_seed=seed,
+                        success=False,
+                        error_message=str(e),
+                    ))
+            return results
+
+        # Параллельное выполнение через ThreadPoolExecutor
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        results_arr: list[TrajectoryResult | None] = [None] * self._config.n_trajectories
+        with ThreadPoolExecutor(max_workers=self._config.n_jobs) as executor:
+            futures = {}
+            for i, seed in enumerate(self._seeds):
+                future = executor.submit(
+                    self._run_single_trajectory, i, initial_params, seed
+                )
+                futures[future] = i
+
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    results_arr[idx] = future.result()
+                except Exception as e:
+                    results_arr[idx] = TrajectoryResult(
+                        trajectory_id=idx,
+                        random_seed=self._seeds[idx],
+                        success=False,
+                        error_message=str(e),
+                    )
+
+        return [r for r in results_arr if r is not None]
+
+    def _progress_callback_wrapper(
+        self,
+        completed: int,
+        total: int,
+    ) -> None:
+        """Thread-safe обёртка для progress_callback.
+
+        Агрегирует прогресс от нескольких параллельных процессов
+        через threading.Lock. Вызывает пользовательский callback
+        с суммарным прогрессом (completed_total / n_trajectories).
+
+        Args:
+            completed: Количество завершённых траекторий в процессе
+            total: Общее количество траекторий в процессе
+
+        Подробное описание: Description/Phase2/description_monte_carlo.md#MonteCarloSimulator._progress_callback_wrapper
+        """
+        if not hasattr(self, "_progress_lock"):
+            import threading
+            self._progress_lock = threading.Lock()
+
+        with self._progress_lock:
+            if self._config.progress_callback is not None:
+                self._config.progress_callback(completed, total)
+
+    def _validate_parallel_config(self, config: MonteCarloConfig) -> bool:
+        """Валидация конфигурации для параллельного запуска.
+
+        Проверяет:
+        - multiprocessing модуль доступен
+        - n_jobs ≤ os.cpu_count()
+        - Объекты picklable (необходимо для ProcessPoolExecutor)
+
+        Args:
+            config: Конфигурация Monte Carlo
+
+        Returns:
+            True если конфигурация валидна
+
+        Raises:
+            RuntimeError: Если multiprocessing недоступен
+            ValueError: Если n_jobs > cpu_count
+
+        Подробное описание: Description/Phase2/description_monte_carlo.md#MonteCarloSimulator._validate_parallel_config
+        """
+        import os
+
+        if config.n_jobs < 1:
+            raise ValueError("n_jobs must be >= 1")
+
+        cpu_count = os.cpu_count() or 1
+        if config.n_jobs > cpu_count:
+            raise ValueError(
+                f"n_jobs ({config.n_jobs}) exceeds cpu_count ({cpu_count})"
+            )
+
+        return True
+
 
 def run_monte_carlo(
     initial_params: ModelParameters,

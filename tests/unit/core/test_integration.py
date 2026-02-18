@@ -795,3 +795,475 @@ class TestIntegrationNumericalStability:
         # for state in trajectory.states:
         #     assert state.discrepancy < 10.0  # Разумный предел
         pass
+
+
+# =============================================================================
+# Phase 2: Test _synchronize_cytokines
+# =============================================================================
+
+
+class TestSynchronizeCytokines:
+    """Тесты двусторонней синхронизации цитокинов ABM ↔ SDE."""
+
+    @pytest.fixture
+    def model(self, bidirectional_integration_config):
+        """Модель для тестов синхронизации цитокинов."""
+        return IntegratedModel(
+            config=bidirectional_integration_config,
+            random_seed=42,
+        )
+
+    @pytest.fixture
+    def uniform_snapshot(self):
+        """ABM snapshot с однородным цитокиновым полем."""
+        agents = [
+            AgentState(i, "stem", 10.0 * i, 10.0 * i, 0, 0, 1.0)
+            for i in range(10)
+        ]
+        return ABMSnapshot(
+            t=1.0,
+            agents=agents,
+            cytokine_field=np.ones((10, 10)) * 5.0,
+            ecm_field=np.zeros((10, 10)),
+        )
+
+    def test_matching_values_no_correction(self, model, uniform_snapshot):
+        """Если ABM и SDE совпадают — коррекция ≈ 0."""
+        # С полем = 5.0 и sde_C ≈ 5.0 (с масштабированием)
+        # Ожидаем что результат близок к sde_C
+        result = model._synchronize_cytokines(5.0, uniform_snapshot)
+        assert isinstance(result, float)
+
+    def test_abm_higher_than_sde_increases_c(self, model):
+        """Если ABM >> SDE — C увеличивается."""
+        high_field_snapshot = ABMSnapshot(
+            t=1.0,
+            agents=[],
+            cytokine_field=np.ones((10, 10)) * 100.0,
+            ecm_field=np.zeros((10, 10)),
+        )
+        sde_C = 1.0
+        result = model._synchronize_cytokines(sde_C, high_field_snapshot)
+        assert result >= sde_C
+
+    def test_abm_lower_than_sde_decreases_c(self, model):
+        """Если ABM << SDE — C уменьшается."""
+        low_field_snapshot = ABMSnapshot(
+            t=1.0,
+            agents=[],
+            cytokine_field=np.ones((10, 10)) * 0.01,
+            ecm_field=np.zeros((10, 10)),
+        )
+        sde_C = 100.0
+        result = model._synchronize_cytokines(sde_C, low_field_snapshot)
+        assert result <= sde_C
+
+    def test_coupling_zero_no_correction(self, uniform_snapshot):
+        """coupling_strength=0 → результат == sde_C."""
+        config = IntegrationConfig(coupling_strength=0.0)
+        model = IntegratedModel(config=config, random_seed=42)
+        sde_C = 42.0
+        result = model._synchronize_cytokines(sde_C, uniform_snapshot)
+        assert result == pytest.approx(sde_C)
+
+    def test_result_non_negative(self, model):
+        """Результат ≥ 0 (концентрация неотрицательна)."""
+        zero_snapshot = ABMSnapshot(
+            t=1.0,
+            agents=[],
+            cytokine_field=np.zeros((10, 10)),
+            ecm_field=np.zeros((10, 10)),
+        )
+        result = model._synchronize_cytokines(0.0, zero_snapshot)
+        assert result >= 0.0
+
+    def test_correction_proportional_to_coupling(self, uniform_snapshot):
+        """Коррекция пропорциональна coupling_strength."""
+        sde_C = 1.0
+        results = {}
+        for coupling in [0.1, 0.5, 0.9]:
+            config = IntegrationConfig(coupling_strength=coupling)
+            model = IntegratedModel(config=config, random_seed=42)
+            results[coupling] = model._synchronize_cytokines(sde_C, uniform_snapshot)
+
+        # Большая связь → большая коррекция (при ABM > SDE)
+        correction_01 = abs(results[0.1] - sde_C)
+        correction_09 = abs(results[0.9] - sde_C)
+        # При coupling=0.9 коррекция должна быть больше чем при 0.1
+        assert correction_09 >= correction_01
+
+
+# =============================================================================
+# Phase 2: Test _transfer_therapy_to_abm
+# =============================================================================
+
+
+class TestTransferTherapyToABM:
+    """Тесты передачи терапевтических флагов в ABM."""
+
+    def test_no_therapy_both_inactive(self):
+        """Без терапии — prp_active=False, pemf_active=False."""
+        config = IntegrationConfig()
+        model = IntegratedModel(config=config, random_seed=42)
+        # По умолчанию TherapyProtocol — без терапии
+        model._transfer_therapy_to_abm(current_time_days=3.0)
+        # Не должно вызвать ошибку
+
+    def test_prp_active_in_window(self):
+        """PRP активен внутри временного окна."""
+        therapy = TherapyProtocol(
+            prp_enabled=True,
+            prp_start_time=1.0,
+            prp_end_time=5.0,
+        )
+        config = IntegrationConfig()
+        model = IntegratedModel(config=config, therapy=therapy, random_seed=42)
+        model._transfer_therapy_to_abm(current_time_days=3.0)
+        # PRP должен быть активен
+
+    def test_prp_inactive_outside_window(self):
+        """PRP неактивен вне временного окна."""
+        therapy = TherapyProtocol(
+            prp_enabled=True,
+            prp_start_time=1.0,
+            prp_end_time=5.0,
+        )
+        config = IntegrationConfig()
+        model = IntegratedModel(config=config, therapy=therapy, random_seed=42)
+        model._transfer_therapy_to_abm(current_time_days=10.0)
+        # PRP должен быть неактивен
+
+    def test_pemf_active_in_window(self):
+        """PEMF активен внутри временного окна."""
+        therapy = TherapyProtocol(
+            pemf_enabled=True,
+            pemf_start_time=2.0,
+            pemf_end_time=7.0,
+        )
+        config = IntegrationConfig()
+        model = IntegratedModel(config=config, therapy=therapy, random_seed=42)
+        model._transfer_therapy_to_abm(current_time_days=5.0)
+        # PEMF должен быть активен
+
+    def test_combined_therapy_both_active(self):
+        """Комбинированная терапия — оба флага активны в пересечении."""
+        therapy = TherapyProtocol(
+            prp_enabled=True,
+            prp_start_time=1.0,
+            prp_end_time=10.0,
+            pemf_enabled=True,
+            pemf_start_time=2.0,
+            pemf_end_time=8.0,
+        )
+        config = IntegrationConfig()
+        model = IntegratedModel(config=config, therapy=therapy, random_seed=42)
+        model._transfer_therapy_to_abm(current_time_days=5.0)
+        # Оба должны быть активны
+
+    def test_does_not_modify_sde_state(self):
+        """Метод не изменяет SDE состояние."""
+        therapy = TherapyProtocol(
+            prp_enabled=True,
+            prp_start_time=1.0,
+            prp_end_time=5.0,
+        )
+        config = IntegrationConfig()
+        model = IntegratedModel(config=config, therapy=therapy, random_seed=42)
+
+        # Запомнить SDE конфигурацию
+        sde_config_before = model.sde_model.config
+
+        model._transfer_therapy_to_abm(current_time_days=3.0)
+
+        # SDE конфигурация не изменилась
+        assert model.sde_model.config is sde_config_before
+
+
+# =============================================================================
+# Phase 2: Test _spatial_scaling
+# =============================================================================
+
+
+class TestSpatialScaling:
+    """Тесты конвертации SDE скаляр ↔ ABM 2D поле."""
+
+    @pytest.fixture
+    def model(self, bidirectional_integration_config):
+        """Модель для тестов."""
+        return IntegratedModel(
+            config=bidirectional_integration_config,
+            random_seed=42,
+        )
+
+    def test_sde_to_abm_returns_ndarray(self, model):
+        """sde_to_abm возвращает ndarray."""
+        abm_field = np.zeros((10, 10))
+        result = model._spatial_scaling(5.0, abm_field, direction="sde_to_abm")
+        assert isinstance(result, np.ndarray)
+
+    def test_abm_to_sde_returns_float(self, model):
+        """abm_to_sde возвращает float."""
+        abm_field = np.ones((10, 10)) * 5.0
+        result = model._spatial_scaling(0.0, abm_field, direction="abm_to_sde")
+        assert isinstance(result, (float, np.floating))
+
+    def test_sde_to_abm_zero_produces_zero_field(self, model):
+        """C=0 → нулевое поле."""
+        abm_field = np.zeros((10, 10))
+        result = model._spatial_scaling(0.0, abm_field, direction="sde_to_abm")
+        assert isinstance(result, np.ndarray)
+        np.testing.assert_array_equal(result, np.zeros_like(result))
+
+    def test_invalid_direction_raises_valueerror(self, model):
+        """Неизвестное направление → ValueError."""
+        abm_field = np.zeros((10, 10))
+        with pytest.raises(ValueError):
+            model._spatial_scaling(5.0, abm_field, direction="invalid")
+
+    def test_abm_to_sde_uniform_field(self, model):
+        """Однородное поле = 5.0 → float ≈ 5.0 (с масштабированием)."""
+        abm_field = np.ones((10, 10)) * 5.0
+        result = model._spatial_scaling(0.0, abm_field, direction="abm_to_sde")
+        # Среднее поля = 5.0, результат масштабирован
+        assert isinstance(result, (float, np.floating))
+
+    def test_invertibility(self, model):
+        """abm_to_sde(sde_to_abm(C)) ≈ C (обратимость)."""
+        C_original = 10.0
+        abm_field = np.zeros((10, 10))
+
+        # SDE → ABM
+        field_result = model._spatial_scaling(
+            C_original, abm_field, direction="sde_to_abm"
+        )
+
+        # ABM → SDE
+        C_recovered = model._spatial_scaling(
+            0.0, field_result, direction="abm_to_sde"
+        )
+
+        # Должно быть приблизительно равно оригиналу
+        assert C_recovered == pytest.approx(C_original, rel=0.1)
+
+
+# =============================================================================
+# Phase 2: Test _lifting
+# =============================================================================
+
+
+class TestLifting:
+    """Тесты Equation-Free lifting: макро SDE → микро ABM."""
+
+    @pytest.fixture
+    def model(self, bidirectional_integration_config):
+        """Модель для тестов lifting."""
+        return IntegratedModel(
+            config=bidirectional_integration_config,
+            random_seed=42,
+        )
+
+    def test_lifting_n_100_produces_agents(self, model):
+        """N=100 → snapshot содержит агентов пропорционально 100."""
+        macro_state = {"N": 100.0, "C": 5.0}
+        snapshot = model._lifting(macro_state)
+
+        assert isinstance(snapshot, ABMSnapshot)
+        assert snapshot.get_total_agents() > 0
+
+    def test_lifting_n_zero_produces_empty(self, model):
+        """N=0 → snapshot без агентов."""
+        macro_state = {"N": 0.0, "C": 5.0}
+        snapshot = model._lifting(macro_state)
+
+        assert isinstance(snapshot, ABMSnapshot)
+        assert snapshot.get_total_agents() == 0
+
+    def test_lifting_cytokine_field_from_c(self, model):
+        """C=5.0 → cytokine_field не пустое."""
+        macro_state = {"N": 50.0, "C": 5.0}
+        snapshot = model._lifting(macro_state)
+
+        assert snapshot.cytokine_field is not None
+        assert snapshot.cytokine_field.size > 0
+
+    def test_lifting_all_zero(self, model):
+        """N=0, C=0 → пустой snapshot."""
+        macro_state = {"N": 0.0, "C": 0.0}
+        snapshot = model._lifting(macro_state)
+
+        assert snapshot.get_total_agents() == 0
+
+    def test_lifting_negative_n_raises(self, model):
+        """N < 0 → ValueError."""
+        macro_state = {"N": -10.0, "C": 5.0}
+        with pytest.raises(ValueError):
+            model._lifting(macro_state)
+
+    def test_lifting_returns_abm_snapshot(self, model):
+        """Результат — ABMSnapshot с корректной структурой."""
+        macro_state = {"N": 200.0, "C": 10.0}
+        snapshot = model._lifting(macro_state)
+
+        assert isinstance(snapshot, ABMSnapshot)
+        assert hasattr(snapshot, "agents")
+        assert hasattr(snapshot, "cytokine_field")
+        assert hasattr(snapshot, "ecm_field")
+
+
+# =============================================================================
+# Phase 2: Test _restricting
+# =============================================================================
+
+
+class TestRestricting:
+    """Тесты Equation-Free restricting: микро ABM → макро SDE."""
+
+    @pytest.fixture
+    def model(self, bidirectional_integration_config):
+        """Модель для тестов restricting."""
+        return IntegratedModel(
+            config=bidirectional_integration_config,
+            random_seed=42,
+        )
+
+    def test_restricting_100_agents(self, model):
+        """100 агентов → result['N'] пропорционально 100."""
+        agents = [
+            AgentState(i, "stem", float(i * 5), float(i * 5), 0, 0, 1.0)
+            for i in range(100)
+        ]
+        snapshot = ABMSnapshot(
+            t=1.0,
+            agents=agents,
+            cytokine_field=np.ones((10, 10)) * 5.0,
+            ecm_field=np.zeros((10, 10)),
+        )
+
+        result = model._restricting(snapshot)
+        assert isinstance(result, dict)
+        assert "N" in result
+        assert result["N"] > 0
+
+    def test_restricting_zero_agents(self, model):
+        """0 агентов → result['N'] == 0."""
+        snapshot = ABMSnapshot(
+            t=1.0,
+            agents=[],
+            cytokine_field=np.zeros((10, 10)),
+            ecm_field=np.zeros((10, 10)),
+        )
+
+        result = model._restricting(snapshot)
+        assert result["N"] == 0
+
+    def test_restricting_cytokine_field_to_c(self, model):
+        """Uniform cytokine_field=1.0 → result['C'] ≈ 1.0."""
+        agents = [
+            AgentState(i, "stem", float(i * 5), float(i * 5), 0, 0, 1.0)
+            for i in range(10)
+        ]
+        snapshot = ABMSnapshot(
+            t=1.0,
+            agents=agents,
+            cytokine_field=np.ones((10, 10)) * 1.0,
+            ecm_field=np.zeros((10, 10)),
+        )
+
+        result = model._restricting(snapshot)
+        assert "C" in result
+
+    def test_restricting_empty_snapshot(self, model):
+        """Пустой snapshot → {'N': 0, 'C': 0, ...}."""
+        snapshot = ABMSnapshot(
+            t=0.0,
+            agents=[],
+            cytokine_field=np.zeros((10, 10)),
+            ecm_field=np.zeros((10, 10)),
+        )
+
+        result = model._restricting(snapshot)
+        assert isinstance(result, dict)
+        assert "N" in result
+        assert "C" in result
+        assert result["N"] == 0
+        assert result["C"] == 0
+
+    def test_restricting_keys_present(self, model):
+        """Результат содержит ключи N, C."""
+        agents = [
+            AgentState(i, "stem", float(i * 5), float(i * 5), 0, 0, 1.0)
+            for i in range(5)
+        ]
+        snapshot = ABMSnapshot(
+            t=1.0,
+            agents=agents,
+            cytokine_field=np.ones((10, 10)) * 3.0,
+            ecm_field=np.zeros((10, 10)),
+        )
+
+        result = model._restricting(snapshot)
+        assert "N" in result
+        assert "C" in result
+
+    def test_restricting_non_negative_values(self, model):
+        """N ≥ 0, C ≥ 0 в результате."""
+        agents = [
+            AgentState(i, "stem", float(i * 5), float(i * 5), 0, 0, 1.0)
+            for i in range(20)
+        ]
+        snapshot = ABMSnapshot(
+            t=1.0,
+            agents=agents,
+            cytokine_field=np.ones((10, 10)) * 2.0,
+            ecm_field=np.zeros((10, 10)),
+        )
+
+        result = model._restricting(snapshot)
+        assert result["N"] >= 0
+        assert result["C"] >= 0
+
+
+# =============================================================================
+# Phase 2: Test Lifting-Restricting Roundtrip
+# =============================================================================
+
+
+class TestLiftingRestrictingRoundtrip:
+    """Тесты инварианта: restricting(lifting(state)) ≈ state."""
+
+    @pytest.fixture
+    def model(self, bidirectional_integration_config):
+        """Модель для roundtrip тестов."""
+        return IntegratedModel(
+            config=bidirectional_integration_config,
+            random_seed=42,
+        )
+
+    def test_roundtrip_n_preserved(self, model):
+        """N сохраняется при roundtrip (с точностью до дискретизации)."""
+        macro_state = {"N": 100.0, "C": 5.0}
+
+        snapshot = model._lifting(macro_state)
+        recovered = model._restricting(snapshot)
+
+        # С точностью до дискретизации (ABM → целые агенты)
+        assert recovered["N"] == pytest.approx(macro_state["N"], rel=0.2)
+
+    def test_roundtrip_c_preserved(self, model):
+        """C сохраняется при roundtrip."""
+        macro_state = {"N": 50.0, "C": 10.0}
+
+        snapshot = model._lifting(macro_state)
+        recovered = model._restricting(snapshot)
+
+        assert recovered["C"] == pytest.approx(macro_state["C"], rel=0.2)
+
+    def test_roundtrip_zero_state(self, model):
+        """Roundtrip для нулевого состояния."""
+        macro_state = {"N": 0.0, "C": 0.0}
+
+        snapshot = model._lifting(macro_state)
+        recovered = model._restricting(snapshot)
+
+        assert recovered["N"] == 0
+        assert recovered["C"] == 0

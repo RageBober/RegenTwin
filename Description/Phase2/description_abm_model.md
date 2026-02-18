@@ -396,3 +396,287 @@ else:
 | Fibroblast lifespan | 10-20 дней | Tissue studies |
 | Diffusion coefficient | 0.5-2 мкм²/час | Cell migration studies |
 | Division time | 12-24 часа | Cell cycle duration |
+
+---
+
+## Новые типы агентов (Phase 2 расширение)
+
+### NeutrophilAgent (CD66b+)
+
+**Назначение:** Короткоживущий нейтрофил, рекрутируемый из кровотока. Фагоцитоз debris, секреция TNF-α и IL-8.
+
+**Константы класса:**
+
+| Константа | Значение | Описание |
+|-----------|----------|----------|
+| AGENT_TYPE | "neutro" | Тип агента |
+| LIFESPAN | 24.0 | Часов (короткоживущий) |
+| MAX_DIVISIONS | 0 | Не пролиферируют в ткани |
+| DIVISION_PROBABILITY | 0.0 | per hour |
+| DEATH_PROBABILITY | 0.04 | per hour (t1/2 ~ 12-14 ч) |
+| CHEMOTAXIS_SENSITIVITY | 0.8 | IL-8 хемотаксис |
+| PHAGOCYTOSIS_CAPACITY | 3 | Макс. debris за вызов |
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| Инициализация | AGENT_TYPE == "neutro", alive=True, age=0 |
+| can_divide() | Всегда False (MAX_DIVISIONS=0) |
+| divide(new_id) | Всегда None |
+| phagocytose(10) | ≤ PHAGOCYTOSIS_CAPACITY (3) |
+| phagocytose(0) | 0 |
+| secrete_cytokines(1.0) | dict с ключами "TNF_alpha", "IL_8" |
+| is_apoptotic() при age > LIFESPAN | True |
+| is_apoptotic() при age=0, energy=1.0 | False |
+| update(dt) | age += dt, energy уменьшается |
+
+**Edge cases:**
+- phagocytose(-1) → ValueError или 0
+- secrete_cytokines(0.0) → все значения == 0.0
+- is_apoptotic() при energy == 0 → True
+
+**Инварианты:**
+- AGENT_TYPE == "neutro"
+- phagocytosed ≤ PHAGOCYTOSIS_CAPACITY
+- age ≥ 0
+- 0 ≤ energy ≤ 1.0
+
+---
+
+### EndothelialAgent (CD31+)
+
+**Назначение:** Эндотелиальная клетка. VEGF-зависимый ангиогенез, формирование сосудистых контактов.
+
+**Константы класса:**
+
+| Константа | Значение | Описание |
+|-----------|----------|----------|
+| AGENT_TYPE | "endo" | Тип агента |
+| LIFESPAN | 480.0 | Часов (20 дней) |
+| DIVISION_PROBABILITY | 0.01 | per hour |
+| DEATH_PROBABILITY | 0.001 | per hour |
+| VEGF_SENSITIVITY | 0.6 | Чувствительность к VEGF |
+| ADHESION_STRENGTH | 0.5 | Сила адгезии |
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| Инициализация | AGENT_TYPE == "endo", alive=True |
+| divide() при высоком VEGF | EndothelialAgent или None |
+| divide() при нулевом VEGF | None (подавлено) |
+| form_junction(neighbor) при близком расстоянии | True |
+| form_junction(neighbor) при далёком | False |
+| secrete_cytokines(1.0) | dict с ключами "VEGF", "PDGF" |
+| update(dt) | age += dt |
+
+**Edge cases:**
+- form_junction с не-EndothelialAgent → False или TypeError
+- secrete_cytokines(0.0) → все значения == 0.0
+
+**Инварианты:**
+- AGENT_TYPE == "endo"
+- age ≥ 0
+- 0 ≤ energy ≤ 1.0
+
+---
+
+### MyofibroblastAgent (α-SMA+)
+
+**Назначение:** Миофибробласт. Усиленная продукция ECM, контракция раны, TGF-β-зависимое выживание.
+
+**Константы класса:**
+
+| Константа | Значение | Описание |
+|-----------|----------|----------|
+| AGENT_TYPE | "myofibro" | Тип агента |
+| LIFESPAN | 480.0 | Часов (20 дней) |
+| DIVISION_PROBABILITY | 0.003 | per hour (редкое) |
+| DEATH_PROBABILITY | 0.002 | per hour |
+| ECM_PRODUCTION_RATE | 1.0 | units/hour (2× фибробласта) |
+| CONTRACTION_FORCE | 0.3 | Сила контракции |
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| Инициализация | AGENT_TYPE == "myofibro", alive=True |
+| produce_ecm(1.0) | ECM_PRODUCTION_RATE × dt |
+| produce_ecm(0.0) | 0.0 |
+| contract(1.0) | > 0.0 |
+| should_apoptose_tgfb(0.0) | True (нет TGF-β) |
+| should_apoptose_tgfb(10.0) | False (достаточно TGF-β) |
+| divide(new_id) | MyofibroblastAgent или None |
+
+**Edge cases:**
+- produce_ecm() при alive=False → 0.0
+- contract() при alive=False → 0.0
+- should_apoptose_tgfb(отрицательное) → True
+
+**Инварианты:**
+- AGENT_TYPE == "myofibro"
+- ECM_PRODUCTION_RATE == 2 × Fibroblast.ECM_PRODUCTION_RATE
+- produce_ecm() ≥ 0
+- contract() ≥ 0
+
+---
+
+## Улучшенные механики (Phase 2)
+
+### KDTreeSpatialIndex
+
+**Назначение:** Пространственный индекс на scipy.spatial.cKDTree. Альтернатива SpatialHash для точного O(log n) поиска.
+
+**Сигнатуры:**
+
+```python
+class KDTreeSpatialIndex:
+    def __init__(self, space_size: tuple[float, float], periodic: bool = True) -> None
+    def build(self, agents: list[Agent]) -> None
+    def query_radius(self, position: tuple[float, float], radius: float) -> list[Agent]
+    def query_nearest(self, position: tuple[float, float], k: int = 1) -> list[Agent]
+```
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| build([]) | Пустое дерево, запросы возвращают [] |
+| query_radius(pos, 0) | Пустой список |
+| query_radius(pos, 100) при 10 агентах | 10 агентов |
+| query_nearest(pos, k=3) при 10 агентах | Ровно 3 |
+| query_nearest(pos, k=0) | Пустой список |
+| query_nearest(pos, k=100) при 5 агентах | 5 агентов |
+| Периодические границы | Находит через границу |
+
+**Edge cases:**
+- build() с мёртвыми агентами → фильтрация
+- query_radius с отрицательным radius → ValueError или []
+- Один агент точно на границе
+
+**Инварианты:**
+- len(query_nearest(pos, k)) ≤ k
+- Все агенты из query_radius на расстоянии ≤ radius
+- query_radius ⊇ query_nearest (при достаточном radius)
+
+---
+
+### ABMModel._chemotaxis_displacement
+
+**Назначение:** Мульти-градиентный хемотаксис по типу агента.
+
+**Сигнатура:**
+
+```python
+def _chemotaxis_displacement(
+    self, agent: Agent, cytokine_fields: dict[str, np.ndarray]
+) -> tuple[float, float]
+```
+
+**Поведение:**
+1. Определить хемоаттрактант по agent.AGENT_TYPE
+2. Вычислить градиент цитокинового поля в позиции агента
+3. dx, dy = sensitivity × gradient × dt
+
+**Маппинг тип → цитокин:**
+- "neutro" → "IL_8"
+- "macro" → "MCP_1"
+- "endo" → "VEGF"
+- "fibro" → "PDGF"
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| Нулевой градиент | (0.0, 0.0) |
+| Положительный градиент X | dx > 0, dy ≈ 0 |
+| Агент без маппинга | (0.0, 0.0) |
+| Пустой cytokine_fields | (0.0, 0.0) |
+
+**Инварианты:**
+- Возвращает tuple[float, float]
+- Результат пропорционален agent.CHEMOTAXIS_SENSITIVITY
+
+---
+
+### ABMModel._apply_contact_inhibition
+
+**Назначение:** Модификатор пролиферации по локальной плотности.
+
+**Сигнатура:**
+
+```python
+def _apply_contact_inhibition(self, agent: Agent, neighbors_count: int) -> float
+```
+
+**Формула:** modifier = max(0, 1 - neighbors_count / threshold)
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| neighbors=0 | 1.0 (нет ингибирования) |
+| neighbors=threshold | 0.0 (полное ингибирование) |
+| neighbors=threshold/2 | 0.5 |
+| neighbors > threshold | 0.0 |
+
+**Инварианты:**
+- 0.0 ≤ результат ≤ 1.0
+- Монотонно убывает с ростом neighbors_count
+
+---
+
+### ABMModel._calculate_adhesion_force
+
+**Назначение:** Сила адгезии между совместимыми типами клеток.
+
+**Сигнатура:**
+
+```python
+def _calculate_adhesion_force(
+    self, agent1: Agent, agent2: Agent, distance: float
+) -> np.ndarray
+```
+
+**Совместимые пары:** endo↔endo, myofibro↔myofibro
+
+**Формула:** F = -k_adh × (d - d_eq) × direction
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| endo + endo, d > d_eq | Притяжение (F направлена к соседу) |
+| endo + endo, d < d_eq | Отталкивание |
+| endo + endo, d == d_eq | F ≈ 0 |
+| endo + macro | F = [0, 0] (несовместимы) |
+| myofibro + myofibro | Ненулевая сила |
+
+**Инварианты:**
+- shape == (2,)
+- F == 0 для несовместимых типов
+- |F| пропорциональна |d - d_eq|
+
+---
+
+### ABMConfig расширение
+
+**Новые поля:**
+
+| Поле | Тип | Default | Описание |
+|------|-----|---------|----------|
+| initial_neutrophils | int | 0 | Рекрутируются динамически |
+| initial_endothelial | int | 10 | Начальные эндотелиальные |
+| initial_myofibroblasts | int | 0 | Активируются из фибробластов |
+| adhesion_strength | float | 0.3 | Сила адгезии |
+| adhesion_equilibrium_distance | float | 3.0 | Равновесное расстояние (мкм) |
+| use_multi_chemotaxis | bool | False | Мульти-градиентный хемотаксис |
+| spatial_index_type | str | "hash" | "hash" или "kdtree" |
+
+### ABMModel._create_agent расширение
+
+**Новые ветки:**
+- "neutro" → NeutrophilAgent
+- "endo" → EndothelialAgent
+- "myofibro" → MyofibroblastAgent

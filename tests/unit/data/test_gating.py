@@ -1004,3 +1004,215 @@ class TestGatingStrategyScenarios:
         for gate_name, gate_result in results.gates.items():
             assert len(gate_result.mask) == n_events, \
                 f"Gate {gate_name} mask has wrong length"
+
+
+# =============================================================================
+# Тесты для GatingStrategy.neutrophil_gate (расширенное гейтирование)
+# =============================================================================
+
+class TestNeutrophilGate:
+    """Тесты для метода neutrophil_gate (CD66b+)."""
+
+    def test_normal_data_approx_5_percent(self):
+        """Тест что ~5% событий проходят нейтрофильный гейт."""
+        rng = np.random.default_rng(60)
+        # 95% — фоновый сигнал, 5% — высокий CD66b
+        cd66b = np.concatenate([
+            rng.exponential(4000, 950),
+            rng.normal(120000, 25000, 50),
+        ])
+        strategy = GatingStrategy()
+        mask = strategy.neutrophil_gate(cd66b)
+
+        assert mask.shape == cd66b.shape
+        assert mask.dtype == np.bool_
+        fraction = mask.sum() / len(mask)
+        assert 0.02 < fraction < 0.12
+
+    def test_empty_array_shape_zero(self):
+        """Тест что пустой массив → маска shape=(0,)."""
+        strategy = GatingStrategy()
+        mask = strategy.neutrophil_gate(np.array([]))
+        assert mask.shape == (0,)
+        assert mask.dtype == np.bool_
+
+    def test_all_identical_all_false(self):
+        """Тест что все одинаковые значения → все False."""
+        strategy = GatingStrategy()
+        cd66b = np.full(100, 5.0)
+        mask = strategy.neutrophil_gate(cd66b)
+        assert mask.sum() == 0
+
+    def test_manual_threshold(self):
+        """Тест с явно заданным threshold."""
+        strategy = GatingStrategy()
+        cd66b = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        mask = strategy.neutrophil_gate(cd66b, threshold=3.0)
+        # > 3.0: только 4.0 и 5.0
+        expected = np.array([False, False, False, True, True])
+        np.testing.assert_array_equal(mask, expected)
+
+    def test_single_element(self):
+        """Тест с одним элементом."""
+        strategy = GatingStrategy()
+        cd66b = np.array([100.0])
+        mask = strategy.neutrophil_gate(cd66b, percentile=95.0)
+        assert mask.shape == (1,)
+        assert mask.dtype == np.bool_
+
+    def test_percentile_0_almost_all_true(self):
+        """Тест что percentile=0 → почти все True (threshold = min)."""
+        strategy = GatingStrategy()
+        cd66b = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        mask = strategy.neutrophil_gate(cd66b, percentile=0.0)
+        # threshold = min(1.0), mask = cd66b > 1.0 → [F,T,T,T,T]
+        assert mask.sum() >= len(cd66b) - 1
+
+    def test_percentile_100_all_false(self):
+        """Тест что percentile=100 → все False."""
+        strategy = GatingStrategy()
+        cd66b = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        mask = strategy.neutrophil_gate(cd66b, percentile=100.0)
+        assert mask.sum() == 0
+
+
+# =============================================================================
+# Тесты для GatingStrategy.endothelial_gate (расширенное гейтирование)
+# =============================================================================
+
+class TestEndothelialGate:
+    """Тесты для метода endothelial_gate (CD31+)."""
+
+    def test_normal_data_approx_3_percent(self):
+        """Тест что ~3% событий проходят эндотелиальный гейт."""
+        rng = np.random.default_rng(61)
+        # 97% — фоновый сигнал, 3% — высокий CD31
+        cd31 = np.concatenate([
+            rng.exponential(3000, 970),
+            rng.normal(100000, 20000, 30),
+        ])
+        strategy = GatingStrategy()
+        mask = strategy.endothelial_gate(cd31)
+
+        assert mask.shape == cd31.shape
+        assert mask.dtype == np.bool_
+        fraction = mask.sum() / len(mask)
+        assert 0.01 < fraction < 0.10
+
+    def test_empty_array_shape_zero(self):
+        """Тест что пустой массив → маска shape=(0,)."""
+        strategy = GatingStrategy()
+        mask = strategy.endothelial_gate(np.array([]))
+        assert mask.shape == (0,)
+        assert mask.dtype == np.bool_
+
+    def test_all_identical_all_false(self):
+        """Тест что все одинаковые значения → все False."""
+        strategy = GatingStrategy()
+        cd31 = np.full(100, 5.0)
+        mask = strategy.endothelial_gate(cd31)
+        assert mask.sum() == 0
+
+    def test_manual_threshold(self):
+        """Тест с явно заданным threshold."""
+        strategy = GatingStrategy()
+        cd31 = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        mask = strategy.endothelial_gate(cd31, threshold=25.0)
+        # > 25.0: 30, 40, 50
+        expected = np.array([False, False, True, True, True])
+        np.testing.assert_array_equal(mask, expected)
+
+    def test_single_element(self):
+        """Тест с одним элементом."""
+        strategy = GatingStrategy()
+        cd31 = np.array([50.0])
+        mask = strategy.endothelial_gate(cd31, percentile=95.0)
+        assert mask.shape == (1,)
+        assert mask.dtype == np.bool_
+
+    def test_percentile_0_almost_all_true(self):
+        """Тест что percentile=0 → почти все True."""
+        strategy = GatingStrategy()
+        cd31 = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        mask = strategy.endothelial_gate(cd31, percentile=0.0)
+        assert mask.sum() >= len(cd31) - 1
+
+    def test_percentile_100_all_false(self):
+        """Тест что percentile=100 → все False."""
+        strategy = GatingStrategy()
+        cd31 = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        mask = strategy.endothelial_gate(cd31, percentile=100.0)
+        assert mask.sum() == 0
+
+
+# =============================================================================
+# Тесты для GatingStrategy.apply_extended (расширенное гейтирование)
+# =============================================================================
+
+class TestApplyExtended:
+    """Тесты для метода apply_extended (9 каналов → 8 популяций)."""
+
+    def test_ndarray_9_cols_returns_8_gates(self, mock_fcs_data_extended_normal):
+        """Тест что ndarray с 9 столбцами → GatingResults с 8 гейтами."""
+        strategy = GatingStrategy()
+        data = mock_fcs_data_extended_normal.values
+        results = strategy.apply_extended(data)
+        assert isinstance(results, GatingResults)
+        assert len(results.gates) == 8
+
+    def test_dataframe_9_channels_returns_8_gates(self, mock_fcs_data_extended_normal):
+        """Тест что DataFrame с 9 каналами → GatingResults с 8 гейтами."""
+        strategy = GatingStrategy()
+        results = strategy.apply_extended(mock_fcs_data_extended_normal)
+        assert isinstance(results, GatingResults)
+        assert len(results.gates) == 8
+
+    def test_7_col_ndarray_raises_error(self):
+        """Тест что ndarray с 7 столбцами → ошибка."""
+        rng = np.random.default_rng(62)
+        data = rng.uniform(0, 100000, (100, 7))
+        strategy = GatingStrategy()
+        with pytest.raises((IndexError, ValueError, KeyError)):
+            strategy.apply_extended(data)
+
+    def test_all_8_gate_keys_present(self, mock_fcs_data_extended_normal):
+        """Тест что все 8 ключей гейтов присутствуют."""
+        strategy = GatingStrategy()
+        results = strategy.apply_extended(mock_fcs_data_extended_normal)
+        expected_keys = {
+            "non_debris", "singlets", "live_cells", "cd34_positive",
+            "macrophages", "apoptotic", "neutrophils", "endothelial",
+        }
+        assert set(results.gates.keys()) == expected_keys
+
+    def test_all_fractions_in_0_1(self, mock_fcs_data_extended_normal):
+        """Тест что все фракции в диапазоне [0, 1]."""
+        strategy = GatingStrategy()
+        results = strategy.apply_extended(mock_fcs_data_extended_normal)
+        for gate_name, gate in results.gates.items():
+            assert 0 <= gate.fraction <= 1, \
+                f"Gate {gate_name} fraction={gate.fraction} out of [0,1]"
+
+    def test_neutrophils_parent_is_live_cells(self, mock_fcs_data_extended_normal):
+        """Тест что neutrophils.parent == 'live_cells'."""
+        strategy = GatingStrategy()
+        results = strategy.apply_extended(mock_fcs_data_extended_normal)
+        assert results.gates["neutrophils"].parent == "live_cells"
+
+    def test_endothelial_parent_is_live_cells(self, mock_fcs_data_extended_normal):
+        """Тест что endothelial.parent == 'live_cells'."""
+        strategy = GatingStrategy()
+        results = strategy.apply_extended(mock_fcs_data_extended_normal)
+        assert results.gates["endothelial"].parent == "live_cells"
+
+    def test_neutrophils_n_events_non_negative(self, mock_fcs_data_extended_normal):
+        """Тест что neutrophils.n_events >= 0."""
+        strategy = GatingStrategy()
+        results = strategy.apply_extended(mock_fcs_data_extended_normal)
+        assert results.gates["neutrophils"].n_events >= 0
+
+    def test_endothelial_n_events_non_negative(self, mock_fcs_data_extended_normal):
+        """Тест что endothelial.n_events >= 0."""
+        strategy = GatingStrategy()
+        results = strategy.apply_extended(mock_fcs_data_extended_normal)
+        assert results.gates["endothelial"].n_events >= 0

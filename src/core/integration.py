@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from src.core.abm_model import ABMConfig, ABMModel, ABMSnapshot, ABMTrajectory
+from src.core.abm_model import ABMConfig, ABMModel, ABMSnapshot, ABMTrajectory, AgentState
 from src.core.sde_model import SDEConfig, SDEModel, SDEState, SDETrajectory, TherapyProtocol
 from src.data.parameter_extraction import ModelParameters
 
@@ -550,6 +550,191 @@ class IntegratedModel:
             self._abm_model._cytokine_field,
             scaled_C,
         )
+
+    def _synchronize_cytokines(
+        self,
+        sde_C: float,
+        abm_snapshot: ABMSnapshot,
+    ) -> float:
+        """Двусторонняя синхронизация цитокинов (ABM ↔ SDE).
+
+        Дополняет текущую одностороннюю передачу (SDE→ABM).
+        Усредняет цитокиновое поле ABM, вычисляет расхождение с SDE.C,
+        корректирует SDE.C пропорционально coupling_strength.
+
+        Алгоритм:
+        1. abm_C_mean = mean(abm_snapshot.cytokine_field) × scaling_factor
+        2. discrepancy = abm_C_mean - sde_C
+        3. correction = coupling_strength × discrepancy
+        4. return sde_C + correction
+
+        Args:
+            sde_C: Текущая концентрация цитокинов в SDE
+            abm_snapshot: Текущий снимок ABM состояния
+
+        Returns:
+            Скорректированное значение C для SDE
+
+        Подробное описание: Description/Phase2/description_integration.md#IntegratedModel._synchronize_cytokines
+        """
+        abm_C_mean = float(np.mean(abm_snapshot.cytokine_field))
+        discrepancy = abm_C_mean - sde_C
+        correction = self._config.coupling_strength * discrepancy
+        return max(0.0, sde_C + correction)
+
+    def _transfer_therapy_to_abm(self, current_time_days: float) -> None:
+        """Передача терапевтических флагов в ABM environment.
+
+        Проверяет TherapyProtocol для определения активных терапий
+        в текущий момент времени. Устанавливает флаги prp_active
+        и pemf_active в окружение ABM модели.
+
+        PRP: активен в окне [protocol.prp_start, protocol.prp_end]
+        PEMF: активен в окне [protocol.pemf_start, protocol.pemf_end]
+
+        Args:
+            current_time_days: Текущее время симуляции (дни)
+
+        Подробное описание: Description/Phase2/description_integration.md#IntegratedModel._transfer_therapy_to_abm
+        """
+        therapy = self._therapy
+        prp_active = False
+        pemf_active = False
+
+        if therapy.prp_enabled:
+            prp_end = getattr(
+                therapy, "prp_end_time",
+                therapy.prp_start_time + therapy.prp_duration,
+            )
+            prp_active = therapy.prp_start_time <= current_time_days <= prp_end
+
+        if therapy.pemf_enabled:
+            pemf_end = getattr(
+                therapy, "pemf_end_time",
+                therapy.pemf_start_time + therapy.pemf_duration,
+            )
+            pemf_active = therapy.pemf_start_time <= current_time_days <= pemf_end
+
+        self._abm_prp_active = prp_active
+        self._abm_pemf_active = pemf_active
+
+    def _spatial_scaling(
+        self,
+        sde_C: float,
+        abm_field: np.ndarray,
+        direction: str = "sde_to_abm",
+    ) -> np.ndarray | float:
+        """Конвертация между SDE скаляром и ABM 2D полем.
+
+        SDE работает со скалярным C (среднее по объёму),
+        ABM — с 2D полем цитокинов на сетке. Преобразование
+        учитывает масштабные факторы и пространственную неоднородность.
+
+        direction="sde_to_abm": scalar → 2D field (заполнение сетки)
+        direction="abm_to_sde": 2D field → scalar (усреднение)
+
+        Args:
+            sde_C: Скалярная концентрация из SDE
+            abm_field: 2D поле цитокинов ABM
+            direction: Направление конвертации ("sde_to_abm" или "abm_to_sde")
+
+        Returns:
+            np.ndarray (для sde_to_abm) или float (для abm_to_sde)
+
+        Raises:
+            ValueError: Если direction не "sde_to_abm" и не "abm_to_sde"
+
+        Подробное описание: Description/Phase2/description_integration.md#IntegratedModel._spatial_scaling
+        """
+        if direction == "sde_to_abm":
+            return np.full(abm_field.shape, sde_C)
+        elif direction == "abm_to_sde":
+            return float(np.mean(abm_field))
+        else:
+            raise ValueError(
+                f"direction must be 'sde_to_abm' or 'abm_to_sde', got '{direction}'"
+            )
+
+    def _lifting(self, macro_state: dict[str, float]) -> ABMSnapshot:
+        """Equation-Free lifting: макросостояние SDE → микросостояние ABM.
+
+        Создаёт ABM snapshot из макропеременных SDE. Процедура:
+        1. N → количество агентов (с учётом масштабирования)
+        2. Распределение типов агентов пропорционально текущим долям
+        3. C → инициализация цитокинового поля
+        4. Случайное размещение агентов в пространстве
+
+        Используется в Equation-Free фреймворке для рестарта
+        ABM из макросостояния после coarse timestepper.
+
+        Args:
+            macro_state: Словарь макропеременных {"N": float, "C": float, ...}
+
+        Returns:
+            ABMSnapshot с инициализированными агентами и полями
+
+        Подробное описание: Description/Phase2/description_integration.md#IntegratedModel._lifting
+        """
+        N = macro_state.get("N", 0.0)
+        C = macro_state.get("C", 0.0)
+
+        if N < 0:
+            raise ValueError("N must be non-negative")
+
+        n_agents = int(N)
+        space_size = self._config.abm_config.space_size
+        grid_res = self._config.abm_config.grid_resolution
+
+        agents = []
+        for i in range(n_agents):
+            x = float(self._rng.uniform(0, space_size[0]))
+            y = float(self._rng.uniform(0, space_size[1]))
+            agents.append(AgentState(
+                agent_id=i,
+                agent_type="stem",
+                x=x,
+                y=y,
+                age=0.0,
+                division_count=0,
+                energy=1.0,
+            ))
+
+        grid_shape = (
+            int(space_size[0] / grid_res),
+            int(space_size[1] / grid_res),
+        )
+        cytokine_field = np.full(grid_shape, C)
+        ecm_field = np.zeros(grid_shape)
+
+        return ABMSnapshot(
+            t=0.0,
+            agents=agents,
+            cytokine_field=cytokine_field,
+            ecm_field=ecm_field,
+        )
+
+    def _restricting(self, abm_snapshot: ABMSnapshot) -> dict[str, float]:
+        """Equation-Free restricting: микросостояние ABM → макропеременные SDE.
+
+        Агрегирует ABM snapshot в макропеременные. Процедура:
+        1. Подсчёт агентов → N (с масштабированием)
+        2. Усреднение цитокинового поля → C
+        3. Подсчёт типов → доли популяций
+
+        Инвариант: restricting(lifting(state)) ≈ state
+        (с точностью до дискретизации).
+
+        Args:
+            abm_snapshot: Снимок ABM состояния
+
+        Returns:
+            Словарь макропеременных {"N": float, "C": float, ...}
+
+        Подробное описание: Description/Phase2/description_integration.md#IntegratedModel._restricting
+        """
+        N = abm_snapshot.get_total_agents()
+        C = float(np.mean(abm_snapshot.cytokine_field))
+        return {"N": N, "C": C}
 
     def _create_integrated_state(
         self,

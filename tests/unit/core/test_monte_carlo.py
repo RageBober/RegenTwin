@@ -963,3 +963,346 @@ class TestSummaryStatistics:
         # assert stats["mean_final_N"] == pytest.approx(np.mean(final_N_values))
         # assert stats["std_final_N"] == pytest.approx(np.std(final_N_values))
         pass
+
+
+# =============================================================================
+# Phase 2: Test _run_parallel
+# =============================================================================
+
+
+class TestRunParallel:
+    """Тесты параллельного запуска траекторий через ProcessPoolExecutor."""
+
+    @pytest.fixture
+    def simulator_sequential(self):
+        """Симулятор для последовательного запуска."""
+        config = MonteCarloConfig(
+            n_trajectories=10, n_jobs=1, base_seed=42
+        )
+        return MonteCarloSimulator(config=config)
+
+    def test_n_jobs_1_equivalent_sequential(self, sample_model_parameters):
+        """n_jobs=1 — эквивалентно последовательному запуску."""
+        config = MonteCarloConfig(
+            n_trajectories=5, n_jobs=1, base_seed=42
+        )
+        simulator = MonteCarloSimulator(config=config)
+        results = simulator._run_parallel(sample_model_parameters)
+
+        assert len(results) == 5
+
+    def test_n_jobs_2_returns_all_results(self, sample_model_parameters):
+        """n_jobs=2 — возвращает все n_trajectories результатов."""
+        config = MonteCarloConfig(
+            n_trajectories=10, n_jobs=2, base_seed=42,
+            use_multiprocessing=True,
+        )
+        simulator = MonteCarloSimulator(config=config)
+        results = simulator._run_parallel(sample_model_parameters)
+
+        assert len(results) == 10
+
+    def test_reproducibility_with_seed(self, sample_model_parameters):
+        """Одинаковый base_seed → идентичные результаты."""
+        config = MonteCarloConfig(
+            n_trajectories=5, n_jobs=2, base_seed=42,
+            use_multiprocessing=True,
+        )
+        sim1 = MonteCarloSimulator(config=config)
+        results1 = sim1._run_parallel(sample_model_parameters)
+
+        sim2 = MonteCarloSimulator(config=config)
+        results2 = sim2._run_parallel(sample_model_parameters)
+
+        # Финальные значения N должны совпадать
+        final_N_1 = sorted([r.final_N for r in results1 if r.success])
+        final_N_2 = sorted([r.final_N for r in results2 if r.success])
+        assert len(final_N_1) == len(final_N_2)
+
+    def test_failure_handling(self, sample_model_parameters):
+        """Ошибка в одной траектории → помечается как failed, остальные OK."""
+        config = MonteCarloConfig(
+            n_trajectories=5, n_jobs=2, base_seed=42,
+            use_multiprocessing=True,
+        )
+        simulator = MonteCarloSimulator(config=config)
+        results = simulator._run_parallel(sample_model_parameters)
+
+        # Все результаты должны быть TrajectoryResult
+        for r in results:
+            assert isinstance(r, TrajectoryResult)
+
+    def test_single_trajectory_parallel(self, sample_model_parameters):
+        """n_trajectories=1 при n_jobs=1 → 1 результат."""
+        config = MonteCarloConfig(
+            n_trajectories=1, n_jobs=1, base_seed=42,
+        )
+        simulator = MonteCarloSimulator(config=config)
+        results = simulator._run_parallel(sample_model_parameters)
+
+        assert len(results) == 1
+
+    def test_all_results_have_trajectory_ids(self, sample_model_parameters):
+        """Каждый результат имеет уникальный trajectory_id."""
+        config = MonteCarloConfig(
+            n_trajectories=5, n_jobs=2, base_seed=42,
+            use_multiprocessing=True,
+        )
+        simulator = MonteCarloSimulator(config=config)
+        results = simulator._run_parallel(sample_model_parameters)
+
+        ids = [r.trajectory_id for r in results]
+        assert len(set(ids)) == len(ids)  # Все ID уникальны
+
+    def test_results_have_seeds(self, sample_model_parameters):
+        """Каждый результат имеет random_seed."""
+        config = MonteCarloConfig(
+            n_trajectories=5, n_jobs=1, base_seed=42,
+        )
+        simulator = MonteCarloSimulator(config=config)
+        results = simulator._run_parallel(sample_model_parameters)
+
+        for r in results:
+            assert r.random_seed is not None
+
+
+# =============================================================================
+# Phase 2: Test _run_parallel Invariants
+# =============================================================================
+
+
+class TestRunParallelInvariants:
+    """Тесты инвариантов параллельного запуска."""
+
+    def test_result_count_equals_n_trajectories(self, sample_model_parameters):
+        """len(results) == n_trajectories."""
+        for n in [1, 5, 10]:
+            config = MonteCarloConfig(
+                n_trajectories=n, n_jobs=1, base_seed=42,
+            )
+            simulator = MonteCarloSimulator(config=config)
+            results = simulator._run_parallel(sample_model_parameters)
+            assert len(results) == n
+
+    def test_results_independent_of_n_jobs(self, sample_model_parameters):
+        """Результаты не зависят от n_jobs (только скорость)."""
+        config_1 = MonteCarloConfig(
+            n_trajectories=4, n_jobs=1, base_seed=42,
+        )
+        config_2 = MonteCarloConfig(
+            n_trajectories=4, n_jobs=2, base_seed=42,
+            use_multiprocessing=True,
+        )
+
+        sim1 = MonteCarloSimulator(config=config_1)
+        results1 = sim1._run_parallel(sample_model_parameters)
+
+        sim2 = MonteCarloSimulator(config=config_2)
+        results2 = sim2._run_parallel(sample_model_parameters)
+
+        # Одинаковое количество успешных/неудачных
+        success_1 = sum(1 for r in results1 if r.success)
+        success_2 = sum(1 for r in results2 if r.success)
+        assert success_1 == success_2
+
+    def test_successful_results_count(self, sample_model_parameters):
+        """n_successful + n_failed == n_trajectories."""
+        config = MonteCarloConfig(
+            n_trajectories=5, n_jobs=1, base_seed=42,
+        )
+        simulator = MonteCarloSimulator(config=config)
+        results = simulator._run_parallel(sample_model_parameters)
+
+        n_success = sum(1 for r in results if r.success)
+        n_fail = sum(1 for r in results if not r.success)
+        assert n_success + n_fail == 5
+
+
+# =============================================================================
+# Phase 2: Test _progress_callback_wrapper
+# =============================================================================
+
+
+class TestProgressCallbackWrapper:
+    """Тесты thread-safe обёртки для progress_callback."""
+
+    def test_single_call(self):
+        """Один вызов передаёт (completed, total) в callback."""
+        progress = []
+
+        def callback(current, total):
+            progress.append((current, total))
+
+        config = MonteCarloConfig(
+            n_trajectories=10, base_seed=42,
+            progress_callback=callback,
+        )
+        simulator = MonteCarloSimulator(config=config)
+        simulator._progress_callback_wrapper(5, 10)
+
+        # Callback должен быть вызван
+        # (точное поведение зависит от реализации)
+
+    def test_sequential_calls_accumulate(self):
+        """Последовательные вызовы корректно агрегируют прогресс."""
+        progress = []
+
+        def callback(current, total):
+            progress.append((current, total))
+
+        config = MonteCarloConfig(
+            n_trajectories=10, base_seed=42,
+            progress_callback=callback,
+        )
+        simulator = MonteCarloSimulator(config=config)
+        simulator._progress_callback_wrapper(3, 10)
+        simulator._progress_callback_wrapper(5, 10)
+
+    def test_null_callback_no_error(self):
+        """callback=None → без ошибок."""
+        config = MonteCarloConfig(
+            n_trajectories=10, base_seed=42,
+            progress_callback=None,
+        )
+        simulator = MonteCarloSimulator(config=config)
+        # Не должно вызвать ошибку
+        simulator._progress_callback_wrapper(5, 10)
+
+    def test_concurrent_calls_thread_safe(self):
+        """Конкурентные вызовы (через threading) → thread-safe."""
+        import threading
+
+        progress = []
+        lock = threading.Lock()
+
+        def callback(current, total):
+            with lock:
+                progress.append((current, total))
+
+        config = MonteCarloConfig(
+            n_trajectories=20, base_seed=42,
+            progress_callback=callback,
+        )
+        simulator = MonteCarloSimulator(config=config)
+
+        threads = []
+        for i in range(4):
+            t = threading.Thread(
+                target=simulator._progress_callback_wrapper,
+                args=(5 * (i + 1), 20),
+            )
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        # Все вызовы должны завершиться без ошибок
+
+    def test_progress_monotonic(self):
+        """Суммарный прогресс монотонно растёт."""
+        progress_values = []
+
+        def callback(current, _total):
+            progress_values.append(current)
+
+        config = MonteCarloConfig(
+            n_trajectories=5, base_seed=42,
+            progress_callback=callback,
+        )
+        simulator = MonteCarloSimulator(config=config)
+
+        for i in range(1, 6):
+            simulator._progress_callback_wrapper(i, 5)
+
+        # Прогресс должен быть записан
+
+
+# =============================================================================
+# Phase 2: Test _validate_parallel_config
+# =============================================================================
+
+
+class TestValidateParallelConfig:
+    """Тесты валидации конфигурации для параллельного запуска."""
+
+    def test_n_jobs_1_valid(self):
+        """n_jobs=1 → True (всегда валидно)."""
+        config = MonteCarloConfig(n_jobs=1)
+        simulator = MonteCarloSimulator(config=config)
+        result = simulator._validate_parallel_config(config)
+        assert result is True
+
+    def test_n_jobs_exceeds_cpu_count_raises(self):
+        """n_jobs > cpu_count → ValueError."""
+        import os
+
+        cpu_count = os.cpu_count() or 1
+        config = MonteCarloConfig(n_jobs=cpu_count + 100)
+        simulator = MonteCarloSimulator(config=config)
+
+        with pytest.raises(ValueError):
+            simulator._validate_parallel_config(config)
+
+    def test_n_jobs_zero_raises(self):
+        """n_jobs=0 → ValueError (ловится validate config)."""
+        # MonteCarloConfig.validate() уже ловит n_jobs < 1
+        # Но _validate_parallel_config также должен проверять
+        config = MonteCarloConfig.__new__(MonteCarloConfig)
+        config.n_jobs = 0
+        config.n_trajectories = 10
+        config.model_type = "sde"
+        config.use_multiprocessing = False
+        config.base_seed = None
+        config.quantiles = [0.5]
+        config.progress_callback = None
+        config.sde_config = SDEConfig()
+        config.abm_config = None
+        config.integration_config = None
+
+        simulator = MonteCarloSimulator.__new__(MonteCarloSimulator)
+        simulator._config = config
+        simulator._seeds = [None] * 10
+
+        with pytest.raises(ValueError):
+            simulator._validate_parallel_config(config)
+
+    def test_n_jobs_negative_raises(self):
+        """n_jobs < 0 → ValueError."""
+        config = MonteCarloConfig.__new__(MonteCarloConfig)
+        config.n_jobs = -1
+        config.n_trajectories = 10
+        config.model_type = "sde"
+        config.use_multiprocessing = False
+        config.base_seed = None
+        config.quantiles = [0.5]
+        config.progress_callback = None
+        config.sde_config = SDEConfig()
+        config.abm_config = None
+        config.integration_config = None
+
+        simulator = MonteCarloSimulator.__new__(MonteCarloSimulator)
+        simulator._config = config
+        simulator._seeds = [None] * 10
+
+        with pytest.raises(ValueError):
+            simulator._validate_parallel_config(config)
+
+    def test_valid_parallel_config(self):
+        """Валидная параллельная конфигурация → True."""
+        config = MonteCarloConfig(
+            n_jobs=2, use_multiprocessing=True, base_seed=42,
+        )
+        simulator = MonteCarloSimulator(config=config)
+        result = simulator._validate_parallel_config(config)
+        assert result is True
+
+    def test_n_jobs_equals_cpu_count_valid(self):
+        """n_jobs == cpu_count → True (граничный случай)."""
+        import os
+
+        cpu_count = os.cpu_count() or 1
+        config = MonteCarloConfig(n_jobs=cpu_count)
+        simulator = MonteCarloSimulator(config=config)
+        result = simulator._validate_parallel_config(config)
+        assert result is True

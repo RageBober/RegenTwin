@@ -159,3 +159,9 @@ temp/
 
 # Ignore vscode AI rules
 .github/instructions/codacy.instructions.md
+
+# Claude Code internal files
+.claude/
+
+# Windows artifacts
+nul

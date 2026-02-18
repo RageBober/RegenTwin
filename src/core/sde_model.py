@@ -94,6 +94,7 @@ class TherapyProtocol:
     prp_duration: float = 7.0  # дни
     prp_intensity: float = 1.0  # множитель интенсивности (0-2)
     prp_initial_concentration: float = 10.0  # нг/мл начальная концентрация
+    prp_end_time: float | None = None  # дни (если None → start + duration)
 
     # PEMF терапия
     pemf_enabled: bool = False
@@ -101,9 +102,17 @@ class TherapyProtocol:
     pemf_duration: float = 14.0  # дни
     pemf_frequency: float = 50.0  # Hz
     pemf_intensity: float = 1.0  # множитель интенсивности (0-2)
+    pemf_end_time: float | None = None  # дни (если None → start + duration)
 
     # Комбинированная терапия
     synergy_factor: float = 1.2  # Синергетический эффект при совместном применении
+
+    def __post_init__(self) -> None:
+        """Вычисление end_time из duration если не задан."""
+        if self.prp_end_time is None:
+            self.prp_end_time = self.prp_start_time + self.prp_duration
+        if self.pemf_end_time is None:
+            self.pemf_end_time = self.pemf_start_time + self.pemf_duration
 
 
 @dataclass

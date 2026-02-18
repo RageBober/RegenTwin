@@ -4,7 +4,8 @@
 - Пространственное движение (random walk + chemotaxis)
 - Деление и гибель клеток
 - Взаимодействия между агентами
-- Типы агентов: StemCell (CD34+), Macrophage (CD14+/CD68+), Fibroblast
+- Типы агентов: StemCell (CD34+), Macrophage (CD14+/CD68+), Fibroblast,
+  NeutrophilAgent (CD66b+), EndothelialAgent (CD31+), MyofibroblastAgent (α-SMA+)
 
 Подробное описание: Description/description_abm_model.md
 """
@@ -14,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from src.data.parameter_extraction import ModelParameters
 
@@ -37,6 +39,9 @@ class ABMConfig:
     initial_stem_cells: int = 50
     initial_macrophages: int = 30
     initial_fibroblasts: int = 20
+    initial_neutrophils: int = 0  # Рекрутируются динамически из кровотока
+    initial_endothelial: int = 10  # Начальное количество эндотелиальных клеток
+    initial_myofibroblasts: int = 0  # Активируются из фибробластов при TGF-β
     max_agents: int = 10000
 
     # Параметры движения
@@ -46,6 +51,14 @@ class ABMConfig:
     # Параметры взаимодействий
     interaction_radius: float = 5.0  # мкм
     contact_inhibition_radius: float = 2.0  # мкм
+    contact_inhibition_threshold: int = 5  # Макс. соседей для деления
+    repulsion_strength: float = 1.0  # Коэффициент силы отталкивания
+
+    # Параметры адгезии и расширенной механики
+    adhesion_strength: float = 0.3  # Сила адгезии между совместимыми типами
+    adhesion_equilibrium_distance: float = 3.0  # мкм, равновесное расстояние
+    use_multi_chemotaxis: bool = False  # Мульти-градиентный хемотаксис по типу
+    spatial_index_type: str = "hash"  # "hash" (SpatialHash) или "kdtree"
 
     # Параметры цитокинового поля
     grid_resolution: float = 10.0  # мкм на ячейку сетки
@@ -239,6 +252,227 @@ class ABMTrajectory:
             "final_fibro": float(final_counts.get("fibro", 0)),
             "growth_rate": float(growth_rate),
         }
+
+
+class SpatialHash:
+    """Пространственный хэш для эффективного поиска соседей O(1).
+
+    Делит пространство на ячейки размером cell_size × cell_size.
+    Поиск соседей в радиусе r требует проверки только
+    ceil(r/cell_size) + 1 ячеек в каждом направлении.
+
+    Подробное описание: Description/description_abm_model.md#SpatialHash
+    """
+
+    def __init__(
+        self,
+        space_size: tuple[float, float],
+        cell_size: float,
+        periodic: bool = True,
+    ) -> None:
+        """Инициализация пространственного хэша.
+
+        Args:
+            space_size: Размер пространства (ширина, высота) в мкм
+            cell_size: Размер ячейки (обычно = interaction_radius)
+            periodic: Использовать периодические границы
+        """
+        self._space_size = space_size
+        self._cell_size = cell_size
+        self._periodic = periodic
+
+        # Размер сетки
+        self._grid_width = int(np.ceil(space_size[0] / cell_size))
+        self._grid_height = int(np.ceil(space_size[1] / cell_size))
+
+        # Ячейки: dict[tuple[int, int], list[Agent]]
+        self._cells: dict[tuple[int, int], list] = {}
+
+    def _get_cell(self, x: float, y: float) -> tuple[int, int]:
+        """Получить индекс ячейки для координаты."""
+        cx = int(x / self._cell_size) % self._grid_width
+        cy = int(y / self._cell_size) % self._grid_height
+        return (cx, cy)
+
+    def clear(self) -> None:
+        """Очистить все ячейки."""
+        self._cells.clear()
+
+    def insert(self, agent: "Agent") -> None:
+        """Добавить агента в соответствующую ячейку."""
+        cell = self._get_cell(agent.x, agent.y)
+        if cell not in self._cells:
+            self._cells[cell] = []
+        self._cells[cell].append(agent)
+
+    def rebuild(self, agents: list["Agent"]) -> None:
+        """Перестроить хэш из списка агентов."""
+        self.clear()
+        for agent in agents:
+            if agent.alive:
+                self.insert(agent)
+
+    def get_neighbors(
+        self,
+        x: float,
+        y: float,
+        radius: float,
+        exclude: "Agent | None" = None,
+    ) -> list["Agent"]:
+        """Найти всех соседей в радиусе.
+
+        Args:
+            x: Координата X точки поиска
+            y: Координата Y точки поиска
+            radius: Радиус поиска
+            exclude: Агент для исключения из результатов
+
+        Returns:
+            Список агентов в радиусе
+        """
+        neighbors = []
+
+        # Сколько ячеек проверять в каждом направлении
+        cell_range = int(np.ceil(radius / self._cell_size)) + 1
+        center_cell = self._get_cell(x, y)
+
+        for di in range(-cell_range, cell_range + 1):
+            for dj in range(-cell_range, cell_range + 1):
+                if self._periodic:
+                    ci = (center_cell[0] + di) % self._grid_width
+                    cj = (center_cell[1] + dj) % self._grid_height
+                else:
+                    ci = center_cell[0] + di
+                    cj = center_cell[1] + dj
+                    if ci < 0 or ci >= self._grid_width:
+                        continue
+                    if cj < 0 or cj >= self._grid_height:
+                        continue
+
+                cell = (ci, cj)
+                if cell not in self._cells:
+                    continue
+
+                for agent in self._cells[cell]:
+                    if agent is exclude:
+                        continue
+
+                    # Точная проверка расстояния
+                    dx = abs(x - agent.x)
+                    dy = abs(y - agent.y)
+
+                    if self._periodic:
+                        dx = min(dx, self._space_size[0] - dx)
+                        dy = min(dy, self._space_size[1] - dy)
+
+                    if dx * dx + dy * dy <= radius * radius:
+                        neighbors.append(agent)
+
+        return neighbors
+
+
+class KDTreeSpatialIndex:
+    """Пространственный индекс на основе scipy.spatial.cKDTree.
+
+    Альтернатива SpatialHash для точного O(log n) поиска соседей.
+    Использует KD-дерево для эффективных запросов по радиусу
+    и k ближайших соседей. Поддерживает периодические границы.
+
+    Подробное описание: Description/Phase2/description_abm_model.md#KDTreeSpatialIndex
+    """
+
+    def __init__(
+        self,
+        space_size: tuple[float, float],
+        periodic: bool = True,
+    ) -> None:
+        """Инициализация KD-Tree пространственного индекса.
+
+        Args:
+            space_size: Размер пространства (ширина, высота) в мкм
+            periodic: Использовать периодические границы (тор)
+
+        Подробное описание: Description/Phase2/description_abm_model.md#KDTreeSpatialIndex.__init__
+        """
+        self._space_size = space_size
+        self._periodic = periodic
+        self._tree: cKDTree | None = None
+        self._agents: list[Agent] = []
+
+    def build(self, agents: list["Agent"]) -> None:
+        """Построение KD-дерева из списка агентов.
+
+        Создаёт cKDTree из координат живых агентов.
+        При periodic=True используется boxsize для тороидальных границ.
+
+        Args:
+            agents: Список агентов для индексации
+
+        Подробное описание: Description/Phase2/description_abm_model.md#KDTreeSpatialIndex.build
+        """
+        self._agents = [a for a in agents if a.alive]
+        if not self._agents:
+            self._tree = None
+            return
+        positions = np.array([[a.x, a.y] for a in self._agents])
+        if self._periodic:
+            self._tree = cKDTree(
+                positions,
+                boxsize=[self._space_size[0], self._space_size[1]],
+            )
+        else:
+            self._tree = cKDTree(positions)
+
+    def query_radius(
+        self,
+        position: tuple[float, float],
+        radius: float,
+    ) -> list["Agent"]:
+        """Поиск всех агентов в заданном радиусе.
+
+        Использует cKDTree.query_ball_point для эффективного
+        поиска по радиусу. Возвращает агентов на расстоянии ≤ radius.
+
+        Args:
+            position: Координаты центра поиска (x, y)
+            radius: Радиус поиска (мкм)
+
+        Returns:
+            Список агентов в радиусе
+
+        Подробное описание: Description/Phase2/description_abm_model.md#KDTreeSpatialIndex.query_radius
+        """
+        if self._tree is None or not self._agents or radius <= 0:
+            return []
+        indices = self._tree.query_ball_point(list(position), radius)
+        return [self._agents[i] for i in indices]
+
+    def query_nearest(
+        self,
+        position: tuple[float, float],
+        k: int = 1,
+    ) -> list["Agent"]:
+        """Поиск k ближайших агентов.
+
+        Использует cKDTree.query для нахождения k ближайших соседей.
+        Если k > количества агентов, возвращает всех.
+
+        Args:
+            position: Координаты точки поиска (x, y)
+            k: Количество ближайших соседей
+
+        Returns:
+            Список k ближайших агентов (отсортированы по расстоянию)
+
+        Подробное описание: Description/Phase2/description_abm_model.md#KDTreeSpatialIndex.query_nearest
+        """
+        if self._tree is None or not self._agents or k <= 0:
+            return []
+        k = min(k, len(self._agents))
+        distances, indices = self._tree.query(list(position), k=k)
+        if k == 1:
+            return [self._agents[int(indices)]]
+        return [self._agents[int(i)] for i in indices]
 
 
 class Agent(ABC):
@@ -952,6 +1186,427 @@ class Fibroblast(Agent):
         self.activated = True
 
 
+class NeutrophilAgent(Agent):
+    """CD66b+ нейтрофил.
+
+    Свойства:
+    - Короткоживущий (t1/2 ~ 12-14 часов)
+    - Не пролиферирует в ткани (MAX_DIVISIONS = 0)
+    - Мощный фагоцитоз debris
+    - Секреция провоспалительных цитокинов (TNF-α, IL-8)
+    - Хемотаксис по градиенту IL-8
+
+    Подробное описание: Description/Phase2/description_abm_model.md#NeutrophilAgent
+    """
+
+    AGENT_TYPE: str = "neutro"
+    LIFESPAN: float = 24.0  # часов (короткоживущий)
+    DIVISION_ENERGY_THRESHOLD: float = 1.0  # Не делятся
+    MAX_DIVISIONS: int = 0  # Не пролиферируют в ткани
+    DIVISION_PROBABILITY: float = 0.0  # per hour
+    DEATH_PROBABILITY: float = 0.04  # per hour (высокая, t1/2 ~ 12-14 ч)
+
+    CHEMOTAXIS_SENSITIVITY: float = 0.8  # Сильный хемотаксис по IL-8
+    PHAGOCYTOSIS_CAPACITY: int = 3  # Максимум debris за шаг
+
+    def __init__(
+        self,
+        agent_id: int,
+        x: float,
+        y: float,
+        age: float = 0.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        """Инициализация нейтрофила.
+
+        Args:
+            agent_id: Уникальный идентификатор
+            x: Координата X
+            y: Координата Y
+            age: Возраст
+            rng: Генератор случайных чисел
+
+        Подробное описание: Description/Phase2/description_abm_model.md#NeutrophilAgent.__init__
+        """
+        super().__init__(agent_id, x, y, age, rng)
+        self.phagocytosed_count = 0
+
+    def update(self, dt: float, environment: dict[str, Any]) -> None:
+        """Обновление нейтрофила.
+
+        Потребление энергии, обновление возраста, проверка апоптоза.
+        Нейтрофилы быстро расходуют энергию и имеют короткий срок жизни.
+        Хемотаксис обрабатывается на уровне ABMModel.
+
+        Args:
+            dt: Временной шаг (часы)
+            environment: Параметры окружения (il8_level, debris_count)
+
+        Подробное описание: Description/Phase2/description_abm_model.md#NeutrophilAgent.update
+        """
+        if not self.alive:
+            return
+        self.age += dt
+        energy_consumption = 0.003 * dt
+        self.energy = max(0.0, self.energy - energy_consumption)
+        self.dividing = False
+
+    def divide(self, new_id: int) -> "Agent | None":
+        """Деление нейтрофила — всегда None.
+
+        Нейтрофилы не пролиферируют в ткани (MAX_DIVISIONS = 0).
+        Рекрутируются из кровотока, а не делятся локально.
+
+        Args:
+            new_id: ID для нового агента (не используется)
+
+        Returns:
+            Всегда None
+
+        Подробное описание: Description/Phase2/description_abm_model.md#NeutrophilAgent.divide
+        """
+        return None
+
+    def phagocytose(self, debris_count: int) -> int:
+        """Фагоцитоз debris и патогенов.
+
+        Поглощает до PHAGOCYTOSIS_CAPACITY частиц за вызов.
+        Каждая поглощённая частица увеличивает phagocytosed_count.
+        При исчерпании ёмкости — NETosis (гибель с выбросом ловушек).
+
+        Args:
+            debris_count: Количество доступных частиц debris
+
+        Returns:
+            Количество поглощённых частиц (≤ PHAGOCYTOSIS_CAPACITY)
+
+        Подробное описание: Description/Phase2/description_abm_model.md#NeutrophilAgent.phagocytose
+        """
+        if not self.alive:
+            return 0
+        phagocytosed = min(debris_count, self.PHAGOCYTOSIS_CAPACITY)
+        self.phagocytosed_count += phagocytosed
+        return phagocytosed
+
+    def secrete_cytokines(self, dt: float) -> dict[str, float]:
+        """Секреция провоспалительных цитокинов.
+
+        Нейтрофилы секретируют TNF-α и IL-8 (аутокринная петля).
+        Скорость секреции зависит от активации (phagocytosed_count > 0).
+
+        Args:
+            dt: Временной шаг (часы)
+
+        Returns:
+            Словарь {"TNF_alpha": float, "IL_8": float}
+
+        Подробное описание: Description/Phase2/description_abm_model.md#NeutrophilAgent.secrete_cytokines
+        """
+        if not self.alive:
+            return {"TNF_alpha": 0.0, "IL_8": 0.0}
+        return {"TNF_alpha": 0.01 * dt, "IL_8": 0.02 * dt}
+
+    def is_apoptotic(self) -> bool:
+        """Проверка апоптоза нейтрофила.
+
+        True при age > LIFESPAN или energy ≤ 0.
+        Апоптотические нейтрофилы фагоцитируются макрофагами (M2-поляризация).
+
+        Returns:
+            True если нейтрофил апоптотический
+
+        Подробное описание: Description/Phase2/description_abm_model.md#NeutrophilAgent.is_apoptotic
+        """
+        return not self.alive
+
+
+class EndothelialAgent(Agent):
+    """CD31+ эндотелиальная клетка.
+
+    Свойства:
+    - VEGF-зависимый ангиогенез
+    - Формирование межклеточных контактов (адгезия)
+    - Долгоживущая (до 20 дней)
+    - Низкая пролиферация, стимулируемая VEGF
+    - Секреция VEGF и PDGF
+
+    Подробное описание: Description/Phase2/description_abm_model.md#EndothelialAgent
+    """
+
+    AGENT_TYPE: str = "endo"
+    LIFESPAN: float = 480.0  # часов (20 дней)
+    DIVISION_ENERGY_THRESHOLD: float = 0.8
+    MAX_DIVISIONS: int = 5
+    DIVISION_PROBABILITY: float = 0.01  # per hour
+    DEATH_PROBABILITY: float = 0.001  # per hour
+
+    VEGF_SENSITIVITY: float = 0.6  # Чувствительность к VEGF-градиенту
+    ADHESION_STRENGTH: float = 0.5  # Сила адгезии к другим endo
+
+    def __init__(
+        self,
+        agent_id: int,
+        x: float,
+        y: float,
+        age: float = 0.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        """Инициализация эндотелиальной клетки.
+
+        Args:
+            agent_id: Уникальный идентификатор
+            x: Координата X
+            y: Координата Y
+            age: Возраст
+            rng: Генератор случайных чисел
+
+        Подробное описание: Description/Phase2/description_abm_model.md#EndothelialAgent.__init__
+        """
+        super().__init__(agent_id, x, y, age, rng)
+        self.junction_count = 0
+
+    def update(self, dt: float, environment: dict[str, Any]) -> None:
+        """Обновление эндотелиальной клетки.
+
+        VEGF-зависимое поведение: при высоком VEGF — миграция и деление.
+        Формирование сосудистых структур через адгезию с соседями.
+
+        Args:
+            dt: Временной шаг (часы)
+            environment: Параметры окружения (vegf_level, neighbors)
+
+        Подробное описание: Description/Phase2/description_abm_model.md#EndothelialAgent.update
+        """
+        if not self.alive:
+            return
+        self.age += dt
+        energy_consumption = 0.001 * dt
+        self.energy = max(0.0, self.energy - energy_consumption)
+        self.dividing = False
+
+    def divide(self, new_id: int) -> "EndothelialAgent | None":
+        """VEGF-зависимое деление эндотелиальной клетки.
+
+        Вероятность деления модулируется уровнем VEGF.
+        Дочерняя клетка появляется рядом с родительской.
+
+        Args:
+            new_id: ID для новой клетки
+
+        Returns:
+            Новый EndothelialAgent или None
+
+        Подробное описание: Description/Phase2/description_abm_model.md#EndothelialAgent.divide
+        """
+        if not self.can_divide():
+            return None
+        if self._rng.random() >= self.DIVISION_PROBABILITY:
+            return None
+        self.dividing = True
+        self.division_count += 1
+        self.energy *= 0.5
+        offspring = EndothelialAgent(
+            agent_id=new_id,
+            x=self.x + self._rng.uniform(-1.0, 1.0),
+            y=self.y + self._rng.uniform(-1.0, 1.0),
+            age=0.0,
+            rng=self._rng,
+        )
+        offspring.energy = self.energy
+        offspring.division_count = 0
+        return offspring
+
+    def form_junction(self, neighbor: "EndothelialAgent") -> bool:
+        """Формирование сосудистого контакта (tight junction).
+
+        Два эндотелиальных агента формируют контакт если находятся
+        на расстоянии ≤ adhesion_equilibrium_distance. Контакт
+        стабилизирует обе клетки (снижает DEATH_PROBABILITY).
+
+        Args:
+            neighbor: Соседняя эндотелиальная клетка
+
+        Returns:
+            True если контакт сформирован
+
+        Подробное описание: Description/Phase2/description_abm_model.md#EndothelialAgent.form_junction
+        """
+        if not isinstance(neighbor, EndothelialAgent):
+            return False
+        dist = np.sqrt((self.x - neighbor.x) ** 2 + (self.y - neighbor.y) ** 2)
+        if dist <= 3.0:  # adhesion_equilibrium_distance
+            self.junction_count += 1
+            return True
+        return False
+
+    def secrete_cytokines(self, dt: float) -> dict[str, float]:
+        """Секреция ангиогенных факторов.
+
+        Эндотелиальные клетки секретируют VEGF (аутокринно) и PDGF
+        (привлечение перицитов). Скорость зависит от активации.
+
+        Args:
+            dt: Временной шаг (часы)
+
+        Returns:
+            Словарь {"VEGF": float, "PDGF": float}
+
+        Подробное описание: Description/Phase2/description_abm_model.md#EndothelialAgent.secrete_cytokines
+        """
+        if not self.alive:
+            return {"VEGF": 0.0, "PDGF": 0.0}
+        return {"VEGF": 0.005 * dt, "PDGF": 0.003 * dt}
+
+
+class MyofibroblastAgent(Agent):
+    """α-SMA+ миофибробласт.
+
+    Свойства:
+    - Усиленная продукция ECM (2× фибробласта)
+    - Контракция ткани (закрытие раны)
+    - TGF-β-зависимое выживание
+    - Апоптоз при снижении TGF-β (разрешение фиброза)
+    - Активируется из Fibroblast при высоком TGF-β
+
+    Подробное описание: Description/Phase2/description_abm_model.md#MyofibroblastAgent
+    """
+
+    AGENT_TYPE: str = "myofibro"
+    LIFESPAN: float = 480.0  # часов (20 дней)
+    DIVISION_ENERGY_THRESHOLD: float = 0.85
+    MAX_DIVISIONS: int = 3
+    DIVISION_PROBABILITY: float = 0.003  # per hour (редкое деление)
+    DEATH_PROBABILITY: float = 0.002  # per hour
+
+    ECM_PRODUCTION_RATE: float = 1.0  # units/hour (2× фибробласта)
+    CONTRACTION_FORCE: float = 0.3  # Сила контракции
+
+    def __init__(
+        self,
+        agent_id: int,
+        x: float,
+        y: float,
+        age: float = 0.0,
+        rng: np.random.Generator | None = None,
+    ) -> None:
+        """Инициализация миофибробласта.
+
+        Args:
+            agent_id: Уникальный идентификатор
+            x: Координата X
+            y: Координата Y
+            age: Возраст
+            rng: Генератор случайных чисел
+
+        Подробное описание: Description/Phase2/description_abm_model.md#MyofibroblastAgent.__init__
+        """
+        super().__init__(agent_id, x, y, age, rng)
+        self.ecm_produced = 0.0
+
+    def update(self, dt: float, environment: dict[str, Any]) -> None:
+        """Обновление миофибробласта.
+
+        TGF-β-зависимое выживание: при низком TGF-β — апоптоз.
+        Непрерывная продукция ECM и контракция ткани.
+
+        Args:
+            dt: Временной шаг (часы)
+            environment: Параметры окружения (tgfb_level, ecm_density)
+
+        Подробное описание: Description/Phase2/description_abm_model.md#MyofibroblastAgent.update
+        """
+        if not self.alive:
+            return
+        self.age += dt
+        energy_consumption = 0.002 * dt
+        self.energy = max(0.0, self.energy - energy_consumption)
+        self.dividing = False
+
+    def divide(self, new_id: int) -> "MyofibroblastAgent | None":
+        """Редкое деление миофибробласта.
+
+        Миофибробласты делятся крайне редко (DIVISION_PROBABILITY = 0.003).
+        Дочерняя клетка наследует состояние активации.
+
+        Args:
+            new_id: ID для нового агента
+
+        Returns:
+            Новый MyofibroblastAgent или None
+
+        Подробное описание: Description/Phase2/description_abm_model.md#MyofibroblastAgent.divide
+        """
+        if not self.can_divide():
+            return None
+        if self._rng.random() >= self.DIVISION_PROBABILITY:
+            return None
+        self.dividing = True
+        self.division_count += 1
+        self.energy *= 0.5
+        offspring = MyofibroblastAgent(
+            agent_id=new_id,
+            x=self.x + self._rng.uniform(-1.0, 1.0),
+            y=self.y + self._rng.uniform(-1.0, 1.0),
+            age=0.0,
+            rng=self._rng,
+        )
+        offspring.energy = self.energy
+        offspring.division_count = 0
+        return offspring
+
+    def produce_ecm(self, dt: float) -> float:
+        """Усиленное производство внеклеточного матрикса.
+
+        Миофибробласты производят коллаген со скоростью 2× фибробласта
+        (ECM_PRODUCTION_RATE = 1.0). Скорость зависит от уровня TGF-β.
+
+        Args:
+            dt: Временной шаг (часы)
+
+        Returns:
+            Количество произведённого ECM (units)
+
+        Подробное описание: Description/Phase2/description_abm_model.md#MyofibroblastAgent.produce_ecm
+        """
+        if not self.alive:
+            return 0.0
+        return self.ECM_PRODUCTION_RATE * dt
+
+    def contract(self, dt: float) -> float:
+        """Контракция ткани (закрытие раны).
+
+        Миофибробласты генерируют тяговую силу через α-SMA стресс-волокна.
+        Сила контракции пропорциональна CONTRACTION_FORCE и времени.
+
+        Args:
+            dt: Временной шаг (часы)
+
+        Returns:
+            Величина контракции (безразмерная)
+
+        Подробное описание: Description/Phase2/description_abm_model.md#MyofibroblastAgent.contract
+        """
+        if not self.alive:
+            return 0.0
+        return self.CONTRACTION_FORCE * dt
+
+    def should_apoptose_tgfb(self, tgfb_level: float) -> bool:
+        """Проверка TGF-β-зависимого апоптоза.
+
+        Миофибробласты зависят от TGF-β для выживания. При падении
+        уровня ниже порога — запускается апоптоз (разрешение фиброза).
+
+        Args:
+            tgfb_level: Локальный уровень TGF-β (нг/мл)
+
+        Returns:
+            True если TGF-β ниже порога выживания
+
+        Подробное описание: Description/Phase2/description_abm_model.md#MyofibroblastAgent.should_apoptose_tgfb
+        """
+        return tgfb_level < 0.1
+
+
 class ABMModel:
     """Agent-Based модель регенерации тканей.
 
@@ -987,6 +1642,16 @@ class ABMModel:
         )
         self._cytokine_field = np.zeros(self._grid_shape)
         self._ecm_field = np.zeros(self._grid_shape)
+
+        # Spatial hash для эффективного поиска соседей O(1)
+        self._spatial_hash = SpatialHash(
+            space_size=self._config.space_size,
+            cell_size=max(
+                self._config.interaction_radius,
+                self._config.contact_inhibition_radius,
+            ),
+            periodic=(self._config.boundary_type == "periodic"),
+        )
 
     @property
     def config(self) -> ABMConfig:
@@ -1108,6 +1773,9 @@ class ABMModel:
 
         Подробное описание: Description/description_abm_model.md#ABMModel.step
         """
+        # 0. Перестроение пространственного хэша для поиска соседей
+        self._spatial_hash.rebuild(self._agents)
+
         # 1. Обновление агентов (движение, потребление энергии, etc.)
         self._update_agents(dt)
 
@@ -1149,6 +1817,19 @@ class ABMModel:
             dx, dy = agent._random_walk_displacement(
                 self._config.diffusion_coefficient, dt
             )
+
+            # Хемотаксис для макрофагов
+            if isinstance(agent, Macrophage):
+                grad_x, grad_y = self._get_cytokine_gradient(agent.x, agent.y)
+                chi = self._config.chemotaxis_strength * agent.CHEMOTAXIS_SENSITIVITY
+                dx += chi * grad_x * dt
+                dy += chi * grad_y * dt
+
+            # Силы отталкивания между клетками
+            repulsion_x, repulsion_y = self._calculate_repulsion_force(agent)
+            dx += repulsion_x * dt
+            dy += repulsion_y * dt
+
             agent.move(dx, dy, self._config.space_size, self._config.boundary_type)
 
             # Проверка смерти
@@ -1169,6 +1850,13 @@ class ABMModel:
         for agent in self._agents:
             if not agent.alive or not agent.can_divide():
                 continue
+
+            # Контактное ингибирование: блокировка деления при высокой плотности
+            neighbor_count = self._count_neighbors(
+                agent, self._config.contact_inhibition_radius
+            )
+            if neighbor_count >= self._config.contact_inhibition_threshold:
+                continue  # Слишком много соседей - деление заблокировано
 
             # Ограничение общего количества
             if len(self._agents) + len(new_agents) >= self._config.max_agents:
@@ -1324,6 +2012,245 @@ class ABMModel:
             "pemf_active": False,
         }
 
+    def _get_cytokine_gradient(self, x: float, y: float) -> tuple[float, float]:
+        """Вычисление градиента цитокинового поля методом центральных разностей.
+
+        Используется для хемотаксиса макрофагов - направленного движения
+        к источникам цитокинов.
+
+        Args:
+            x: Координата X агента (мкм)
+            y: Координата Y агента (мкм)
+
+        Returns:
+            Нормализованный вектор градиента (grad_x, grad_y)
+
+        Подробное описание: Description/description_abm_model.md#ABMModel._get_cytokine_gradient
+        """
+        # Преобразование координат агента в индексы сетки
+        grid_x = int(x / self._config.grid_resolution) % self._grid_shape[0]
+        grid_y = int(y / self._config.grid_resolution) % self._grid_shape[1]
+
+        # Соседние индексы с периодическими границами
+        x_prev = (grid_x - 1) % self._grid_shape[0]
+        x_next = (grid_x + 1) % self._grid_shape[0]
+        y_prev = (grid_y - 1) % self._grid_shape[1]
+        y_next = (grid_y + 1) % self._grid_shape[1]
+
+        # Центральные разности: grad = (C[i+1] - C[i-1]) / (2 * dx)
+        dx = 2.0 * self._config.grid_resolution
+        grad_x = (
+            self._cytokine_field[x_next, grid_y]
+            - self._cytokine_field[x_prev, grid_y]
+        ) / dx
+        grad_y = (
+            self._cytokine_field[grid_x, y_next]
+            - self._cytokine_field[grid_x, y_prev]
+        ) / dx
+
+        # Нормализация (избегаем деления на 0)
+        magnitude = np.sqrt(grad_x**2 + grad_y**2)
+        if magnitude > 1e-10:
+            return (grad_x / magnitude, grad_y / magnitude)
+        return (0.0, 0.0)
+
+    def _count_neighbors(self, agent: Agent, radius: float) -> int:
+        """Подсчёт соседей агента в заданном радиусе (оптимизировано через SpatialHash).
+
+        Используется для контактного ингибирования - блокировки деления
+        при высокой локальной плотности клеток.
+
+        Args:
+            agent: Агент для проверки
+            radius: Радиус поиска (мкм)
+
+        Returns:
+            Количество живых соседей в радиусе
+
+        Подробное описание: Description/description_abm_model.md#ABMModel._count_neighbors
+        """
+        neighbors = self._spatial_hash.get_neighbors(
+            agent.x, agent.y, radius, exclude=agent
+        )
+        return len(neighbors)
+
+    def _calculate_repulsion_force(self, agent: Agent) -> tuple[float, float]:
+        """Вычисление силы отталкивания от соседних клеток (оптимизировано через SpatialHash).
+
+        Модель мягких сфер с линейным отталкиванием:
+        F = k * (r0 - d) / r0 * direction
+
+        Args:
+            agent: Агент для расчёта сил
+
+        Returns:
+            (fx, fy) - компоненты силы отталкивания
+
+        Подробное описание: Description/description_abm_model.md#ABMModel._calculate_repulsion_force
+        """
+        fx, fy = 0.0, 0.0
+        r0 = self._config.interaction_radius
+
+        # Получаем только соседей в радиусе взаимодействия через spatial hash
+        neighbors = self._spatial_hash.get_neighbors(
+            agent.x, agent.y, r0, exclude=agent
+        )
+
+        for other in neighbors:
+            # Вектор от other к agent
+            dx = agent.x - other.x
+            dy = agent.y - other.y
+
+            # Учёт периодических границ
+            if self._config.boundary_type == "periodic":
+                if dx > self._config.space_size[0] / 2:
+                    dx -= self._config.space_size[0]
+                elif dx < -self._config.space_size[0] / 2:
+                    dx += self._config.space_size[0]
+                if dy > self._config.space_size[1] / 2:
+                    dy -= self._config.space_size[1]
+                elif dy < -self._config.space_size[1] / 2:
+                    dy += self._config.space_size[1]
+
+            distance = np.sqrt(dx**2 + dy**2)
+
+            if distance > 1e-10:
+                # Линейное отталкивание: F = k * overlap / r0
+                overlap = r0 - distance
+                force_magnitude = self._config.repulsion_strength * overlap / r0
+
+                # Нормализация направления
+                fx += force_magnitude * dx / distance
+                fy += force_magnitude * dy / distance
+
+        return (fx, fy)
+
+    def _chemotaxis_displacement(
+        self,
+        agent: Agent,
+        cytokine_fields: dict[str, np.ndarray],
+    ) -> tuple[float, float]:
+        """Мульти-градиентный хемотаксис в зависимости от типа агента.
+
+        Каждый тип клетки реагирует на специфический набор хемоаттрактантов:
+        - NeutrophilAgent → IL-8 (рекрутирование в зону воспаления)
+        - Macrophage → MCP-1 (привлечение макрофагов)
+        - EndothelialAgent → VEGF (ангиогенная миграция)
+        - Fibroblast → PDGF (привлечение к месту ремоделирования)
+
+        Вычисляет градиент цитокинового поля в позиции агента и
+        возвращает смещение пропорциональное градиенту × чувствительность.
+
+        Args:
+            agent: Агент для расчёта хемотаксиса
+            cytokine_fields: Словарь цитокиновых полей {"IL_8": ndarray, ...}
+
+        Returns:
+            (dx, dy) — хемотаксическое смещение
+
+        Подробное описание: Description/Phase2/description_abm_model.md#ABMModel._chemotaxis_displacement
+        """
+        type_to_cytokine = {
+            "neutro": "IL_8",
+            "macro": "MCP_1",
+            "endo": "VEGF",
+            "fibro": "PDGF",
+        }
+        cytokine_name = type_to_cytokine.get(agent.AGENT_TYPE)
+        if cytokine_name is None or cytokine_name not in cytokine_fields:
+            return (0.0, 0.0)
+
+        field = cytokine_fields[cytokine_name]
+        grid_x = int(agent.x / self._config.grid_resolution) % field.shape[0]
+        grid_y = int(agent.y / self._config.grid_resolution) % field.shape[1]
+
+        x_prev = (grid_x - 1) % field.shape[0]
+        x_next = (grid_x + 1) % field.shape[0]
+        y_prev = (grid_y - 1) % field.shape[1]
+        y_next = (grid_y + 1) % field.shape[1]
+
+        dx_step = 2.0 * self._config.grid_resolution
+        grad_x = (field[x_next, grid_y] - field[x_prev, grid_y]) / dx_step
+        grad_y = (field[grid_x, y_next] - field[grid_x, y_prev]) / dx_step
+
+        sensitivity = getattr(agent, "CHEMOTAXIS_SENSITIVITY", 0.0)
+        dx = float(sensitivity * grad_x * self._config.chemotaxis_strength)
+        dy = float(sensitivity * grad_y * self._config.chemotaxis_strength)
+        return (dx, dy)
+
+    def _apply_contact_inhibition(
+        self,
+        agent: Agent,
+        neighbors_count: int,
+    ) -> float:
+        """Модификатор пролиферации на основе контактного ингибирования.
+
+        Плотность-зависимое подавление деления. При увеличении количества
+        соседей вероятность деления снижается линейно до 0 при достижении
+        contact_inhibition_threshold.
+
+        Формула: modifier = max(0, 1 - neighbors_count / threshold)
+        - 0 соседей → 1.0 (нет ингибирования)
+        - threshold соседей → 0.0 (полное ингибирование)
+
+        Args:
+            agent: Агент, для которого считается модификатор
+            neighbors_count: Количество соседей в contact_inhibition_radius
+
+        Returns:
+            Модификатор пролиферации в диапазоне [0.0, 1.0]
+
+        Подробное описание: Description/Phase2/description_abm_model.md#ABMModel._apply_contact_inhibition
+        """
+        threshold = self._config.contact_inhibition_threshold
+        return max(0.0, 1.0 - neighbors_count / threshold)
+
+    def _calculate_adhesion_force(
+        self,
+        agent1: Agent,
+        agent2: Agent,
+        distance: float,
+    ) -> np.ndarray:
+        """Сила адгезии между совместимыми типами клеток.
+
+        Моделирует клеточную адгезию (кадгерины, интегрины):
+        - endo ↔ endo: VE-кадгерин (сосудистые контакты)
+        - myofibro ↔ myofibro: N-кадгерин (контрактильная сеть)
+        - Несовместимые типы → нулевая сила
+
+        Потенциал: F = -k_adh * (d - d_eq), где d_eq — равновесное расстояние.
+        Притяжение при d > d_eq, отталкивание при d < d_eq.
+
+        Args:
+            agent1: Первый агент
+            agent2: Второй агент
+            distance: Расстояние между агентами (мкм)
+
+        Returns:
+            np.ndarray shape=(2,) — вектор силы адгезии (fx, fy)
+
+        Подробное описание: Description/Phase2/description_abm_model.md#ABMModel._calculate_adhesion_force
+        """
+        compatible = (
+            isinstance(agent1, EndothelialAgent)
+            and isinstance(agent2, EndothelialAgent)
+        ) or (
+            isinstance(agent1, MyofibroblastAgent)
+            and isinstance(agent2, MyofibroblastAgent)
+        )
+        if not compatible or distance < 1e-10:
+            return np.zeros(2)
+
+        d_eq = self._config.adhesion_equilibrium_distance
+        k_adh = self._config.adhesion_strength
+
+        dx = agent2.x - agent1.x
+        dy = agent2.y - agent1.y
+        direction = np.array([dx, dy]) / distance
+
+        force = k_adh * (distance - d_eq) * direction
+        return force
+
     def _get_snapshot(self) -> ABMSnapshot:
         """Создание снимка текущего состояния.
 
@@ -1350,7 +2277,8 @@ class ABMModel:
         """Создание нового агента.
 
         Args:
-            agent_type: Тип агента ('stem', 'macro', 'fibro')
+            agent_type: Тип агента ('stem', 'macro', 'fibro',
+                        'neutro', 'endo', 'myofibro')
             x: Координата X (или случайная)
             y: Координата Y (или случайная)
 
@@ -1374,6 +2302,12 @@ class ABMModel:
             return Macrophage(agent_id=agent_id, x=x, y=y, rng=self._rng)
         elif agent_type == "fibro":
             return Fibroblast(agent_id=agent_id, x=x, y=y, rng=self._rng)
+        elif agent_type == "neutro":
+            return NeutrophilAgent(agent_id=agent_id, x=x, y=y, rng=self._rng)
+        elif agent_type == "endo":
+            return EndothelialAgent(agent_id=agent_id, x=x, y=y, rng=self._rng)
+        elif agent_type == "myofibro":
+            return MyofibroblastAgent(agent_id=agent_id, x=x, y=y, rng=self._rng)
         else:
             raise ValueError(f"Unknown agent type: {agent_type}")
 

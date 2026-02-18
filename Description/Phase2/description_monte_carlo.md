@@ -409,3 +409,98 @@ config = MonteCarloConfig(base_seed=42)
 - src.core.abm_model
 - src.core.integration
 - src.data.parameter_extraction
+
+---
+
+## Параллелизация (Phase 2 расширение)
+
+### MonteCarloSimulator._run_parallel
+
+**Назначение:** Параллельный запуск траекторий через ProcessPoolExecutor.
+
+**Сигнатура:**
+
+```python
+def _run_parallel(self, initial_params: ModelParameters) -> list[TrajectoryResult]
+```
+
+**Поведение:**
+1. Разделить n_trajectories на n_jobs частей
+2. Для каждой части -- создать seed (base_seed + offset)
+3. Запустить через ProcessPoolExecutor
+4. Собрать результаты в единый список
+5. При ошибке в процессе -- пометить как failed
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| n_jobs=1 | Эквивалентно sequential |
+| n_jobs=2, n_trajectories=10 | 10 результатов |
+| base_seed=42, дважды | Идентичные результаты |
+| Одна траектория fails | n_successful = n-1 |
+| n_jobs=1, n_trajectories=1 | 1 результат |
+
+**Инварианты:**
+- len(results) == n_trajectories
+- Воспроизводимость при фиксированном seed
+- Результаты не зависят от n_jobs (только скорость)
+
+---
+
+### MonteCarloSimulator._progress_callback_wrapper
+
+**Назначение:** Thread-safe обёртка для progress_callback при параллельном выполнении.
+
+**Сигнатура:**
+
+```python
+def _progress_callback_wrapper(self, completed: int, total: int) -> None
+```
+
+**Поведение:**
+1. Захватить threading.Lock
+2. Обновить суммарный прогресс
+3. Вызвать пользовательский callback с (total_completed, n_trajectories)
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| Один вызов (5, 10) | callback(5, total) |
+| Два последовательных вызова | Корректная агрегация |
+| callback=None | Без ошибок |
+| Конкурентные вызовы | Thread-safe (через Lock) |
+
+**Инварианты:**
+- Thread-safe (используется Lock)
+- total_completed монотонно растёт
+
+---
+
+### MonteCarloSimulator._validate_parallel_config
+
+**Назначение:** Проверка конфигурации для параллельного запуска.
+
+**Сигнатура:**
+
+```python
+def _validate_parallel_config(self, config: MonteCarloConfig) -> bool
+```
+
+**Тестовые сценарии:**
+
+| Сценарий | Ожидание |
+|----------|----------|
+| n_jobs=1 | True |
+| n_jobs > cpu_count | ValueError |
+| n_jobs=0 | ValueError |
+| multiprocessing недоступен | RuntimeError |
+
+**Ошибки:**
+- `ValueError`: n_jobs > os.cpu_count() или n_jobs < 1
+- `RuntimeError`: multiprocessing модуль недоступен
+
+**Инварианты:**
+- True → safe to run _run_parallel
+- 1 ≤ n_jobs ≤ cpu_count
