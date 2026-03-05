@@ -137,6 +137,8 @@ Thumbs.db
 # Project specific
 data/raw/
 data/processed/
+data/results/
+data/regentwin.db
 *.fcs
 !data/mock/*.fcs
 *.pdf

@@ -71,12 +71,14 @@ class FCSLoader:
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        self._sample = Sample(
-            fcs_path_or_data=file_path,
-            subsample=self._subsample,
-            ignore_offset_error=True,
-            ignore_offset_discrepancy=True,
-        )
+        kwargs: dict = {
+            "fcs_path_or_data": file_path,
+            "ignore_offset_error": True,
+            "ignore_offset_discrepancy": True,
+        }
+        if self._subsample is not None:
+            kwargs["subsample"] = self._subsample
+        self._sample = Sample(**kwargs)
         self._file_path = file_path
         return self
 
@@ -138,9 +140,9 @@ class FCSLoader:
             n_events=self._sample.event_count,
             n_channels=len(self._sample.pnn_labels),
             channels=list(self._sample.pnn_labels),
-            cytometer=meta.get("$CYT", None),
-            date=meta.get("$DATE", None),
-            fcs_version=meta.get("FCSversion", None),
+            cytometer=meta.get("cyt", meta.get("$CYT")),
+            date=meta.get("date", meta.get("$DATE")),
+            fcs_version=meta.get("fcsversion", meta.get("FCSversion")),
         )
 
     def to_dataframe(

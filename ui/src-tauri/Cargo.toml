@@ -1,0 +1,19 @@
+[package]
+name = "regentwin"
+version = "0.1.0"
+description = "RegenTwin — Tissue Regeneration Digital Twin"
+authors = ["RegenTwin Team"]
+edition = "2021"
+
+[lib]
+name = "regentwin_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

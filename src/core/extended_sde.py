@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import IntEnum
 
@@ -301,12 +302,19 @@ class ExtendedSDEModel:
         self.therapy = therapy
         self._rng = np.random.default_rng(rng_seed)
 
+        # Инициализация механистической PRP-модели (если включена)
+        self._prp_model = None
+        if therapy and therapy.prp_enabled:
+            from src.core.therapy_models import PRPModel
+            self._prp_model = PRPModel()
+
     # ===== Основные методы =====
 
     def simulate(
         self,
         initial_state: ExtendedSDEState,
         t_span: tuple[float, float] | None = None,
+        progress_callback: "Callable[[int, int], None] | None" = None,
     ) -> ExtendedSDETrajectory:
         """Полная симуляция методом Эйлера-Маруямы.
 
@@ -320,6 +328,8 @@ class ExtendedSDEModel:
             initial_state: Начальное состояние (20 переменных)
             t_span: (t_start, t_end) в часах.
                     None → (0, params.t_max)
+            progress_callback: Вызывается с (current_step, total_steps)
+                    для отслеживания прогресса. None → без отслеживания.
 
         Returns:
             ExtendedSDETrajectory с результатами
@@ -341,6 +351,9 @@ class ExtendedSDEModel:
         current_state = initial_state
         states.append(current_state)
 
+        # Интервал для вызова progress_callback (~50 раз за симуляцию)
+        report_interval = max(1, n_steps // 50)
+
         for i in range(n_steps):
             drift = self._compute_drift(current_state)
             diffusion = self._compute_diffusion(current_state)
@@ -351,6 +364,9 @@ class ExtendedSDEModel:
             new_state = self._apply_boundary_conditions(new_state)
             states.append(new_state)
             current_state = new_state
+
+            if progress_callback and (i + 1) % report_interval == 0:
+                progress_callback(i + 1, n_steps)
 
         return ExtendedSDETrajectory(
             times=times, states=states, params=p,
@@ -649,8 +665,12 @@ class ExtendedSDEModel:
             p.k_bind_F * state.F * state.C_PDGF / denom
             if denom > 0 else 0.0
         )
-        # TODO: добавить Θ_PRP_PDGF(t) из therapy_models.py (§3.1)
-        return platelet_release + macro_production - degradation - binding
+        # PRP-вклад в PDGF (двухфазная кинетика высвобождения)
+        prp_pdgf = 0.0
+        if self._prp_model is not None:
+            release = self._prp_model.compute_release(state.t)
+            prp_pdgf = release.theta_pdgf
+        return platelet_release + macro_production + prp_pdgf - degradation - binding
 
     def _drift_C_VEGF(self, state: ExtendedSDEState) -> float:
         """Drift VEGF.
@@ -674,8 +694,12 @@ class ExtendedSDEModel:
             p.k_bind_E * state.E * state.C_VEGF / denom
             if denom > 0 else 0.0
         )
-        # TODO: добавить Θ_PRP_VEGF(t) из therapy_models.py (§3.1)
-        return m2_production + f_production - degradation - binding
+        # PRP-вклад в VEGF (двухфазная кинетика высвобождения)
+        prp_vegf = 0.0
+        if self._prp_model is not None:
+            release = self._prp_model.compute_release(state.t)
+            prp_vegf = release.theta_vegf
+        return m2_production + f_production + prp_vegf - degradation - binding
 
     def _drift_C_TGFb(self, state: ExtendedSDEState) -> float:
         """Drift TGF-β (критический для бистабильности!).
@@ -692,8 +716,12 @@ class ExtendedSDEModel:
         m2_production = p.s_TGF_M2 * state.M2
         mf_production = p.s_TGF_Mf * state.Mf  # положительная обр. связь
         degradation = p.gamma_TGF * state.C_TGFb
-        # TODO: добавить Θ_PRP_TGF(t) из therapy_models.py (§3.1)
-        return platelet_release + m2_production + mf_production - degradation
+        # PRP-вклад в TGF-β (двухфазная кинетика высвобождения)
+        prp_tgfb = 0.0
+        if self._prp_model is not None:
+            release = self._prp_model.compute_release(state.t)
+            prp_tgfb = release.theta_tgfb
+        return platelet_release + m2_production + mf_production + prp_tgfb - degradation
 
     def _drift_C_MCP1(self, state: ExtendedSDEState) -> float:
         """Drift MCP-1.

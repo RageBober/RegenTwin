@@ -1,0 +1,161 @@
+{
+  "nav": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "results": "Results",
+    "analysis": "Analysis",
+    "history": "History",
+    "settings": "Settings"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "export": "Export",
+    "run": "Run",
+    "reset": "Reset",
+    "close": "Close",
+    "backendOffline": "Backend is offline",
+    "backendOnline": "Backend is online"
+  },
+  "home": {
+    "title": "RegenTwin",
+    "subtitle": "Tissue Regeneration Digital Twin",
+    "description": "Multiscale wound healing simulation platform integrating SDE, ABM, and therapeutic protocols",
+    "quickStart": "Quick Start",
+    "uploadData": "Upload Data",
+    "runSimulation": "Run Simulation",
+    "viewHistory": "View History"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "upload": {
+      "title": "Data Upload",
+      "dropzone": "Drop .fcs file here or click to select",
+      "uploading": "Uploading...",
+      "success": "File uploaded",
+      "error": "Upload error"
+    },
+    "model": {
+      "title": "Model Selection",
+      "mvp": "MVP (2 variables)",
+      "extended": "Extended SDE (20 variables)",
+      "abm": "Agent-Based Model",
+      "integrated": "Integrated Model"
+    },
+    "params": {
+      "title": "Simulation Parameters",
+      "initialConditions": "Initial Conditions",
+      "populations": "Cell Populations",
+      "cytokines": "Cytokines",
+      "auxiliary": "Auxiliary",
+      "timeSettings": "Time Settings",
+      "tMax": "Simulation time (hours)",
+      "dt": "Integration step",
+      "therapy": "Therapy",
+      "prpEnabled": "PRP Therapy",
+      "prpIntensity": "PRP Intensity",
+      "pemfEnabled": "PEMF Therapy",
+      "pemfFrequency": "PEMF Frequency (Hz)",
+      "pemfIntensity": "PEMF Intensity",
+      "monteCarlo": "Monte Carlo",
+      "nTrajectories": "Number of trajectories",
+      "randomSeed": "Random seed"
+    },
+    "variables": {
+      "P": "Platelets (P)",
+      "Ne": "Neutrophils (Ne)",
+      "M1": "Macrophages M1",
+      "M2": "Macrophages M2",
+      "F": "Fibroblasts (F)",
+      "Mf": "Myofibroblasts (Mf)",
+      "E": "Endothelial (E)",
+      "S": "Stem cells (S)",
+      "C_TNF": "TNF-α",
+      "C_IL10": "IL-10",
+      "D": "Damage signal (D)",
+      "O2": "Oxygen (O₂)"
+    }
+  },
+  "simulation": {
+    "run": "Run Simulation",
+    "running": "Simulation running...",
+    "complete": "Simulation complete",
+    "failed": "Simulation failed",
+    "cancelled": "Simulation cancelled",
+    "viewResults": "View Results",
+    "progress": "Progress"
+  },
+  "results": {
+    "title": "Simulation Results",
+    "tabs": {
+      "populations": "Populations",
+      "cytokines": "Cytokines",
+      "ecm": "ECM",
+      "phases": "Healing Phases",
+      "comparison": "Therapy Comparison",
+      "heatmap": "Cell Heatmap",
+      "inflammation": "Inflammation Map",
+      "animation": "Animation",
+      "spatial3d": "3D View"
+    },
+    "export": {
+      "title": "Export",
+      "csv": "Export CSV",
+      "png": "Export PNG",
+      "pdf": "Export PDF"
+    },
+    "metadata": {
+      "simulationId": "Simulation ID",
+      "mode": "Mode",
+      "status": "Status",
+      "created": "Created",
+      "completed": "Completed"
+    }
+  },
+  "analysis": {
+    "title": "Analysis",
+    "sensitivity": {
+      "title": "Sensitivity Analysis",
+      "method": "Method",
+      "parameters": "Parameters",
+      "nSamples": "Number of samples",
+      "run": "Run Analysis",
+      "results": "Results",
+      "s1": "First-order index (S1)",
+      "st": "Total index (ST)"
+    },
+    "estimation": {
+      "title": "Parameter Estimation",
+      "method": "Method",
+      "targetVariable": "Target variable",
+      "run": "Run Estimation"
+    }
+  },
+  "history": {
+    "title": "Simulation History",
+    "noSimulations": "No saved simulations",
+    "columns": {
+      "id": "ID",
+      "mode": "Mode",
+      "status": "Status",
+      "created": "Created",
+      "actions": "Actions"
+    },
+    "view": "View",
+    "filterByStatus": "Filter by status",
+    "all": "All"
+  },
+  "settings": {
+    "title": "Settings",
+    "apiUrl": "API Server URL",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "language": "Language",
+    "resetDefaults": "Reset to defaults"
+  }
+}

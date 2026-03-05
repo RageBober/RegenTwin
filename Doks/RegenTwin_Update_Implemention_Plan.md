@@ -37,13 +37,13 @@
                          ▼
 ┌───────────────────────────────────────────────────┐
 │      Mathematical Core (src/)                      │
-│  - src/core/extended_sde.py  (20+ SDE)       [NEW] │
-│  - src/core/sde_model.py     (MVP 2-var)      85%  │
-│  - src/core/abm_model.py     (расширенная ABM) 70% │
-│  - src/core/integration.py   (Eq-Free)        50%  │
-│  - src/core/monte_carlo.py   (параллелизация) 80%  │
+│  - src/core/extended_sde.py  (20+ SDE)       100% │
+│  - src/core/sde_model.py     (MVP 2-var)     100%  │
+│  - src/core/abm_model.py     (расширенная ABM) 99% │
+│  - src/core/integration.py   (SDE+ABM)       100%  │
+│  - src/core/monte_carlo.py   (параллелизация) 100% │
 │  - src/analysis/             (SALib, PyMC)   [NEW] │
-│  - src/data/                 (FCS парсинг)    95%  │
+│  - src/data/                 (FCS парсинг)   100%  │
 └───────────────────────────────────────────────────┘
                          │
                          ▼
@@ -63,48 +63,51 @@
 RegenTwin/
 ├── src/                          # Python backend
 │   ├── core/                     # Математическое ядро
-│   │   ├── sde_model.py          # ✔ MVP SDE (2 переменных)
-│   │   ├── extended_sde.py       # ◐ Расширенная SDE (20+ перем.) — стабы
-│   │   ├── sde_numerics.py       # ✖ Milstein, IMEX, адаптивный шаг
-│   │   ├── abm_model.py          # ◐ ABM (расширение агентов) — стабы
+│   │   ├── sde_model.py          # ✔ MVP SDE (2 переменных, 575 LOC)
+│   │   ├── extended_sde.py       # ✔ Расширенная SDE (20+ перем., 1104 LOC)
+│   │   ├── sde_numerics.py       # ◐ EM готов; Milstein, IMEX, SRK — стабы (758 LOC)
+│   │   ├── abm_model.py          # ◐ ABM реализована, интегрирована с API, 2 стаба движения (2335 LOC)
 │   │   ├── abm_spatial.py        # ✖ KD-Tree, хемотаксис
-│   │   ├── integration.py        # ◐ Operator splitting — стабы
+│   │   ├── integration.py        # ✔ SDE+ABM operator splitting (836 LOC)
 │   │   ├── equation_free.py      # ✖ Equation-Free Framework
-│   │   ├── monte_carlo.py        # ◐ Monte Carlo — стабы
-│   │   ├── therapy_models.py     # ✔ PRP/PEMF механистические (124 тестов)
-│   │   ├── numerical_utils.py    # ◐ NumericalGuard, клиппинг — стабы
-│   │   ├── wound_phases.py       # ◐ Фазы заживления — стабы
-│   │   ├── parameters.py         # ◐ ParameterSet (105 полей) — стабы
-│   │   └── robustness.py         # ✖ Клиппинг, NaN, адапт. dt
+│   │   ├── monte_carlo.py        # ✔ Monte Carlo + параллелизация (872 LOC)
+│   │   ├── therapy_models.py     # ✔ PRP/PEMF механистические (124 тестов, 583 LOC)
+│   │   ├── numerical_utils.py    # ✔ NumericalGuard, клиппинг, адапт. шаг (382 LOC)
+│   │   ├── wound_phases.py       # ✔ Фазы заживления (331 LOC)
+│   │   ├── parameters.py         # ✔ ParameterSet (80+ полей, 334 LOC)
+│   │   └── robustness.py         # ◐ Структуры данных готовы, верификация стабы (572 LOC)
 │   ├── data/                     # Data Pipeline
-│   │   ├── fcs_parser.py         # ✔ Реализовано
+│   │   ├── fcs_parser.py         # ✔ Реализовано (исправлены subsample, нормализация ключей метаданных)
 │   │   ├── gating.py             # ✔ Реализовано
 │   │   ├── parameter_extraction.py # ✔ Реализовано
 │   │   ├── image_loader.py       # ✔ Реализовано
 │   │   ├── validation.py         # ✔ Реализовано
 │   │   └── dataset_loader.py     # ✔ Реализовано
-│   ├── analysis/                 # ✖ НОВАЯ ДИРЕКТОРИЯ
-│   │   ├── sensitivity.py        # ✖ Sobol, Morris (SALib)
+│   ├── analysis/                 # ◐ ЧАСТИЧНО (Sobol реализован в api/services)
+│   │   ├── sensitivity.py        # ✖ Выделенный модуль SobolAnalyzer (SALib)
 │   │   ├── parameter_estimation.py # ✖ Bayesian (PyMC/emcee)
 │   │   ├── validation.py         # ✖ Метрики: R², phase timing
 │   │   └── benchmarking.py       # ✖ Сравнение с Flegg/Xue/Vodovotz
-│   ├── api/                      # ✖ FastAPI endpoints
-│   │   ├── main.py               # ✖ App + CORS + роутеры
-│   │   ├── routes/               # ✖ upload, simulate, results
-│   │   ├── models/               # ✖ Pydantic schemas
-│   │   └── services/             # ✖ Бизнес-логика
-│   ├── visualization/            # ✖ Визуализация
-│   │   ├── plots.py              # ✖ Кривые, цитокины, фазы
-│   │   ├── spatial.py            # ✖ Heatmap, анимация
-│   │   └── export.py             # ✖ PNG/CSV/PDF
-│   ├── db/                       # ✖ НОВАЯ ДИРЕКТОРИЯ
-│   │   ├── models.py             # ✖ SQLAlchemy модели
-│   │   └── migrations/           # ✖ Alembic миграции
+│   ├── api/                      # ✔ FastAPI endpoints
+│   │   ├── main.py               # ✔ App + CORS + Middleware + Exception handlers
+│   │   ├── config.py             # ✔ Конфигурация (хост, порт, CORS)
+│   │   ├── routes/               # ✔ health, upload, simulate, results, analysis, viz, spatial
+│   │   ├── models/schemas.py     # ✔ Pydantic схемы (SimulationRequest, SensitivityRequest, …)
+│   │   └── services/             # ✔ simulation_service (EXTENDED/MVP/ABM), analysis_service (Sobol), file_service
+│   ├── visualization/            # ✔ Визуализация (Plotly)
+│   │   ├── plots.py              # ✔ Популяции, цитокины, ECM, фазы
+│   │   ├── spatial.py            # ✔ ABM тепловые карты, scatter, inflammation
+│   │   ├── export.py             # ✔ PNG/SVG/PDF (kaleido + fpdf2)
+│   │   └── theme.py              # ✔ Цветовые схемы и константы
+│   ├── db/                       # ✔ Database Layer
+│   │   ├── models.py             # ✔ SQLAlchemy ORM: SimulationRecord, UploadRecord, AnalysisRecord
+│   │   ├── session.py            # ✔ SessionLocal, get_db(), create_tables()
+│   │   └── migrations/           # ✔ 001_initial_tables, 002_add_indexes_and_fk
 │   └── utils/                    # ◐
 │       ├── logging.py            # ✖ Loguru конфигурация
 │       └── error_handling.py     # ✖ Обработка ошибок
 │
-├── ui/                           # ✖ Tauri + React frontend
+├── ui/                           # ◐ Tauri + React frontend (в разработке)
 │   ├── src-tauri/                # Tauri (Rust)
 │   └── src/                      # React (TypeScript)
 │
@@ -143,7 +146,7 @@ RegenTwin/
 
 | Задача | Статус | Описание |
 |--------|--------|----------|
-| pyproject.toml | ✔ | Все зависимости; **добавить PyMC, SALib, emcee, celery** |
+| pyproject.toml | ✔ | Все зависимости включая PyMC, SALib, emcee, celery — **уже добавлены** |
 | Структура директорий | ✔ | src/, tests/, data/ |
 | __init__.py файлы | ✔ | Созданы |
 | .gitignore, ruff.toml | ✔ | Настроены |
@@ -155,25 +158,27 @@ RegenTwin/
 | **CI/CD: Docker build** | ✖ | `.github/workflows/docker.yml`: build + push |
 | **CI/CD: coverage badge** | ✖ | Codecov или coveralls интеграция |
 | **Loguru конфигурация** | ✖ | `src/utils/logging.py`: structured logging для всех модулей |
-| **Alembic init** | ✖ | `alembic init src/db/migrations` + начальная миграция |
-| **SQLAlchemy модели** | ✖ | `src/db/models.py`: Simulation, Upload, Result |
+| **Alembic init** | ✔ | `alembic.ini` + `src/db/migrations/versions/001_initial_tables, 002_add_indexes_and_fk` |
+| **SQLAlchemy модели** | ✔ | `src/db/models.py`: SimulationRecord, UploadRecord, AnalysisRecord |
 | **Загрузка реальных данных** | ✖ | Скрипт загрузки с FlowRepository (FR-FCM-*) |
 | **pre-commit hooks** | ✖ | `.pre-commit-config.yaml`: ruff, black, mypy |
 
 ### Новые зависимости для pyproject.toml
 
 ```toml
-# Добавить в dependencies:
-"pymc>=5.10.0",
-"emcee>=3.1.0",
-"SALib>=1.4.0",
-"celery[redis]>=5.3.0",
-"redis>=5.0.0",
-"psycopg2-binary>=2.9.0",
+# Уже добавлены в dependencies:
+"pymc>=5.10.0",           # ✔ добавлено
+"emcee>=3.1.0",           # ✔ добавлено
+"SALib>=1.4.0",           # ✔ добавлено
+"celery>=5.3.0",          # ✔ добавлено (без redis extras)
+
+# Ещё нужно добавить:
+"redis>=5.0.0",           # ✖ отсутствует
+"psycopg2-binary>=2.9.0", # ✖ отсутствует
 
 # Добавить в dev:
-"pytest-xdist>=3.5.0",
-"pytest-benchmark>=4.0.0",
+"pytest-xdist>=3.5.0",   # ✖ отсутствует
+"pytest-benchmark>=4.0.0", # ✖ отсутствует
 ```
 
 ---
@@ -182,12 +187,12 @@ RegenTwin/
 
 | Файл | Классы/Функции | Статус | LOC |
 |------|----------------|--------|-----|
-| `src/data/fcs_parser.py` | `FCSLoader`, `FCSMetadata`, `load_fcs()` | ✔ | 235 |
-| `src/data/gating.py` | `GatingStrategy`, `GateResult`, `GatingResults` | ✔ | 460 |
-| `src/data/parameter_extraction.py` | `ParameterExtractor`, `ModelParameters` | ✔ | 295 |
-| `src/data/image_loader.py` | `ImageLoader`, `ImageAnalyzer`, `ScatterPlotExtractor` | ✔ | ~1400 |
-| `src/data/validation.py` | `ValidationResult`, `DataValidator` | ✔ | 127 |
-| `src/data/dataset_loader.py` | `DatasetLoader`, `DatasetMetadata` | ✔ | 164 |
+| `src/data/fcs_parser.py` | `FCSLoader`, `FCSMetadata`, `load_fcs()` | ✔ | 234 |
+| `src/data/gating.py` | `GatingStrategy`, `GateResult`, `GatingResults` | ✔ | 651 |
+| `src/data/parameter_extraction.py` | `ParameterExtractor`, `ModelParameters` | ✔ | 813 |
+| `src/data/image_loader.py` | `ImageLoader`, `ImageAnalyzer`, `ScatterPlotExtractor` | ✔ | 1260 |
+| `src/data/validation.py` | `ValidationResult`, `DataValidator` | ✔ | 448 |
+| `src/data/dataset_loader.py` | `DatasetLoader`, `DatasetMetadata` — FlowRepository, GEO, кэш | ✔ | 562 |
 | `Description/Phase1/*.md` | Описания | ✔ | 6 файлов |
 | `tests/unit/data/` | 532 теста, покрытие 93-100% | ✔ | ~2500 |
 
@@ -197,22 +202,22 @@ RegenTwin/
 |--------|--------|----------|
 | Расширить `ModelParameters` для 20+ переменных | ✖ | Начальные условия P0, Ne0, M1_0, M2_0, F0, Mf0, E0, S0 |
 | Расширить гейтинг для новых популяций | ✖ | CD66b+ (нейтрофилы), CD31+ (эндотелий) |
-| `src/data/dataset_loader.py` | ✖ | Загрузка публичных датасетов (FlowRepository, GEO) |
+| `src/data/dataset_loader.py` | ✔ | Загрузка публичных датасетов (FlowRepository, GEO) — реализовано |
 | Валидационные данные | ✖ | `data/validation/` с реальными .fcs и временными рядами |
 
 ---
 
-## Фаза 2: Математическое ядро MVP ◐ ЧАСТИЧНО (85% → цель 95%)
+## Фаза 2: Математическое ядро MVP ✔ РЕАЛИЗОВАНО (95%)
 
 > **Цель:** Довести существующую 2-переменную модель до production-ready состояния.
 
 | Файл | Код | Description | Тесты | Статус |
 |------|-----|-------------|-------|--------|
-| `src/core/sde_model.py` | ✔ | ✔ | ✔ | Полностью реализован |
-| `src/core/abm_model.py` | ◐ | ✔ | ✔ | Стабы расширены (+3 агента, +KDTree, +механики) |
-| `src/core/integration.py` | ◐ | ✔ | ✔ | Стабы расширены (+5 методов) |
-| `src/core/monte_carlo.py` | ◐ | ✔ | ✔ | Стабы расширены (+3 метода) |
-| `src/core/numerical_utils.py` | ◐ | ✔ | ✔ | НОВЫЙ: стабы (DivergenceInfo, NumericalGuard) |
+| `src/core/sde_model.py` | ✔ | ✔ | ✔ 100 тестов | Полностью реализован (575 LOC) |
+| `src/core/abm_model.py` | ◐ | ✔ | ✔ 214 тестов | Реализована, 2 стаба движения/взаимодействия (2335 LOC) |
+| `src/core/integration.py` | ✔ | ✔ | ✔ 100 тестов | Полностью реализован — operator splitting, SDE+ABM (836 LOC) |
+| `src/core/monte_carlo.py` | ✔ | ✔ | ✔ 97 тестов | Полностью реализован + параллелизация (872 LOC) |
+| `src/core/numerical_utils.py` | ✔ | ✔ | ✔ 68 тестов | Полностью реализован: clip, detect_divergence, adaptive_dt, NumericalGuard (382 LOC) |
 
 ### 2.1 ABM: завершение базовой функциональности
 
@@ -228,8 +233,8 @@ RegenTwin/
 
 | Компонент | Статус | Описание |
 |-----------|--------|----------|
-| Operator splitting | ✔ | Работает |
-| Синхронизация N | ◐ | Только N; **добавить C** |
+| Operator splitting | ✔ | Реализовано в integration.py (836 LOC) |
+| Синхронизация N | ✔ | Бидиректциональная синхронизация реализована в integration.py |
 | **Передача терапий в ABM** | ✖ | PRP/PEMF эффекты на уровне агентов |
 | **Пространственное масштабирование** | ✖ | SDE mean-field ↔ ABM spatial маппинг |
 
@@ -239,17 +244,17 @@ RegenTwin/
 |-----------|--------|----------|
 | Генерация ансамбля | ✔ | Работает |
 | Статистика | ✔ | Mean, std, CI, квантили |
-| **Параллелизация** | ✖ | `multiprocessing.Pool` / `concurrent.futures` |
+| **Параллелизация** | ✔ | `concurrent.futures` реализовано в monte_carlo.py |
 | **Прогресс callback** | ✖ | Для WebSocket отображения в UI |
 
 ### 2.4 Численная робастность
 
 | Компонент | Статус | Описание |
 |-----------|--------|----------|
-| **Клиппинг отрицательных концентраций** | ✖ | `np.maximum(x, 0)` после каждого шага |
-| **NaN/Inf detection** | ✖ | Остановка + fallback при дивергенции |
-| **Адаптивный временной шаг** | ✖ | Уменьшение dt при быстром изменении |
-| **Loguru логирование в core** | ✖ | Предупреждения при отрицательных значениях |
+| **Клиппинг отрицательных концентраций** | ✔ | `clip_negative_concentrations()` в numerical_utils.py |
+| **NaN/Inf detection** | ✔ | `detect_divergence()` — остановка + fallback в numerical_utils.py |
+| **Адаптивный временной шаг** | ✔ | `adaptive_timestep()` + `NumericalGuard` в numerical_utils.py |
+| **Loguru логирование в core** | ✖ | Предупреждения при отрицательных значениях — src/utils/logging.py не создан |
 
 ---
 
@@ -258,7 +263,7 @@ RegenTwin/
 > **Цель:** Реализация полной 20+ переменной системы SDE из математического фреймворка.
 > **Приоритет:** КРИТИЧЕСКИЙ для публикации
 > **Зависимости:** Фаза 2 (MVP должна быть стабильной)
-> **Результат:** 249 тестов PASSED, coverage 99-100%, верификация формул с Mathematical Framework пройдена
+> **Результат:** 142 тестов PASSED (test_extended_sde.py), coverage 99-100%, верификация формул с Mathematical Framework пройдена
 
 ### 2.5.1 Клеточные популяции (8 уравнений)
 
@@ -310,7 +315,7 @@ RegenTwin/
 | `Description/Phase2/description_extended_sde.md` | Описание функционала + TDD секции | ✔ |
 | `Description/Phase2/description_wound_phases.md` | Описание функционала + TDD секции | ✔ |
 | `Description/Phase2/description_parameters.md` | Описание функционала + TDD секции | ✔ |
-| `tests/unit/core/test_extended_sde.py` | TDD тесты: conservation laws, positivity, фазовые переходы | ✔ 249 passed |
+| `tests/unit/core/test_extended_sde.py` | TDD тесты: conservation laws, positivity, фазовые переходы | ✔ 142 passed |
 | `tests/unit/core/test_wound_phases.py` | TDD тесты: детекция фаз, переходы | ✔ |
 | `tests/unit/core/test_parameters.py` | TDD тесты: ParameterSet, валидация, экспорт | ✔ |
 
@@ -381,7 +386,7 @@ RegenTwin/
 
 ---
 
-## Фаза 2.7: Численные методы и робастность ✖ НЕ НАЧАТО (0%)
+## Фаза 2.7: Численные методы и робастность ◐ ЧАСТИЧНО (50%)
 
 > **Цель:** Upgrade с Euler-Maruyama на Milstein + IMEX для стиффной системы
 > **Зависимости:** Фаза 2.5
@@ -390,34 +395,36 @@ RegenTwin/
 
 | Метод | Применение | Порядок сходимости | Статус |
 |-------|-----------|-------------------|--------|
-| Euler-Maruyama (EM) | ✔ Текущий | 0.5 (сильная) | ✔ |
-| **Milstein** | Upgrade для скалярного шума | 1.0 (сильная) | ✖ |
-| **IMEX splitting** | Для стиффных систем (быстрые цитокины + медленный ECM) | Зависит от компонент | ✖ |
-| **Адаптивный шаг** | Автоматическое уменьшение dt при быстром изменении | - | ✖ |
-| **Stochastic RK (SRI2W1)** | Опционально для мультимерных перекрёстных термов | 1.0 | ✖ |
+| Euler-Maruyama (EM) | ✔ Текущий | 0.5 (сильная) | ✔ — реализован в sde_numerics.py |
+| **Milstein** | Upgrade для скалярного шума | 1.0 (сильная) | ◐ — стаб в sde_numerics.py |
+| **IMEX splitting** | Для стиффных систем (быстрые цитокины + медленный ECM) | Зависит от компонент | ◐ — стаб в sde_numerics.py |
+| **Адаптивный шаг** | Автоматическое уменьшение dt при быстром изменении | - | ✔ — adaptive_timestep() в numerical_utils.py |
+| **Stochastic RK (SRI2W1)** | Опционально для мультимерных перекрёстных термов | 1.0 | ◐ — стаб в sde_numerics.py |
 
 ### Робастность
 
 | Компонент | Описание | Статус |
 |-----------|----------|--------|
-| Клиппинг отрицательных значений | `np.maximum(state, 0)` с логированием | ✖ |
-| NaN/Inf обнаружение | `np.isfinite()` + fallback на уменьшение dt | ✖ |
-| Conservation checks | Баланс рождения/смерти | ✖ |
-| Method of Manufactured Solutions | Верификация порядка сходимости | ✖ |
-| Сравнение SDE vs ABM | При большом N_agents ABM → SDE (ЗБЧ) | ✖ |
+| Клиппинг отрицательных значений | `clip_negative_concentrations()` в numerical_utils.py | ✔ |
+| NaN/Inf обнаружение | `detect_divergence()` в numerical_utils.py | ✔ |
+| Conservation checks | Стабы ViolationStats + ConservationReport в robustness.py | ◐ |
+| Method of Manufactured Solutions | Стаб ConvergenceResult в robustness.py | ◐ |
+| Сравнение SDE vs ABM | Стаб в robustness.py | ◐ |
 
 ### Файлы для создания
 
 | Файл | Описание | Статус |
 |------|----------|--------|
-| `src/core/sde_numerics.py` | `MilsteinSolver`, `IMEXSplitter`, `AdaptiveTimestepper` | ✖ |
-| `src/core/robustness.py` | `PositivityEnforcer`, `NaNHandler`, `ConservationChecker` | ✖ |
+| `src/core/sde_numerics.py` | EM готов; `MilsteinSolver`, `IMEXSplitter`, `SRKSolver` — стабы (758 LOC) | ◐ |
+| `src/core/robustness.py` | Структуры `ViolationStats`, `ConservationReport`, `ConvergenceResult`; 17 стабов верификации (572 LOC) | ◐ |
+| `Description/Phase2/description_sde_numerics.md` | Описание функционала (512 LOC) — численные схемы, IMEX, адаптивность | ✔ |
+| `Description/Phase2/description_robustness.md` | Описание функционала (492 LOC) — верификация, conservation laws, MMS | ✔ |
 | `tests/unit/core/test_sde_numerics.py` | TDD: порядок сходимости Milstein, IMEX корректность, адаптивность | ✖ |
 | `tests/unit/core/test_robustness.py` | TDD: клиппинг, NaN обработка, conservation | ✖ |
 
 ---
 
-## Фаза 2.8: Расширенная ABM ✖ НЕ НАЧАТО (0%)
+## Фаза 2.8: Расширенная ABM ◐ ЧАСТИЧНО (30%)
 
 > **Цель:** Расширить ABM для поддержки полной системы из математического фреймворка.
 > **Зависимости:** Фаза 2.5, Фаза 2 (базовая ABM)
@@ -429,9 +436,9 @@ RegenTwin/
 | StemCell (CD34+) | Пролиферация, дифференциация | ✔ | Добавить PRP-зависимую мобилизацию |
 | Macrophage | M0/M1/M2 поляризация | ✔ | Добавить continuous polarization_state, эффероцитоз |
 | Fibroblast | Продукция ECM | ✔ | Добавить активацию в миофибробласт (TGF-β) |
-| **Neutrophil** | Хемотаксис по IL-8, апоптоз, фагоцитоз | ✖ | НОВЫЙ |
-| **Endothelial** | VEGF-зависимый спраутинг | ✖ | НОВЫЙ |
-| **Myofibroblast** | Продукция коллагена, апоптоз при снижении TGF-β | ✖ | НОВЫЙ |
+| **Neutrophil** | Хемотаксис по IL-8, апоптоз, фагоцитоз | ◐ | Стаб-класс в abm_model.py |
+| **Endothelial** | VEGF-зависимый спраутинг | ◐ | Стаб-класс в abm_model.py |
+| **Myofibroblast** | Продукция коллагена, апоптоз при снижении TGF-β | ◐ | Стаб-класс в abm_model.py |
 | **Platelet** | Дегрануляция, высвобождение факторов | ✖ | НОВЫЙ (опционально) |
 
 ### Новые механики ABM
@@ -450,9 +457,10 @@ RegenTwin/
 
 | Файл | Описание | Статус |
 |------|----------|--------|
-| `src/core/abm_model.py` (модификация) | Добавить Neutrophil, Endothelial, Myofibroblast классы | ✖ |
+| `src/core/abm_model.py` (модификация) | Neutrophil, Endothelial, Myofibroblast — стаб-классы добавлены | ◐ |
 | `src/core/abm_spatial.py` | `KDTreeNeighborSearch`, `ChemotaxisEngine`, `ContactInhibition` | ✖ |
-| `Description/Phase2/description_abm_extended.md` | Описание расширенной ABM | ✖ |
+| `Description/Phase2/description_abm_model.md` | Описание базовой ABM (682 LOC) — агенты, поля, механики | ✔ |
+| `Description/Phase2/description_abm_extended.md` | Описание расширенной ABM (Neutrophil, Endothelial, Myofibroblast, хемотаксис) | ✖ |
 | `tests/unit/core/test_abm_extended.py` | TDD тесты для новых агентов и механик | ✖ |
 
 ---
@@ -541,6 +549,20 @@ RegenTwin/
 | Xue 2009 | PLoS Comput. Biol. | Ишемические раны, ECM динамика | ✖ |
 | Vodovotz 2006 | Curr. Opin. Crit. Care | Острое воспаление, macrophage dynamics | ✖ |
 
+### 3.6 Визуализация анализа (объединение с Фазой 4)
+
+> **Примечание:** Графики анализа были отложены из Фазы 4 до реализации Фазы 3,
+> так как требуют реальных выходов от `SobolAnalyzer` и `BayesianEstimator`.
+
+| Задача | Описание | Статус |
+|--------|----------|--------|
+| `plot_sobol()` | Tornado bar chart — S1 и ST Sobol indices | ✖ |
+| `plot_posterior()` | Marginal histograms / corner plots (ArviZ) | ✖ |
+| `plot_convergence()` | Сходимость MC/MCMC метрик по итерациям | ✖ |
+| `plot_morris()` | Morris screening: mu_star vs sigma scatter | ✖ |
+
+**Файл:** `src/visualization/analysis_plots.py` — принимает generic dict/ndarray, чтобы не зависеть от конкретных типов Phase 3.
+
 ### Файлы для создания
 
 | Файл | Описание | Статус |
@@ -550,45 +572,55 @@ RegenTwin/
 | `src/analysis/parameter_estimation.py` | `BayesianEstimator`, `MCMCRunner`, `MLEstimator` | ✖ |
 | `src/analysis/validation.py` | `ValidationRunner`, `TemporalR2`, `PhaseTimingMetric` | ✖ |
 | `src/analysis/benchmarking.py` | `BenchmarkSuite`, сравнение с Flegg/Xue/Vodovotz | ✖ |
+| `src/visualization/analysis_plots.py` | `plot_sobol()`, `plot_posterior()`, `plot_convergence()`, `plot_morris()` | ✖ |
 | `Description/Phase3/description_analysis.md` | Описание | ✖ |
 | `tests/unit/analysis/test_sensitivity.py` | TDD тесты | ✖ |
 | `tests/unit/analysis/test_parameter_estimation.py` | TDD тесты | ✖ |
+| `tests/unit/visualization/test_analysis_plots.py` | TDD тесты analysis_plots | ✖ |
 | `tests/validation/test_on_real_data.py` | Интеграционные тесты на реальных данных | ✖ |
 
 ---
 
-## Фаза 4: Визуализация ✖ НЕ НАЧАТО (0%)
+## Фаза 4: Визуализация ✔ РЕАЛИЗОВАНО (90%)
 
 > **Цель:** Полный набор графиков для расширенной модели
 > **Зависимости:** Фаза 2.5 (расширенная SDE)
+> **Примечание:** analysis_plots.py (Sobol, posterior) отложен до Фазы 3 (пункт 3.6). 3D Three.js — до Фазы 6.
 
 | Задача | Статус | Описание |
 |--------|--------|----------|
-| Кривые роста 8 популяций | ✖ | P, Ne, M1, M2, F, Mf, E, S с CI |
-| Динамика 7 цитокинов | ✖ | TNF, IL-10, PDGF, VEGF, TGF-β, MCP-1, IL-8 |
-| Динамика ECM | ✖ | Коллаген, MMP, фибрин |
-| Детекция фаз заживления | ✖ | Цветовая полоса: гемостаз / воспаление / пролиферация / ремоделирование |
-| Сравнение сценариев | ✖ | Контроль vs PRP vs PEMF vs PRP+PEMF |
-| 2D heatmap плотности | ✖ | Пространственная карта из ABM |
-| Карта воспаления | ✖ | TNF-α/IL-10 ratio на пространственной сетке |
-| Анимация эволюции | ✖ | GIF/видео ABM + цитокиновые поля |
-| Sensitivity tornado | ✖ | Sobol indices bar chart |
-| Posterior distributions | ✖ | Corner plots параметров (ArviZ) |
-| 3D визуализация | ✖ | Three.js для ABM пространственной модели |
-| Экспорт PNG/SVG | ✖ | Matplotlib/Plotly |
-| Экспорт CSV | ✖ | Данные всех 20+ переменных |
-| Экспорт PDF | ✖ | Полный отчёт с графиками |
+| Кривые роста 8 популяций | ✔ | P, Ne, M1, M2, F, Mf, E, S с CI (plot_populations) |
+| Динамика 7 цитокинов | ✔ | TNF, IL-10, PDGF, VEGF, TGF-β, MCP-1, IL-8 (plot_cytokines) |
+| Динамика ECM | ✔ | Коллаген, MMP, фибрин — dual axes (plot_ecm) |
+| Детекция фаз заживления | ✔ | Цветовая полоса + популяции (plot_phases) |
+| Сравнение сценариев | ✔ | 4 сценария, single var / all 8 (plot_comparison) |
+| 2D heatmap плотности | ✔ | Пространственная карта из ABM (heatmap_density) |
+| Карта воспаления | ✔ | Цитокиновое поле с diverging colorscale (inflammation_map) |
+| Анимация эволюции | ✔ | Plotly animation + GIF через matplotlib (animate_evolution) |
+| Sensitivity tornado | ⏳ | Отложено до Фазы 3.6 (analysis_plots.py) |
+| Posterior distributions | ⏳ | Отложено до Фазы 3.6 (analysis_plots.py) |
+| 3D визуализация | ⏳ | Отложено до Фазы 6 (Three.js в React) |
+| Экспорт PNG/SVG | ✔ | Kaleido (ReportExporter.to_png/to_svg) |
+| Экспорт CSV | ✔ | 21 колонка: time + 20 переменных (ReportExporter.to_csv) |
+| Экспорт PDF | ✔ | fpdf2: титул + метаданные + графики + сводка (ReportExporter.to_pdf) |
+| API endpoints | ✔ | 8 FastAPI endpoints (/api/viz/*) → Plotly JSON для React |
 
-### Файлы для создания
+### Файлы
 
 | Файл | Описание | Статус |
 |------|----------|--------|
-| `src/visualization/plots.py` | `plot_populations()`, `plot_cytokines()`, `plot_ecm()`, `plot_phases()`, `plot_comparison()` | ✖ |
-| `src/visualization/spatial.py` | `heatmap_density()`, `inflammation_map()`, `animate_evolution()` | ✖ |
-| `src/visualization/analysis_plots.py` | `plot_sobol()`, `plot_posterior()`, `plot_convergence()` | ✖ |
-| `src/visualization/export.py` | `ReportExporter`: `to_png()`, `to_csv()`, `to_pdf()` | ✖ |
-| `Description/Phase4/description_visualization.md` | Описание | ✖ |
-| `tests/unit/visualization/test_plots.py` | TDD тесты (smoke tests, output format) | ✖ |
+| `src/visualization/theme.py` | Цветовая тема, layout defaults, группировка 20 переменных | ✔ |
+| `src/visualization/plots.py` | `plot_populations()`, `plot_cytokines()`, `plot_ecm()`, `plot_phases()`, `plot_comparison()` | ✔ |
+| `src/visualization/spatial.py` | `heatmap_density()`, `scatter_agents()`, `inflammation_map()`, `field_heatmap()`, `animate_evolution()` | ✔ |
+| `src/visualization/analysis_plots.py` | `plot_sobol()`, `plot_posterior()`, `plot_convergence()` | ⏳ Фаза 3.6 |
+| `src/visualization/export.py` | `ReportExporter`: `to_png()`, `to_svg()`, `to_csv()`, `to_pdf()` | ✔ |
+| `src/api/routes/visualization.py` | FastAPI: 8 endpoints → Plotly JSON + экспорт файлов | ✔ |
+| `Description/Phase4/description_visualization.md` | Описание модуля | ✔ |
+| `tests/unit/visualization/test_theme.py` | 19 тестов — консистентность констант | ✔ |
+| `tests/unit/visualization/test_plots.py` | 26 тестов — smoke + structural | ✔ |
+| `tests/unit/visualization/test_spatial.py` | 21 тест — spatial viz + GIF export | ✔ |
+| `tests/unit/visualization/test_export.py` | 18 тестов — PNG/SVG/CSV/PDF экспорт | ✔ |
+| `tests/unit/api/test_visualization_routes.py` | 17 тестов — API endpoints | ✔ |
 
 ---
 
@@ -656,23 +688,53 @@ npm install tailwindcss postcss autoprefixer @headlessui/react
 npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
 ```
 
-### 6.2 Компоненты React
+### 6.2 Интеграция визуализации из Фазы 4
 
-| Компонент | Файл | Функционал | Статус |
-|-----------|------|------------|--------|
-| **Upload** | `components/Upload/UploadFCS.tsx` | Drag-drop загрузка .fcs | ✖ |
-| **Parameters** | `components/Parameters/TherapyConfig.tsx` | PRP/PEMF слайдеры (расширенные) | ✖ |
-| **ModelSelector** | `components/Parameters/ModelSelector.tsx` | MVP (2-var) vs Extended (20+) выбор | ✖ |
-| **Simulation** | `components/Simulation/SimulationRunner.tsx` | Запуск, прогресс-бар, WebSocket | ✖ |
-| **PopulationCharts** | `components/Visualization/PopulationCharts.tsx` | 8 популяций + CI | ✖ |
-| **CytokineCharts** | `components/Visualization/CytokineCharts.tsx` | 7 цитокинов | ✖ |
-| **ECMCharts** | `components/Visualization/ECMCharts.tsx` | Коллаген, MMP, фибрин | ✖ |
-| **PhaseTimeline** | `components/Visualization/PhaseTimeline.tsx` | Фазы заживления цветовая полоса | ✖ |
-| **Heatmap** | `components/Visualization/CellHeatmap.tsx` | 2D карта плотности из ABM | ✖ |
-| **3D View** | `components/Visualization/SpatialView3D.tsx` | Three.js ABM визуализация | ✖ |
-| **ScenarioComparison** | `components/Visualization/ScenarioComparison.tsx` | Контроль vs PRP vs PEMF vs комбо | ✖ |
-| **SensitivityView** | `components/Analysis/SensitivityView.tsx` | Sobol tornado plot | ✖ |
-| **Results** | `components/Results/ExportPanel.tsx` | Экспорт PDF, CSV | ✖ |
+> **Важно:** API endpoints из Фазы 4 (`/api/viz/*`) возвращают Plotly JSON,
+> который React-компоненты потребляют через `react-plotly.js`.
+> Все 8 endpoints готовы — нужно только создать React-обёртки.
+
+```tsx
+// Пример интеграции:
+import Plot from 'react-plotly.js';
+
+const response = await fetch('/api/viz/populations', {
+  method: 'POST',
+  body: JSON.stringify({ simulation: { t_max_hours: 720, prp_enabled: true } })
+});
+const plotData = await response.json();
+<Plot data={plotData.data} layout={plotData.layout} />
+```
+
+**Готовые API endpoints (Фаза 4):**
+- `POST /api/viz/populations` → Plotly JSON (8 популяций)
+- `POST /api/viz/cytokines` → Plotly JSON (7 цитокинов)
+- `POST /api/viz/ecm` → Plotly JSON (ECM)
+- `POST /api/viz/phases` → Plotly JSON (фазы заживления)
+- `POST /api/viz/comparison` → Plotly JSON (4 сценария)
+- `POST /api/viz/export/csv` → CSV файл
+- `POST /api/viz/export/png` → PNG файл
+- `POST /api/viz/export/pdf` → PDF отчёт
+
+### 6.3 Компоненты React
+
+| Компонент | Файл | API endpoint | Статус |
+|-----------|------|-------------|--------|
+| **Upload** | `components/Upload/UploadFCS.tsx` | POST /api/v1/upload | ✖ |
+| **Parameters** | `components/Parameters/TherapyConfig.tsx` | — (local state) | ✖ |
+| **ModelSelector** | `components/Parameters/ModelSelector.tsx` | — (local state) | ✖ |
+| **Simulation** | `components/Simulation/SimulationRunner.tsx` | POST /api/v1/simulate | ✖ |
+| **PopulationCharts** | `components/Visualization/PopulationCharts.tsx` | POST /api/viz/populations | ✖ |
+| **CytokineCharts** | `components/Visualization/CytokineCharts.tsx` | POST /api/viz/cytokines | ✖ |
+| **ECMCharts** | `components/Visualization/ECMCharts.tsx` | POST /api/viz/ecm | ✖ |
+| **PhaseTimeline** | `components/Visualization/PhaseTimeline.tsx` | POST /api/viz/phases | ✖ |
+| **TherapyComparison** | `components/Visualization/TherapyComparison.tsx` | POST /api/viz/comparison | ✖ |
+| **Heatmap** | `components/Visualization/CellHeatmap.tsx` | (будущий spatial API) | ✖ |
+| **InflammationMap** | `components/Visualization/InflammationMap.tsx` | (будущий spatial API) | ✖ |
+| **AnimationPlayer** | `components/Visualization/AnimationPlayer.tsx` | (будущий spatial API) | ✖ |
+| **3D View** | `components/Visualization/SpatialView3D.tsx` | Three.js ABM | ✖ |
+| **SensitivityView** | `components/Analysis/SensitivityView.tsx` | (Фаза 3.6 API) | ✖ |
+| **ExportPanel** | `components/Results/ExportPanel.tsx` | POST /api/viz/export/* | ✖ |
 
 ### 6.3 Страницы
 
@@ -689,7 +751,7 @@ npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
 
 ## Фаза 7: Тестирование ◐ РЕАЛИЗОВАНО (55% → цель 98%)
 
-> **Примечание:** 1511 тестов (все проходят). Покрыты: data pipeline (6 модулей), core MVP (4 модуля), therapy_models (реализация), extended_sde/wound_phases/parameters/numerical_utils (стабы).
+> **Примечание:** 1467 тестов. Покрыты: data pipeline (6 модулей, 532 теста), core MVP (5 модулей, 100+214+100+97+68 тестов), therapy_models (124 теста), extended_sde/wound_phases/parameters (полностью реализованы — 142+54+36 тестов).
 
 | Категория | Текущий статус | Целевое состояние |
 |-----------|---------------|-------------------|
@@ -697,12 +759,12 @@ npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
 | Unit-тесты (data) | ✔ ~600 LOC | ✔ Сохранить |
 | Integration-тесты | ✔ 307 LOC | Расширить для Extended SDE |
 | Performance-тесты | ✔ ~100 LOC | Добавить бенчмарки Extended SDE |
-| **Unit-тесты (Extended SDE)** | ✔ (стабы) | ~800 LOC |
+| **Unit-тесты (Extended SDE)** | ✔ 142 теста | ✔ |
 | **Unit-тесты (therapy models)** | ✔ (124 теста) | ~1060 LOC |
 | **Unit-тесты (numerics)** | ✖ | ~300 LOC |
 | **Unit-тесты (analysis)** | ✖ | ~500 LOC |
-| **Unit-тесты (API)** | ✖ | ~600 LOC |
-| **Unit-тесты (visualization)** | ✖ | ~200 LOC |
+| **Unit-тесты (API)** | ◐ 17 тестов (visualization routes) | ~600 LOC |
+| **Unit-тесты (visualization)** | ✔ 84 теста (theme+plots+spatial+export) | ~800 LOC |
 | **Validation-тесты (реальные данные)** | ✖ | ~300 LOC |
 | **E2E тесты (API + Frontend)** | ✖ | ~400 LOC |
 
@@ -718,8 +780,8 @@ npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
 | `gating.py` | `test_gating.py` | ✔ | ✔ |
 | `parameter_extraction.py` | `test_parameter_extraction.py` | ✔ | ✔ |
 | `image_loader.py` | `test_image_loader.py` | ✔ | ✔ |
-| **`extended_sde.py`** | `test_extended_sde.py` | ✔ (стабы) | Реализация → ✔ |
-| **`therapy_models.py`** | `test_therapy_models.py` | ✔ (124 теста) | ✔ |
+| **`extended_sde.py`** | `test_extended_sde.py` | ✔ 142 теста | ✔ |
+| **`therapy_models.py`** | `test_therapy_models.py` | ✔ 124 теста | ✔ |
 | **`sde_numerics.py`** | `test_sde_numerics.py` | ✖ | ✖ → ✔ |
 | **`robustness.py`** | `test_robustness.py` | ✖ | ✖ → ✔ |
 | **`abm_spatial.py`** | `test_abm_spatial.py` | ✖ | ✖ → ✔ |
@@ -767,14 +829,14 @@ npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
 
 | # | Задача | Зависимости | Приоритет | Статус |
 |---|--------|-------------|-----------|--------|
-| 1 | Завершить ABM MVP (хемотаксис, контактное ингиб.) | — | Высокий | ✖ |
-| 2 | Завершить интеграцию MVP SDE↔ABM (синхронизация C) | 1 | Высокий | ✖ |
-| 3 | Параллелизация Monte Carlo | — | Средний | ✖ |
-| 4 | Численная робастность MVP (клиппинг, NaN, логирование) | — | Высокий | ✖ |
-| 5 | **Расширенная SDE (20+ переменных)** | 4 | КРИТИЧЕСКИЙ | ✖ |
+| 1 | Завершить ABM MVP (хемотаксис, контактное ингиб.) | — | Высокий | ◐ стабы |
+| 2 | Завершить интеграцию MVP SDE↔ABM (синхронизация C) | 1 | Высокий | ✔ |
+| 3 | Параллелизация Monte Carlo | — | Средний | ✔ |
+| 4 | Численная робастность MVP (клиппинг, NaN) | — | Высокий | ✔ |
+| 5 | **Расширенная SDE (20+ переменных)** | 4 | КРИТИЧЕСКИЙ | ✔ |
 | 6 | Механистические модели терапий (PRP/PEMF) | 5 | КРИТИЧЕСКИЙ | ✔ |
-| 7 | Milstein + IMEX для расширенной SDE | 5 | Высокий | ✖ |
-| 8 | Расширенная ABM (Neutrophil, Endothelial, Mf, KD-Tree) | 1, 5 | Высокий | ✖ |
+| 7 | Milstein + IMEX для расширенной SDE | 5 | Высокий | ◐ стабы |
+| 8 | Расширенная ABM (Neutrophil, Endothelial, Mf, KD-Tree) | 1, 5 | Высокий | ◐ стабы |
 | 9 | Equation-Free интеграция (расширенная) | 5, 8 | Высокий | ✖ |
 | 10 | Параметрическая идентификация (PyMC/emcee) | 5 | КРИТИЧЕСКИЙ | ✖ |
 | 11 | Анализ чувствительности (SALib) | 5 | КРИТИЧЕСКИЙ | ✖ |
@@ -805,15 +867,15 @@ npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
 
 | Файл | Описание | Статус |
 |------|----------|--------|
-| `pyproject.toml` | Зависимости (добавить PyMC, SALib, emcee, celery) | ◐ |
-| `src/core/extended_sde.py` | **КЛЮЧЕВОЙ:** 20+ переменных SDE система | ◐ Стабы |
-| `src/core/therapy_models.py` | Механистические PRP/PEMF модели | ✔ Реализован |
-| `src/core/sde_numerics.py` | Milstein, IMEX, адаптивный шаг | ✖ |
-| `src/core/abm_model.py` | Расширение ABM (хемотаксис, новые агенты) | ◐ |
+| `pyproject.toml` | Зависимости включая PyMC, SALib, emcee, celery | ✔ |
+| `src/core/extended_sde.py` | **КЛЮЧЕВОЙ:** 20+ переменных SDE система | ✔ Реализован (1104 LOC) |
+| `src/core/therapy_models.py` | Механистические PRP/PEMF модели | ✔ Реализован (583 LOC) |
+| `src/core/sde_numerics.py` | EM готов; Milstein, IMEX, SRK — стабы | ◐ |
+| `src/core/abm_model.py` | Расширение ABM, стаб-классы агентов | ◐ |
 | `src/core/abm_spatial.py` | KD-Tree, хемотаксис, контактное ингибирование | ✖ |
 | `src/core/equation_free.py` | Equation-Free мультимасштабная интеграция | ✖ |
-| `src/core/parameters.py` | 105 параметров из литературы | ◐ Стабы |
-| `src/core/robustness.py` | Клиппинг, NaN, адаптивный dt | ✖ |
+| `src/core/parameters.py` | 80+ параметров из литературы | ✔ Реализован (334 LOC) |
+| `src/core/robustness.py` | Структуры данных готовы, верификация стабы | ◐ |
 | `src/analysis/sensitivity.py` | Sobol, Morris (SALib) | ✖ |
 | `src/analysis/parameter_estimation.py` | Bayesian estimation (PyMC) | ✖ |
 | `src/analysis/validation.py` | Метрики валидации на реальных данных | ✖ |
@@ -831,33 +893,35 @@ npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
 |------|----------|--------|----------|
 | 0 | Инфраструктура и DevOps | ◐ Частично | 70% |
 | 1 | Data Pipeline | ✔ Реализовано | 100% |
-| 2 | Математическое ядро MVP | ◐ Частично (стабы расширены) | 85% |
-| 2.5 | Расширенная SDE (20+ переменных) | ◐ Этап 1 (стабы + описания + тесты) | 33% |
+| 2 | Математическое ядро MVP | ✔ Реализовано | 95% |
+| 2.5 | Расширенная SDE (20+ переменных) | ✔ Реализовано (1104 LOC, 142 теста) | 100% |
 | 2.6 | Механистические модели терапий | ✔ Реализовано (124/124 тестов) | 100% |
-| 2.7 | Численные методы и робастность | ✖ Не начато | 0% |
-| 2.8 | Расширенная ABM | ✖ Не начато | 0% |
+| 2.7 | Численные методы и робастность | ◐ Частично (файлы + описания готовы, стабы) | 50% |
+| 2.8 | Расширенная ABM | ◐ Частично (стаб-классы в abm_model.py) | 30% |
 | 2.9 | Мультимасштабная интеграция | ✖ Не начато | 0% |
 | 3 | Анализ и валидация | ✖ Не начато | 0% |
 | 4 | Визуализация | ✖ Не начато | 0% |
 | 5 | FastAPI Backend | ✖ Не начато | 0% |
 | 6 | Tauri + React Frontend | ✖ Не начато | 0% |
-| 7 | Тестирование | ◐ Частично | 55% (1511 тестов) |
+| 7 | Тестирование | ◐ Частично | 60% (1467 тестов) |
 | 8 | Интеграция и деплой | ✖ Не начато | 0% |
 
 ### Общий прогресс: ~30% (от полной модели)
 
 ### Созданные файлы (проверено)
 
-**Python Backend — `src/core/` (9 файлов):**
-- `sde_model.py` ✔ (реализован)
-- `abm_model.py` ◐ (стабы расширены: +3 агента, +KDTree, +механики)
-- `integration.py` ◐ (стабы расширены: +5 методов)
-- `monte_carlo.py` ◐ (стабы расширены: +3 метода)
-- `numerical_utils.py` ◐ (НОВЫЙ: стабы — DivergenceInfo, NumericalGuard)
-- `therapy_models.py` ✔ (ПОЛНОСТЬЮ РЕАЛИЗОВАН — PRPModel, PEMFModel, SynergyModel, 124 теста, 99% coverage)
-- `parameters.py` ◐ (стабы — ParameterSet 105 полей)
-- `extended_sde.py` ◐ (стабы — StateIndex(20), ~30 методов)
-- `wound_phases.py` ◐ (стабы — WoundPhaseDetector 8 методов)
+**Python Backend — `src/core/` (11 файлов):**
+- `sde_model.py` ✔ (реализован, 575 LOC)
+- `extended_sde.py` ✔ (ПОЛНОСТЬЮ РЕАЛИЗОВАН — StateIndex(20), 50+ методов, все 20 SDE, 1104 LOC)
+- `abm_model.py` ◐ (2335 LOC — базовая ABM реализована, стаб-классы Neutrophil/Endothelial/Myofibroblast, 2 стаба движения)
+- `integration.py` ✔ (реализован — bidirectional SDE+ABM sync, operator splitting, 836 LOC)
+- `monte_carlo.py` ✔ (реализован — ensemble + concurrent.futures параллелизация, 872 LOC)
+- `numerical_utils.py` ✔ (реализован — clip, detect_divergence, adaptive_timestep, NumericalGuard, 382 LOC)
+- `therapy_models.py` ✔ (реализован — PRPModel, PEMFModel, SynergyModel, 124 теста, 99% coverage, 583 LOC)
+- `parameters.py` ✔ (реализован — ParameterSet 80+ полей, 334 LOC)
+- `wound_phases.py` ✔ (реализован — WoundPhaseDetector, 4 фазы, 8 методов, 331 LOC)
+- `sde_numerics.py` ◐ (758 LOC — EM реализован, Milstein/IMEX/SRK стабы)
+- `robustness.py` ◐ (572 LOC — структуры данных готовы, 17 стабов верификации)
 
 **Python Backend — `src/data/` (6 файлов):** ✔ ВСЕ РЕАЛИЗОВАНЫ
 - `fcs_parser.py`, `gating.py`, `parameter_extraction.py`, `image_loader.py`, `validation.py`, `dataset_loader.py`
@@ -868,7 +932,7 @@ npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
 - `src/analysis/` — не создан ✖
 - `src/db/` — не создан ✖
 
-**Тесты (1511 тестов):**
+**Тесты (1467 тестов):**
 - `tests/unit/data/` — 6 файлов, 532 теста ✔
 - `tests/unit/core/` — 9 файлов (sde, abm, integration, monte_carlo, therapy_models, parameters, extended_sde, wound_phases, numerical_utils) ✔
 - `tests/integration/` — 1 файл ✔
@@ -883,7 +947,7 @@ npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
 - `data/mock/` — generate_mock_data.py + README.md ✔
 
 **Конфигурация:**
-- `pyproject.toml` ✔ (требует расширения)
+- `pyproject.toml` ✔ (PyMC, SALib, emcee, celery уже добавлены)
 - `ruff.toml` ✔
 - `.gitignore` ✔
 
@@ -892,11 +956,11 @@ npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
 ## Приоритетная дорожная карта
 
 ### Milestone 1: «Расширенная модель»
-- [ ] Фаза 2 — завершение MVP (хемотаксис, параллелизация, робастность)
-- [ ] Фаза 2.5 — Расширенная SDE (20+ переменных)
-- [x] Фаза 2.6 — Механистические терапии
-- [ ] Фаза 2.7 — Milstein + IMEX
-- [ ] Фаза 2.8 — Расширенная ABM
+- [x] Фаза 2 — завершение MVP (интеграция, параллелизация, робастность) ✔
+- [x] Фаза 2.5 — Расширенная SDE (20+ переменных) ✔
+- [x] Фаза 2.6 — Механистические терапии ✔
+- [ ] Фаза 2.7 — Milstein + IMEX (◐ стабы готовы)
+- [ ] Фаза 2.8 — Расширенная ABM (◐ стаб-классы готовы)
 - [ ] Фаза 2.9 — Equation-Free интеграция
 
 ### Milestone 2: «Валидация для публикации»
@@ -1016,6 +1080,6 @@ python -m src.analysis.parameter_estimation --data data/validation/ --output res
 
 ---
 
-*Документ обновлён: 15 февраля 2026*
-*Версия: 4.1 (therapy_models реализован, Phase 2.5 стабы готовы)*
+*Документ обновлён: 28 февраля 2026*
+*Версия: 4.2 (Phase 2–2.6 полностью реализованы; 1467 тестов; Phase 2.7–2.8 частично)*
 *Основан на: RegenTwin_Mathematical_Framework.md, RegenTwin_Implementation_Plan.md v3.0*
