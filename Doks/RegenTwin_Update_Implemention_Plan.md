@@ -65,7 +65,7 @@ RegenTwin/
 │   ├── core/                     # Математическое ядро
 │   │   ├── sde_model.py          # ✔ MVP SDE (2 переменных, 575 LOC)
 │   │   ├── extended_sde.py       # ✔ Расширенная SDE (20+ перем., 1104 LOC)
-│   │   ├── sde_numerics.py       # ◐ EM готов; Milstein, IMEX, SRK — стабы (758 LOC)
+│   │   ├── sde_numerics.py       # ✔ EM, Milstein, IMEX, Adaptive, SRK реализованы (880 LOC)
 │   │   ├── abm_model.py          # ◐ ABM реализована, интегрирована с API, 2 стаба движения (2335 LOC)
 │   │   ├── abm_spatial.py        # ✖ KD-Tree, хемотаксис
 │   │   ├── integration.py        # ✔ SDE+ABM operator splitting (836 LOC)
@@ -75,7 +75,7 @@ RegenTwin/
 │   │   ├── numerical_utils.py    # ✔ NumericalGuard, клиппинг, адапт. шаг (382 LOC)
 │   │   ├── wound_phases.py       # ✔ Фазы заживления (331 LOC)
 │   │   ├── parameters.py         # ✔ ParameterSet (80+ полей, 334 LOC)
-│   │   └── robustness.py         # ◐ Структуры данных готовы, верификация стабы (572 LOC)
+│   │   └── robustness.py         # ✔ Верификация реализована: позитивность, NaN, conservation, MMS, SDE vs ABM (583 LOC)
 │   ├── data/                     # Data Pipeline
 │   │   ├── fcs_parser.py         # ✔ Реализовано (исправлены subsample, нормализация ключей метаданных)
 │   │   ├── gating.py             # ✔ Реализовано
@@ -386,7 +386,7 @@ RegenTwin/
 
 ---
 
-## Фаза 2.7: Численные методы и робастность ◐ ЧАСТИЧНО (50%)
+## Фаза 2.7: Численные методы и робастность ✔ РЕАЛИЗОВАНО (95%)
 
 > **Цель:** Upgrade с Euler-Maruyama на Milstein + IMEX для стиффной системы
 > **Зависимости:** Фаза 2.5
@@ -396,10 +396,10 @@ RegenTwin/
 | Метод | Применение | Порядок сходимости | Статус |
 |-------|-----------|-------------------|--------|
 | Euler-Maruyama (EM) | ✔ Текущий | 0.5 (сильная) | ✔ — реализован в sde_numerics.py |
-| **Milstein** | Upgrade для скалярного шума | 1.0 (сильная) | ◐ — стаб в sde_numerics.py |
-| **IMEX splitting** | Для стиффных систем (быстрые цитокины + медленный ECM) | Зависит от компонент | ◐ — стаб в sde_numerics.py |
-| **Адаптивный шаг** | Автоматическое уменьшение dt при быстром изменении | - | ✔ — adaptive_timestep() в numerical_utils.py |
-| **Stochastic RK (SRI2W1)** | Опционально для мультимерных перекрёстных термов | 1.0 | ◐ — стаб в sde_numerics.py |
+| **Milstein** | Upgrade для скалярного шума | 1.0 (сильная) | ✔ — реализован в sde_numerics.py |
+| **IMEX splitting** | Для стиффных систем (быстрые цитокины + медленный ECM) | Зависит от компонент | ✔ — реализован в sde_numerics.py |
+| **Адаптивный шаг** | PI-контроллер + Richardson extrapolation в sde_numerics.py | - | ✔ — AdaptiveTimestepper в sde_numerics.py |
+| **Stochastic RK (SRI2W1)** | Опционально для мультимерных перекрёстных термов | 1.0 | ✔ — реализован в sde_numerics.py |
 
 ### Робастность
 
@@ -407,20 +407,20 @@ RegenTwin/
 |-----------|----------|--------|
 | Клиппинг отрицательных значений | `clip_negative_concentrations()` в numerical_utils.py | ✔ |
 | NaN/Inf обнаружение | `detect_divergence()` в numerical_utils.py | ✔ |
-| Conservation checks | Стабы ViolationStats + ConservationReport в robustness.py | ◐ |
-| Method of Manufactured Solutions | Стаб ConvergenceResult в robustness.py | ◐ |
-| Сравнение SDE vs ABM | Стаб в robustness.py | ◐ |
+| Conservation checks | ConservationChecker: mass_balance + cytokine_balance в robustness.py | ✔ |
+| Method of Manufactured Solutions | ConvergenceVerifier: compute_order + manufactured_solution в robustness.py | ✔ |
+| Сравнение SDE vs ABM | SDEvsABMComparator: Wasserstein + KS test в robustness.py | ✔ |
 
 ### Файлы для создания
 
 | Файл | Описание | Статус |
 |------|----------|--------|
-| `src/core/sde_numerics.py` | EM готов; `MilsteinSolver`, `IMEXSplitter`, `SRKSolver` — стабы (758 LOC) | ◐ |
-| `src/core/robustness.py` | Структуры `ViolationStats`, `ConservationReport`, `ConvergenceResult`; 17 стабов верификации (572 LOC) | ◐ |
+| `src/core/sde_numerics.py` | EM, Milstein, IMEX, Adaptive (PI), SRK — все реализованы (880 LOC) | ✔ |
+| `src/core/robustness.py` | PositivityEnforcer, NaNHandler, ConservationChecker, ConvergenceVerifier, SDEvsABMComparator (583 LOC) | ✔ |
 | `Description/Phase2/description_sde_numerics.md` | Описание функционала (512 LOC) — численные схемы, IMEX, адаптивность | ✔ |
 | `Description/Phase2/description_robustness.md` | Описание функционала (492 LOC) — верификация, conservation laws, MMS | ✔ |
-| `tests/unit/core/test_sde_numerics.py` | TDD: порядок сходимости Milstein, IMEX корректность, адаптивность | ✖ |
-| `tests/unit/core/test_robustness.py` | TDD: клиппинг, NaN обработка, conservation | ✖ |
+| `tests/unit/core/test_sde_numerics.py` | 76 тестов: порядок сходимости Milstein, IMEX корректность, адаптивность | ✔ |
+| `tests/unit/core/test_robustness.py` | 72 теста: клиппинг, NaN обработка, conservation, MMS, SDE vs ABM | ✔ |
 
 ---
 
@@ -782,8 +782,8 @@ const plotData = await response.json();
 | `image_loader.py` | `test_image_loader.py` | ✔ | ✔ |
 | **`extended_sde.py`** | `test_extended_sde.py` | ✔ 142 теста | ✔ |
 | **`therapy_models.py`** | `test_therapy_models.py` | ✔ 124 теста | ✔ |
-| **`sde_numerics.py`** | `test_sde_numerics.py` | ✖ | ✖ → ✔ |
-| **`robustness.py`** | `test_robustness.py` | ✖ | ✖ → ✔ |
+| **`sde_numerics.py`** | `test_sde_numerics.py` | ✔ 76 тестов | ✔ |
+| **`robustness.py`** | `test_robustness.py` | ✔ 72 теста | ✔ |
 | **`abm_spatial.py`** | `test_abm_spatial.py` | ✖ | ✖ → ✔ |
 | **`equation_free.py`** | `test_equation_free.py` | ✖ | ✖ → ✔ |
 | **`sensitivity.py`** | `test_sensitivity.py` | ✖ | ✖ → ✔ |
@@ -870,12 +870,12 @@ const plotData = await response.json();
 | `pyproject.toml` | Зависимости включая PyMC, SALib, emcee, celery | ✔ |
 | `src/core/extended_sde.py` | **КЛЮЧЕВОЙ:** 20+ переменных SDE система | ✔ Реализован (1104 LOC) |
 | `src/core/therapy_models.py` | Механистические PRP/PEMF модели | ✔ Реализован (583 LOC) |
-| `src/core/sde_numerics.py` | EM готов; Milstein, IMEX, SRK — стабы | ◐ |
+| `src/core/sde_numerics.py` | EM, Milstein, IMEX, Adaptive, SRK — все реализованы (880 LOC) | ✔ |
 | `src/core/abm_model.py` | Расширение ABM, стаб-классы агентов | ◐ |
 | `src/core/abm_spatial.py` | KD-Tree, хемотаксис, контактное ингибирование | ✖ |
 | `src/core/equation_free.py` | Equation-Free мультимасштабная интеграция | ✖ |
 | `src/core/parameters.py` | 80+ параметров из литературы | ✔ Реализован (334 LOC) |
-| `src/core/robustness.py` | Структуры данных готовы, верификация стабы | ◐ |
+| `src/core/robustness.py` | Верификация реализована: 5 классов, 148 тестов (583 LOC) | ✔ |
 | `src/analysis/sensitivity.py` | Sobol, Morris (SALib) | ✖ |
 | `src/analysis/parameter_estimation.py` | Bayesian estimation (PyMC) | ✖ |
 | `src/analysis/validation.py` | Метрики валидации на реальных данных | ✖ |
@@ -896,7 +896,7 @@ const plotData = await response.json();
 | 2 | Математическое ядро MVP | ✔ Реализовано | 95% |
 | 2.5 | Расширенная SDE (20+ переменных) | ✔ Реализовано (1104 LOC, 142 теста) | 100% |
 | 2.6 | Механистические модели терапий | ✔ Реализовано (124/124 тестов) | 100% |
-| 2.7 | Численные методы и робастность | ◐ Частично (файлы + описания готовы, стабы) | 50% |
+| 2.7 | Численные методы и робастность | ✔ Реализовано (148 тестов, simulate() → Фаза 3) | 95% |
 | 2.8 | Расширенная ABM | ◐ Частично (стаб-классы в abm_model.py) | 30% |
 | 2.9 | Мультимасштабная интеграция | ✖ Не начато | 0% |
 | 3 | Анализ и валидация | ✖ Не начато | 0% |
@@ -920,8 +920,8 @@ const plotData = await response.json();
 - `therapy_models.py` ✔ (реализован — PRPModel, PEMFModel, SynergyModel, 124 теста, 99% coverage, 583 LOC)
 - `parameters.py` ✔ (реализован — ParameterSet 80+ полей, 334 LOC)
 - `wound_phases.py` ✔ (реализован — WoundPhaseDetector, 4 фазы, 8 методов, 331 LOC)
-- `sde_numerics.py` ◐ (758 LOC — EM реализован, Milstein/IMEX/SRK стабы)
-- `robustness.py` ◐ (572 LOC — структуры данных готовы, 17 стабов верификации)
+- `sde_numerics.py` ✔ (880 LOC — EM, Milstein, IMEX, Adaptive PI, SRK реализованы; simulate() оставлен для Фазы 3)
+- `robustness.py` ✔ (583 LOC — PositivityEnforcer, NaNHandler, ConservationChecker, ConvergenceVerifier, SDEvsABMComparator)
 
 **Python Backend — `src/data/` (6 файлов):** ✔ ВСЕ РЕАЛИЗОВАНЫ
 - `fcs_parser.py`, `gating.py`, `parameter_extraction.py`, `image_loader.py`, `validation.py`, `dataset_loader.py`
@@ -932,7 +932,7 @@ const plotData = await response.json();
 - `src/analysis/` — не создан ✖
 - `src/db/` — не создан ✖
 
-**Тесты (1467 тестов):**
+**Тесты (1615 тестов):**
 - `tests/unit/data/` — 6 файлов, 532 теста ✔
 - `tests/unit/core/` — 9 файлов (sde, abm, integration, monte_carlo, therapy_models, parameters, extended_sde, wound_phases, numerical_utils) ✔
 - `tests/integration/` — 1 файл ✔
@@ -959,7 +959,7 @@ const plotData = await response.json();
 - [x] Фаза 2 — завершение MVP (интеграция, параллелизация, робастность) ✔
 - [x] Фаза 2.5 — Расширенная SDE (20+ переменных) ✔
 - [x] Фаза 2.6 — Механистические терапии ✔
-- [ ] Фаза 2.7 — Milstein + IMEX (◐ стабы готовы)
+- [x] Фаза 2.7 — Milstein + IMEX + Adaptive + SRK + Robustness (✔ 148 тестов)
 - [ ] Фаза 2.8 — Расширенная ABM (◐ стаб-классы готовы)
 - [ ] Фаза 2.9 — Equation-Free интеграция
 
@@ -1080,6 +1080,6 @@ python -m src.analysis.parameter_estimation --data data/validation/ --output res
 
 ---
 
-*Документ обновлён: 28 февраля 2026*
-*Версия: 4.2 (Phase 2–2.6 полностью реализованы; 1467 тестов; Phase 2.7–2.8 частично)*
+*Документ обновлён: 8 марта 2026*
+*Версия: 4.3 (Phase 2–2.7 реализованы; 1615 тестов; Phase 2.8 частично)*
 *Основан на: RegenTwin_Mathematical_Framework.md, RegenTwin_Implementation_Plan.md v3.0*

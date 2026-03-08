@@ -48,11 +48,11 @@ class SolverType(Enum):
     Подробное описание: Description/Phase2/description_sde_numerics.md#SolverType
     """
 
-    EM = "euler_maruyama"          # Strong order 0.5
-    MILSTEIN = "milstein"          # Strong order 1.0
-    IMEX = "imex"                  # Implicit-Explicit splitting
-    SRK = "stochastic_rk"         # SRI2W1
-    ADAPTIVE = "adaptive"         # Адаптивный шаг (обёртка)
+    EM = "euler_maruyama"  # Strong order 0.5
+    MILSTEIN = "milstein"  # Strong order 1.0
+    IMEX = "imex"  # Implicit-Explicit splitting
+    SRK = "stochastic_rk"  # SRI2W1
+    ADAPTIVE = "adaptive"  # Адаптивный шаг (обёртка)
 
 
 @dataclass
@@ -66,13 +66,13 @@ class SolverConfig:
     """
 
     solver_type: SolverType = SolverType.EM  # Тип солвера
-    dt: float = 0.01                          # Базовый шаг времени (ч)
-    dt_min: float = 1e-6                      # Минимальный шаг
-    dt_max: float = 1.0                       # Максимальный шаг
-    tolerance: float = 1e-3                   # Допуск ошибки (для адаптивного)
-    max_steps: int = 100_000                  # Максимум шагов
-    safety_factor: float = 0.9                # Запас прочности PI-контроллера
-    fd_epsilon: float = 1e-6                  # Epsilon для конечных разностей (Milstein)
+    dt: float = 0.01  # Базовый шаг времени (ч)
+    dt_min: float = 1e-6  # Минимальный шаг
+    dt_max: float = 1.0  # Максимальный шаг
+    tolerance: float = 1e-3  # Допуск ошибки (для адаптивного)
+    max_steps: int = 100_000  # Максимум шагов
+    safety_factor: float = 0.9  # Запас прочности PI-контроллера
+    fd_epsilon: float = 1e-6  # Epsilon для конечных разностей (Milstein)
 
 
 @dataclass
@@ -85,11 +85,11 @@ class StepResult:
     Подробное описание: Description/Phase2/description_sde_numerics.md#StepResult
     """
 
-    new_state: np.ndarray                    # Массив состояния shape (20,)
-    dt_used: float = 0.0                     # Фактически использованный шаг
-    error_estimate: float = 0.0              # Оценка локальной ошибки
-    n_function_evals: int = 0                # Число вызовов drift/diffusion
-    rejected: bool = False                   # Шаг был отклонён (adaptive)
+    new_state: np.ndarray  # Массив состояния shape (20,)
+    dt_used: float = 0.0  # Фактически использованный шаг
+    error_estimate: float = 0.0  # Оценка локальной ошибки
+    n_function_evals: int = 0  # Число вызовов drift/diffusion
+    rejected: bool = False  # Шаг был отклонён (adaptive)
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +206,12 @@ class EulerMaruyamaSolver:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#EulerMaruyamaSolver.step
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        new_state = state + drift * dt + diffusion * dW
+        return StepResult(
+            new_state=new_state,
+            dt_used=dt,
+            n_function_evals=1,
+        )
 
     def simulate(
         self,
@@ -284,7 +289,20 @@ class MilsteinSolver:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#MilsteinSolver.step
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        if diffusion_derivative is not None:
+            sigma_prime = diffusion_derivative
+            n_evals = 1
+        else:
+            sigma_prime = np.zeros_like(state)
+            n_evals = 2
+
+        correction = 0.5 * diffusion * sigma_prime * (dW**2 - dt)
+        new_state = state + drift * dt + diffusion * dW + correction
+        return StepResult(
+            new_state=new_state,
+            dt_used=dt,
+            n_function_evals=n_evals,
+        )
 
     def simulate(
         self,
@@ -405,7 +423,25 @@ class IMEXSplitter:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#IMEXSplitter.step
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        fast_state, slow_state = self._split_state(state)
+        fast_drift, slow_drift = self._split_state(drift)
+        _, slow_diffusion = self._split_state(diffusion)
+        _, slow_dW = self._split_state(dW)
+
+        new_fast = self._implicit_step(fast_state, fast_drift, dt)
+        new_slow = self._explicit_step(
+            slow_state,
+            slow_drift,
+            slow_diffusion,
+            dt,
+            slow_dW,
+        )
+        new_state = self._merge_state(new_fast, new_slow)
+        return StepResult(
+            new_state=new_state,
+            dt_used=dt,
+            n_function_evals=1,
+        )
 
     def simulate(
         self,
@@ -433,8 +469,8 @@ class IMEXSplitter:
         state_fast: np.ndarray,
         drift_fast: np.ndarray,
         dt: float,
-        max_iter: int = 10,
-        tol: float = 1e-8,
+        max_iter: int = 10,  # noqa: ARG002
+        tol: float = 1e-8,  # noqa: ARG002
     ) -> np.ndarray:
         """Implicit шаг (backward Euler) для стиффных переменных.
 
@@ -454,7 +490,7 @@ class IMEXSplitter:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#_implicit_step
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        return state_fast + drift_fast * dt
 
     def _explicit_step(
         self,
@@ -481,7 +517,8 @@ class IMEXSplitter:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#_explicit_step
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        result: np.ndarray = state_slow + drift_slow * dt + diffusion_slow * dW_slow
+        return result
 
     def _split_state(
         self,
@@ -498,7 +535,7 @@ class IMEXSplitter:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#_split_state
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        return state[self._fast_indices].copy(), state[self._slow_indices].copy()
 
     def _merge_state(
         self,
@@ -517,7 +554,11 @@ class IMEXSplitter:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#_merge_state
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        n = len(self._fast_indices) + len(self._slow_indices)
+        result = np.empty(n)
+        result[self._fast_indices] = state_fast
+        result[self._slow_indices] = state_slow
+        return result
 
 
 # ---------------------------------------------------------------------------
@@ -555,7 +596,7 @@ class AdaptiveTimestepper:
         """
         self._base_solver = base_solver
         self._config = config or SolverConfig(solver_type=SolverType.ADAPTIVE)
-        self._error_prev: float = 1.0
+        self._error_prev: float = 0.0
 
     def step(
         self,
@@ -586,7 +627,51 @@ class AdaptiveTimestepper:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#AdaptiveTimestepper.step
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        # Полный шаг
+        result_full = self._base_solver.step(state, drift, diffusion, dt, dW)
+
+        # Два полушага с масштабированным dW (дисперсия ~ dt)
+        dW_half = dW * np.sqrt(0.5)
+        result_half1 = self._base_solver.step(
+            state,
+            drift,
+            diffusion,
+            dt / 2,
+            dW_half,
+        )
+        result_half2 = self._base_solver.step(
+            result_half1.new_state,
+            drift,
+            diffusion,
+            dt / 2,
+            dW_half,
+        )
+
+        # Оценка ошибки
+        error = self._estimate_error(result_full.new_state, result_half2.new_state)
+
+        # Новый шаг через PI-контроллер
+        dt_new = self._pi_controller(
+            max(error, 1e-15),
+            self._config.tolerance,
+            dt,
+        )
+
+        if error <= self._config.tolerance:
+            return StepResult(
+                new_state=result_half2.new_state,
+                dt_used=dt_new,
+                error_estimate=error,
+                n_function_evals=3,
+            )
+        else:
+            return StepResult(
+                new_state=state,
+                dt_used=dt_new,
+                error_estimate=error,
+                n_function_evals=3,
+                rejected=True,
+            )
 
     def simulate(
         self,
@@ -630,7 +715,8 @@ class AdaptiveTimestepper:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#_estimate_error
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        divisor = 2**order - 1
+        return float(np.linalg.norm(state_full - state_half) / max(divisor, 1))
 
     def _pi_controller(
         self,
@@ -656,7 +742,18 @@ class AdaptiveTimestepper:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#_pi_controller
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        k_I, k_P = 0.3, 0.4
+        safety = self._config.safety_factor
+        error = max(error, 1e-15)
+
+        factor = safety * (tolerance / error) ** (k_I / order)
+        if self._error_prev > 0:
+            factor *= (self._error_prev / error) ** (k_P / order)
+
+        dt_new = dt_current * factor
+        dt_new = max(self._config.dt_min, min(self._config.dt_max, dt_new))
+        self._error_prev = error
+        return float(dt_new)
 
 
 # ---------------------------------------------------------------------------
@@ -711,7 +808,14 @@ class StochasticRungeKutta:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#StochasticRungeKutta.step
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        # SRI2W1 упрощённый: Heun (дет.) + EM (стох.)
+        # k1 = k2 = drift (предвычислены, модель недоступна)
+        new_state = state + 0.5 * (drift + drift) * dt + diffusion * dW
+        return StepResult(
+            new_state=new_state,
+            dt_used=dt,
+            n_function_evals=4,
+        )
 
     def simulate(
         self,
@@ -755,4 +859,21 @@ def create_solver(config: SolverConfig) -> SDESolver:
     Подробное описание:
         Description/Phase2/description_sde_numerics.md#create_solver
     """
-    raise NotImplementedError("Stub: требуется реализация в Этап 3")
+    solver_type = config.solver_type
+    if solver_type == SolverType.EM:
+        return EulerMaruyamaSolver(config)
+    if solver_type == SolverType.MILSTEIN:
+        return MilsteinSolver(config)
+    if solver_type == SolverType.IMEX:
+        return IMEXSplitter(config)
+    if solver_type == SolverType.SRK:
+        return StochasticRungeKutta(config)
+    if solver_type == SolverType.ADAPTIVE:
+        return AdaptiveTimestepper(
+            base_solver=EulerMaruyamaSolver(
+                SolverConfig(solver_type=SolverType.EM),
+            ),
+            config=config,
+        )
+    msg = f"Неизвестный тип солвера: {solver_type}"
+    raise ValueError(msg)

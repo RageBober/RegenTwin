@@ -48,14 +48,14 @@ class ViolationStats:
     Подробное описание: Description/Phase2/description_robustness.md#ViolationStats
     """
 
-    count: int = 0                                   # Общее число нарушений
-    variables: dict[str, int] = field(               # {имя_перем: число_нарушений}
+    count: int = 0  # Общее число нарушений
+    variables: dict[str, int] = field(  # {имя_перем: число_нарушений}
         default_factory=dict,
     )
-    timestamps: list[float] = field(                 # Моменты времени нарушений
+    timestamps: list[float] = field(  # Моменты времени нарушений
         default_factory=list,
     )
-    total_clipped: float = 0.0                       # Суммарная величина отсечения
+    total_clipped: float = 0.0  # Суммарная величина отсечения
 
 
 @dataclass
@@ -68,12 +68,12 @@ class ConservationReport:
     Подробное описание: Description/Phase2/description_robustness.md#ConservationReport
     """
 
-    mass_error: float = 0.0          # Относительная ошибка баланса клеток
-    cytokine_error: float = 0.0      # Относительная ошибка баланса цитокинов
-    ecm_error: float = 0.0           # Относительная ошибка баланса ECM
-    is_conserved: bool = True         # Все ошибки в допуске
-    tolerance: float = 0.05           # Допуск (5% по умолчанию)
-    details: str = ""                 # Текстовая диагностика
+    mass_error: float = 0.0  # Относительная ошибка баланса клеток
+    cytokine_error: float = 0.0  # Относительная ошибка баланса цитокинов
+    ecm_error: float = 0.0  # Относительная ошибка баланса ECM
+    is_conserved: bool = True  # Все ошибки в допуске
+    tolerance: float = 0.05  # Допуск (5% по умолчанию)
+    details: str = ""  # Текстовая диагностика
 
 
 @dataclass
@@ -86,15 +86,15 @@ class ConvergenceResult:
     Подробное описание: Description/Phase2/description_robustness.md#ConvergenceResult
     """
 
-    estimated_order: float = 0.0                 # Оценённый порядок сходимости
-    errors: list[float] = field(                 # Ошибки для каждого dt
+    estimated_order: float = 0.0  # Оценённый порядок сходимости
+    errors: list[float] = field(  # Ошибки для каждого dt
         default_factory=list,
     )
-    dt_sequence: list[float] = field(            # Последовательность dt
+    dt_sequence: list[float] = field(  # Последовательность dt
         default_factory=list,
     )
-    reference_order: float = 0.0                 # Теоретический порядок
-    is_valid: bool = False                       # Оценка ≈ reference ± 0.2
+    reference_order: float = 0.0  # Теоретический порядок
+    is_valid: bool = False  # Оценка ≈ reference ± 0.2
 
 
 @dataclass
@@ -106,12 +106,12 @@ class ComparisonMetrics:
     Подробное описание: Description/Phase2/description_robustness.md#ComparisonMetrics
     """
 
-    wasserstein_distance: float = 0.0    # W1 расстояние
-    mean_diff: float = 0.0               # |mean_SDE - mean_ABM|
-    std_diff: float = 0.0                # |std_SDE - std_ABM|
-    ks_statistic: float = 0.0            # Kolmogorov-Smirnov статистика
-    ks_pvalue: float = 0.0               # KS p-value
-    is_consistent: bool = False          # True если p > 0.05
+    wasserstein_distance: float = 0.0  # W1 расстояние
+    mean_diff: float = 0.0  # |mean_SDE - mean_ABM|
+    std_diff: float = 0.0  # |std_SDE - std_ABM|
+    ks_statistic: float = 0.0  # Kolmogorov-Smirnov статистика
+    ks_pvalue: float = 0.0  # KS p-value
+    is_consistent: bool = False  # True если p > 0.05
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +166,29 @@ class PositivityEnforcer:
         Подробное описание:
             Description/Phase2/description_robustness.md#PositivityEnforcer.enforce
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        result = state.copy()
+        names = variable_names or self._variable_names
+        violations_in_call = 0
+
+        for i in range(len(result)):
+            if np.isnan(result[i]):
+                continue
+            if result[i] < self._min_value:
+                clipped_amount = abs(result[i] - self._min_value)
+                self._stats.count += 1
+                self._stats.total_clipped += clipped_amount
+                violations_in_call += 1
+
+                if names and i < len(names):
+                    name = names[i]
+                    self._stats.variables[name] = self._stats.variables.get(name, 0) + 1
+
+                result[i] = self._min_value
+
+        if violations_in_call > 0:
+            self._stats.timestamps.append(t)
+
+        return result
 
     def get_violation_stats(self) -> ViolationStats:
         """Получить накопленную статистику нарушений.
@@ -177,7 +199,7 @@ class PositivityEnforcer:
         Подробное описание:
             Description/Phase2/description_robustness.md#get_violation_stats
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        return self._stats
 
     def reset_stats(self) -> None:
         """Сбросить статистику нарушений.
@@ -185,7 +207,7 @@ class PositivityEnforcer:
         Подробное описание:
             Description/Phase2/description_robustness.md#reset_stats
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        self._stats = ViolationStats()
 
 
 # ---------------------------------------------------------------------------
@@ -233,11 +255,11 @@ class NaNHandler:
         Подробное описание:
             Description/Phase2/description_robustness.md#NaNHandler.check
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        return bool(not np.all(np.isfinite(state)))
 
     def recover(
         self,
-        state: np.ndarray,
+        state: np.ndarray,  # noqa: ARG002
         last_valid_state: np.ndarray,
         dt: float,
     ) -> tuple[np.ndarray, float, bool]:
@@ -257,7 +279,10 @@ class NaNHandler:
         Подробное описание:
             Description/Phase2/description_robustness.md#NaNHandler.recover
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        self._recovery_count += 1
+        new_dt = dt * self._dt_reduction_factor
+        should_stop = self._recovery_count >= self._max_recoveries
+        return last_valid_state.copy(), new_dt, should_stop
 
     def get_recovery_count(self) -> int:
         """Получить число выполненных восстановлений.
@@ -268,7 +293,7 @@ class NaNHandler:
         Подробное описание:
             Description/Phase2/description_robustness.md#get_recovery_count
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        return self._recovery_count
 
     def reset(self) -> None:
         """Сбросить счётчик восстановлений.
@@ -276,7 +301,7 @@ class NaNHandler:
         Подробное описание:
             Description/Phase2/description_robustness.md#NaNHandler.reset
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        self._recovery_count = 0
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +360,19 @@ class ConservationChecker:
         Подробное описание:
             Description/Phase2/description_robustness.md#check_mass_balance
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        delta_expected = (births - deaths) * dt
+        delta_actual = population_current - population_previous
+        denominator = np.maximum(np.abs(population_previous), 1e-10)
+        error = float(np.linalg.norm((delta_actual - delta_expected) / denominator))
+
+        is_conserved = error <= self._tolerance
+        report = ConservationReport(
+            mass_error=error,
+            is_conserved=is_conserved,
+            tolerance=self._tolerance,
+        )
+        self._reports.append(report)
+        return report
 
     def check_cytokine_balance(
         self,
@@ -363,7 +400,19 @@ class ConservationChecker:
         Подробное описание:
             Description/Phase2/description_robustness.md#check_cytokine_balance
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        delta_expected = (production - degradation) * dt
+        delta_actual = concentration_current - concentration_previous
+        denominator = np.maximum(np.abs(concentration_previous), 1e-10)
+        error = float(np.linalg.norm((delta_actual - delta_expected) / denominator))
+
+        is_conserved = error <= self._tolerance
+        report = ConservationReport(
+            cytokine_error=error,
+            is_conserved=is_conserved,
+            tolerance=self._tolerance,
+        )
+        self._reports.append(report)
+        return report
 
     def report(self) -> list[ConservationReport]:
         """Получить все накопленные отчёты.
@@ -374,7 +423,7 @@ class ConservationChecker:
         Подробное описание:
             Description/Phase2/description_robustness.md#ConservationChecker.report
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        return list(self._reports)
 
     def reset(self) -> None:
         """Сбросить накопленные отчёты.
@@ -382,7 +431,7 @@ class ConservationChecker:
         Подробное описание:
             Description/Phase2/description_robustness.md#ConservationChecker.reset
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        self._reports = []
 
 
 # ---------------------------------------------------------------------------
@@ -433,7 +482,10 @@ class ConvergenceVerifier:
         Подробное описание:
             Description/Phase2/description_robustness.md#compute_order
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        log_errors = np.log(errors)
+        log_dt = np.log(dt_sequence)
+        coeffs = np.polyfit(log_dt, log_errors, 1)
+        return float(coeffs[0])
 
     def verify_solver(
         self,
@@ -485,7 +537,7 @@ class ConvergenceVerifier:
         Подробное описание:
             Description/Phase2/description_robustness.md#manufactured_solution
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        return float(x0 * np.exp((mu - sigma**2 / 2) * t))
 
 
 # ---------------------------------------------------------------------------
@@ -533,7 +585,27 @@ class SDEvsABMComparator:
         Подробное описание:
             Description/Phase2/description_robustness.md#SDEvsABMComparator.compare
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        if len(sde_values) == 0 or len(abm_values) == 0:
+            msg = "Массивы не могут быть пустыми"
+            raise ValueError(msg)
+
+        from scipy.stats import ks_2samp
+        from scipy.stats import wasserstein_distance as _wasserstein
+
+        w1 = float(_wasserstein(sde_values, abm_values))
+        ks_stat, ks_p = ks_2samp(sde_values, abm_values)
+        mean_diff = float(abs(np.mean(sde_values) - np.mean(abm_values)))
+        std_diff = float(abs(np.std(sde_values) - np.std(abm_values)))
+        is_consistent = float(ks_p) >= self._significance_level
+
+        return ComparisonMetrics(
+            wasserstein_distance=w1,
+            mean_diff=mean_diff,
+            std_diff=std_diff,
+            ks_statistic=float(ks_stat),
+            ks_pvalue=float(ks_p),
+            is_consistent=is_consistent,
+        )
 
     def wasserstein_distance(
         self,
@@ -552,7 +624,9 @@ class SDEvsABMComparator:
         Подробное описание:
             Description/Phase2/description_robustness.md#wasserstein_distance
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        from scipy.stats import wasserstein_distance as _wasserstein
+
+        return float(_wasserstein(sde_values, abm_values))
 
     def summary(
         self,
@@ -569,4 +643,13 @@ class SDEvsABMComparator:
         Подробное описание:
             Description/Phase2/description_robustness.md#SDEvsABMComparator.summary
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        lines = [
+            "SDE vs ABM Comparison Report",
+            f"  Wasserstein distance: {metrics.wasserstein_distance:.6f}",
+            f"  Mean difference: {metrics.mean_diff:.6f}",
+            f"  Std difference: {metrics.std_diff:.6f}",
+            f"  KS statistic: {metrics.ks_statistic:.6f}",
+            f"  KS p-value: {metrics.ks_pvalue:.6f}",
+            f"  Consistent: {metrics.is_consistent}",
+        ]
+        return "\n".join(lines)
