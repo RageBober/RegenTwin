@@ -60,6 +60,13 @@ class ABMConfig:
     use_multi_chemotaxis: bool = False  # Мульти-градиентный хемотаксис по типу
     spatial_index_type: str = "hash"  # "hash" (SpatialHash) или "kdtree"
 
+    # Phase 2.8: Расширенная ABM
+    initial_platelets: int = 0  # Тромбоциты (дегрануляция)
+    enable_efferocytosis: bool = False  # Эффероцитоз нейтрофилов
+    enable_mechanotransduction: bool = False  # Механотрансдукция
+    enable_subcycling: bool = False  # Subcycling полей
+    field_dt: float = 0.01  # dt для цитокиновых полей при subcycling
+
     # Параметры цитокинового поля
     grid_resolution: float = 10.0  # мкм на ячейку сетки
     cytokine_diffusion: float = 10.0  # мкм²/час
@@ -854,6 +861,19 @@ class StemCell(Agent):
             return 0.0
         return self.CYTOKINE_SECRETION_RATE * dt
 
+    def prp_mobilization(self, prp_level: float) -> float:
+        """PRP-зависимая мобилизация стволовой клетки.
+
+        Args:
+            prp_level: Концентрация PRP (0–1)
+
+        Returns:
+            Модификатор активности (множитель)
+
+        Подробное описание: Description/Phase2/description_abm_extended.md#StemCell.prp_mobilization
+        """
+        return 1.0 + 2.0 * prp_level / (0.3 + prp_level)
+
 
 class Macrophage(Agent):
     """CD14+/CD68+ макрофаг.
@@ -898,7 +918,7 @@ class Macrophage(Agent):
         Подробное описание: Description/description_abm_model.md#Macrophage.__init__
         """
         super().__init__(agent_id, x, y, age, rng)
-        self.polarization_state = "M0"  # M0, M1 (pro-inflam), M2 (anti-inflam)
+        self.polarization_state: float = 0.5  # 0.0=M2(anti-inflam), 1.0=M1(pro-inflam)
         self.phagocytosed_count = 0
 
     def update(self, dt: float, environment: dict[str, Any]) -> None:
@@ -996,10 +1016,7 @@ class Macrophage(Agent):
 
         Подробное описание: Description/description_abm_model.md#Macrophage.polarize
         """
-        if inflammation_level > 0.5:
-            self.polarization_state = "M1"  # Провоспалительный
-        else:
-            self.polarization_state = "M2"  # Противовоспалительный
+        self.polarization_state = max(0.0, min(1.0, float(inflammation_level)))
 
     def secrete_cytokines(self, dt: float) -> dict[str, float]:
         """Секреция цитокинов в зависимости от поляризации.
@@ -1016,27 +1033,45 @@ class Macrophage(Agent):
             return {"TNF_alpha": 0.0, "IL_1beta": 0.0, "IL_10": 0.0}
 
         base_rate = 0.1 * dt
+        state = (
+            float(self.polarization_state)
+            if isinstance(self.polarization_state, (int, float))
+            else 0.5
+        )
+        return {
+            "TNF_alpha": base_rate * state,
+            "IL_1beta": base_rate * 0.8 * state,
+            "IL_10": base_rate * (1.0 - state),
+        }
 
-        if self.polarization_state == "M1":
-            # Провоспалительные цитокины
-            return {
-                "TNF_alpha": base_rate,
-                "IL_1beta": base_rate * 0.8,
-                "IL_10": 0.0,
-            }
-        elif self.polarization_state == "M2":
-            # Противовоспалительные цитокины
-            return {
-                "TNF_alpha": 0.0,
-                "IL_1beta": 0.0,
-                "IL_10": base_rate,
-            }
-        else:  # M0
-            return {
-                "TNF_alpha": base_rate * 0.2,
-                "IL_1beta": base_rate * 0.1,
-                "IL_10": base_rate * 0.1,
-            }
+    def efferocytose(
+        self,
+        apoptotic_neutrophils: list["NeutrophilAgent"],
+    ) -> dict[str, float]:
+        """Фагоцитоз апоптотических нейтрофилов → выброс IL-10.
+
+        Args:
+            apoptotic_neutrophils: Апоптотические нейтрофилы в радиусе
+
+        Returns:
+            {"IL10": amount, "phagocytosed": count}
+
+        Подробное описание: Description/Phase2/description_abm_extended.md#Macrophage.efferocytose
+        """
+        if not apoptotic_neutrophils:
+            return {"IL10": 0.0, "phagocytosed": 0}
+        count = min(len(apoptotic_neutrophils), self.PHAGOCYTOSIS_CAPACITY)
+        for n in apoptotic_neutrophils[:count]:
+            n.alive = False
+        # Dual-mode polarization shift
+        if isinstance(self.polarization_state, str):
+            self.polarization_state = "M2"
+        else:
+            self.polarization_state = max(
+                0.0,
+                self.polarization_state - 0.1 * count,
+            )
+        return {"IL10": count * 0.05, "phagocytosed": count}
 
 
 class Fibroblast(Agent):
@@ -1184,6 +1219,31 @@ class Fibroblast(Agent):
         Подробное описание: Description/description_abm_model.md#Fibroblast.activate
         """
         self.activated = True
+
+    def tgfb_activation(
+        self,
+        tgfb_level: float,
+    ) -> "MyofibroblastAgent | None":
+        """TGF-β-зависимая активация → переход в MyofibroblastAgent.
+
+        Args:
+            tgfb_level: Концентрация TGF-β в окрестности
+
+        Returns:
+            MyofibroblastAgent или None
+
+        Подробное описание: Description/Phase2/description_abm_extended.md#Fibroblast.tgfb_activation
+        """
+        if tgfb_level <= 0.5:
+            return None
+        if self._rng.random() < 0.02:
+            return MyofibroblastAgent(
+                agent_id=self.agent_id,
+                x=self.x,
+                y=self.y,
+                rng=self._rng,
+            )
+        return None
 
 
 class NeutrophilAgent(Agent):
@@ -1382,6 +1442,9 @@ class EndothelialAgent(Agent):
         self.age += dt
         energy_consumption = 0.001 * dt
         self.energy = max(0.0, self.energy - energy_consumption)
+        vegf_level = environment.get("vegf_level", 0.0)
+        if vegf_level > 0:
+            self.energy = min(1.0, self.energy + 0.005 * vegf_level * dt)
         self.dividing = False
 
     def divide(self, new_id: int) -> "EndothelialAgent | None":
@@ -1570,7 +1633,9 @@ class MyofibroblastAgent(Agent):
         """
         if not self.alive:
             return 0.0
-        return self.ECM_PRODUCTION_RATE * dt
+        amount = self.ECM_PRODUCTION_RATE * dt
+        self.ecm_produced += amount
+        return amount
 
     def contract(self, dt: float) -> float:
         """Контракция ткани (закрытие раны).
@@ -1814,9 +1879,7 @@ class ABMModel:
             agent.update(dt, env)
 
             # Случайное перемещение
-            dx, dy = agent._random_walk_displacement(
-                self._config.diffusion_coefficient, dt
-            )
+            dx, dy = agent._random_walk_displacement(self._config.diffusion_coefficient, dt)
 
             # Хемотаксис для макрофагов
             if isinstance(agent, Macrophage):
@@ -1852,9 +1915,7 @@ class ABMModel:
                 continue
 
             # Контактное ингибирование: блокировка деления при высокой плотности
-            neighbor_count = self._count_neighbors(
-                agent, self._config.contact_inhibition_radius
-            )
+            neighbor_count = self._count_neighbors(agent, self._config.contact_inhibition_radius)
             if neighbor_count >= self._config.contact_inhibition_threshold:
                 continue  # Слишком много соседей - деление заблокировано
 
@@ -1908,12 +1969,12 @@ class ABMModel:
         Подробное описание: Description/description_abm_model.md#ABMModel._update_cytokine_field
         """
         # Деградация
-        self._cytokine_field *= (1.0 - self._config.cytokine_decay * dt)
+        self._cytokine_field *= 1.0 - self._config.cytokine_decay * dt
 
         # Диффузия (упрощённая - усреднение с соседями)
         if self._config.cytokine_diffusion > 0:
-            diffusion_coeff = self._config.cytokine_diffusion * dt / (
-                self._config.grid_resolution ** 2
+            diffusion_coeff = (
+                self._config.cytokine_diffusion * dt / (self._config.grid_resolution**2)
             )
             diffusion_coeff = min(diffusion_coeff, 0.25)  # Стабильность
 
@@ -1992,17 +2053,12 @@ class ABMModel:
         cytokine_level = self._cytokine_field[grid_x, grid_y]
         ecm_level = self._ecm_field[grid_x, grid_y]
 
-        # Расчёт уровня воспаления на основе M1/M2 баланса
-        n_m1 = sum(
-            1 for a in self._agents
-            if isinstance(a, Macrophage) and a.alive and a.polarization_state == "M1"
-        )
-        n_m2 = sum(
-            1 for a in self._agents
-            if isinstance(a, Macrophage) and a.alive and a.polarization_state == "M2"
-        )
-        total_macro = n_m1 + n_m2
-        inflammation_level = n_m1 / total_macro if total_macro > 0 else 0.5
+        # Расчёт уровня воспаления на основе непрерывной поляризации
+        macros = [a for a in self._agents if isinstance(a, Macrophage) and a.alive]
+        if macros:
+            inflammation_level = sum(float(a.polarization_state) for a in macros) / len(macros)
+        else:
+            inflammation_level = 0.5
 
         return {
             "cytokine_level": float(cytokine_level),
@@ -2039,14 +2095,8 @@ class ABMModel:
 
         # Центральные разности: grad = (C[i+1] - C[i-1]) / (2 * dx)
         dx = 2.0 * self._config.grid_resolution
-        grad_x = (
-            self._cytokine_field[x_next, grid_y]
-            - self._cytokine_field[x_prev, grid_y]
-        ) / dx
-        grad_y = (
-            self._cytokine_field[grid_x, y_next]
-            - self._cytokine_field[grid_x, y_prev]
-        ) / dx
+        grad_x = (self._cytokine_field[x_next, grid_y] - self._cytokine_field[x_prev, grid_y]) / dx
+        grad_y = (self._cytokine_field[grid_x, y_next] - self._cytokine_field[grid_x, y_prev]) / dx
 
         # Нормализация (избегаем деления на 0)
         magnitude = np.sqrt(grad_x**2 + grad_y**2)
@@ -2069,9 +2119,7 @@ class ABMModel:
 
         Подробное описание: Description/description_abm_model.md#ABMModel._count_neighbors
         """
-        neighbors = self._spatial_hash.get_neighbors(
-            agent.x, agent.y, radius, exclude=agent
-        )
+        neighbors = self._spatial_hash.get_neighbors(agent.x, agent.y, radius, exclude=agent)
         return len(neighbors)
 
     def _calculate_repulsion_force(self, agent: Agent) -> tuple[float, float]:
@@ -2092,9 +2140,7 @@ class ABMModel:
         r0 = self._config.interaction_radius
 
         # Получаем только соседей в радиусе взаимодействия через spatial hash
-        neighbors = self._spatial_hash.get_neighbors(
-            agent.x, agent.y, r0, exclude=agent
-        )
+        neighbors = self._spatial_hash.get_neighbors(agent.x, agent.y, r0, exclude=agent)
 
         for other in neighbors:
             # Вектор от other к agent
@@ -2232,12 +2278,8 @@ class ABMModel:
         Подробное описание: Description/Phase2/description_abm_model.md#ABMModel._calculate_adhesion_force
         """
         compatible = (
-            isinstance(agent1, EndothelialAgent)
-            and isinstance(agent2, EndothelialAgent)
-        ) or (
-            isinstance(agent1, MyofibroblastAgent)
-            and isinstance(agent2, MyofibroblastAgent)
-        )
+            isinstance(agent1, EndothelialAgent) and isinstance(agent2, EndothelialAgent)
+        ) or (isinstance(agent1, MyofibroblastAgent) and isinstance(agent2, MyofibroblastAgent))
         if not compatible or distance < 1e-10:
             return np.zeros(2)
 
@@ -2308,6 +2350,10 @@ class ABMModel:
             return EndothelialAgent(agent_id=agent_id, x=x, y=y, rng=self._rng)
         elif agent_type == "myofibro":
             return MyofibroblastAgent(agent_id=agent_id, x=x, y=y, rng=self._rng)
+        elif agent_type == "platelet":
+            from src.core.abm_spatial import PlateletAgent
+
+            return PlateletAgent(agent_id=agent_id, x=x, y=y, rng=self._rng)
         else:
             raise ValueError(f"Unknown agent type: {agent_type}")
 

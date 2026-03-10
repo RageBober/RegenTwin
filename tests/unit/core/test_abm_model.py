@@ -38,7 +38,6 @@ from src.core.abm_model import (
 )
 from src.data.parameter_extraction import ModelParameters
 
-
 # =============================================================================
 # Test ABMConfig
 # =============================================================================
@@ -525,8 +524,8 @@ class TestMacrophage:
         assert macrophage.alive is True
 
     def test_init_polarization_state(self, macrophage):
-        """Начальное состояние поляризации M0."""
-        assert macrophage.polarization_state == "M0"
+        """Начальное состояние поляризации — нейтральное (0.5)."""
+        assert macrophage.polarization_state == pytest.approx(0.5)
 
     def test_init_phagocytosed_count(self, macrophage):
         """Начальный счётчик фагоцитоза."""
@@ -561,13 +560,13 @@ class TestMacrophageBehavior:
         """Поляризация M1 при высоком воспалении."""
         macro = Macrophage(agent_id=1, x=0, y=0)
         macro.polarize(inflammation_level=0.8)
-        assert macro.polarization_state == "M1"
+        assert macro.polarization_state == pytest.approx(0.8)
 
     def test_polarize_m2_low_inflammation(self):
         """Поляризация M2 при низком воспалении."""
         macro = Macrophage(agent_id=1, x=0, y=0)
         macro.polarize(inflammation_level=0.2)
-        assert macro.polarization_state == "M2"
+        assert macro.polarization_state == pytest.approx(0.2)
 
 
 # =============================================================================
@@ -882,8 +881,12 @@ class TestABMEdgeCases:
         поэтому проверяем корректное завершение, а не 0 агентов.
         """
         params = ModelParameters(
-            n0=0.0, c0=0.0, stem_cell_fraction=0.0,
-            macrophage_fraction=0.0, apoptotic_fraction=0.0, inflammation_level=0.0
+            n0=0.0,
+            c0=0.0,
+            stem_cell_fraction=0.0,
+            macrophage_fraction=0.0,
+            apoptotic_fraction=0.0,
+            inflammation_level=0.0,
         )
         config = ABMConfig(t_max=24.0)
         model = ABMModel(config=config, random_seed=42)
@@ -1995,9 +1998,7 @@ class TestApplyContactInhibition:
         agent = StemCell(agent_id=1, x=50.0, y=50.0, rng=rng)
         threshold = model.config.contact_inhibition_threshold
 
-        modifier = model._apply_contact_inhibition(
-            agent, neighbors_count=threshold // 2
-        )
+        modifier = model._apply_contact_inhibition(agent, neighbors_count=threshold // 2)
 
         assert modifier == pytest.approx(0.5, abs=0.1)
 
@@ -2106,7 +2107,7 @@ class TestCalculateAdhesionForce:
         rng = np.random.default_rng(42)
         e1 = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
         e2_close = EndothelialAgent(agent_id=2, x=54.0, y=50.0, rng=rng)  # d=4
-        e2_far = EndothelialAgent(agent_id=3, x=56.0, y=50.0, rng=rng)    # d=6
+        e2_far = EndothelialAgent(agent_id=3, x=56.0, y=50.0, rng=rng)  # d=6
 
         f_close = model._calculate_adhesion_force(e1, e2_close, distance=4.0)
         f_far = model._calculate_adhesion_force(e1, e2_far, distance=6.0)

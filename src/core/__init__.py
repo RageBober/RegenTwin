@@ -12,6 +12,7 @@
 - therapy_models: Механистические модели PRP и PEMF терапий
 - sde_numerics: Продвинутые численные солверы (Milstein, IMEX, adaptive)
 - robustness: Верификация робастности (conservation, convergence, SDE vs ABM)
+- abm_spatial: Расширенные пространственные механики ABM (Phase 2.8)
 
 Подробное описание каждого модуля в Description/Phase2/description_*.md
 """
@@ -128,6 +129,18 @@ from src.core.therapy_models import (
     SynergyModel,
 )
 
+# ABM Extended (Phase 2.8)
+from src.core.abm_spatial import (
+    ChemotaxisEngine,
+    ContactInhibitionEngine,
+    EfferocytosisEngine,
+    KDTreeNeighborSearch,
+    MechanotransductionEngine,
+    MultiCytokineField,
+    PlateletAgent,
+    SubcyclingManager,
+)
+
 # Wound Phases
 from src.core.wound_phases import (
     PhaseIndicators,
@@ -224,4 +237,13 @@ __all__ = [
     "ConservationChecker",
     "ConvergenceVerifier",
     "SDEvsABMComparator",
+    # ABM Extended (Phase 2.8)
+    "PlateletAgent",
+    "ChemotaxisEngine",
+    "ContactInhibitionEngine",
+    "EfferocytosisEngine",
+    "MechanotransductionEngine",
+    "MultiCytokineField",
+    "KDTreeNeighborSearch",
+    "SubcyclingManager",
 ]

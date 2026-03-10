@@ -424,44 +424,43 @@ RegenTwin/
 
 ---
 
-## Фаза 2.8: Расширенная ABM ◐ ЧАСТИЧНО (30%)
+## Фаза 2.8: Расширенная ABM ✔ РЕАЛИЗОВАНО (100%)
 
 > **Цель:** Расширить ABM для поддержки полной системы из математического фреймворка.
 > **Зависимости:** Фаза 2.5, Фаза 2 (базовая ABM)
 
 ### Новые типы агентов
 
-| Тип агента | Поведение | Текущий статус | Целевой статус |
-|------------|-----------|----------------|----------------|
-| StemCell (CD34+) | Пролиферация, дифференциация | ✔ | Добавить PRP-зависимую мобилизацию |
-| Macrophage | M0/M1/M2 поляризация | ✔ | Добавить continuous polarization_state, эффероцитоз |
-| Fibroblast | Продукция ECM | ✔ | Добавить активацию в миофибробласт (TGF-β) |
-| **Neutrophil** | Хемотаксис по IL-8, апоптоз, фагоцитоз | ◐ | Стаб-класс в abm_model.py |
-| **Endothelial** | VEGF-зависимый спраутинг | ◐ | Стаб-класс в abm_model.py |
-| **Myofibroblast** | Продукция коллагена, апоптоз при снижении TGF-β | ◐ | Стаб-класс в abm_model.py |
-| **Platelet** | Дегрануляция, высвобождение факторов | ✖ | НОВЫЙ (опционально) |
+| Тип агента | Поведение | Статус |
+|------------|-----------|--------|
+| StemCell (CD34+) | PRP-зависимая мобилизация (Michaelis-Menten) | ✔ |
+| Macrophage | Continuous polarization_state ∈ [0,1], эффероцитоз | ✔ |
+| Fibroblast | TGF-β-зависимая активация в MyofibroblastAgent | ✔ |
+| **Neutrophil** | Хемотаксис по IL-8, апоптоз, фагоцитоз | ✔ |
+| **Endothelial** | VEGF-зависимый спраутинг, junction formation | ✔ |
+| **Myofibroblast** | Продукция коллагена (кумулятивная), TGF-β-зависимый апоптоз | ✔ |
+| **Platelet** | Дегрануляция, высвобождение PDGF/TGFb/VEGF | ✔ |
 
 ### Новые механики ABM
 
 | Механика | Описание | Статус |
 |----------|----------|--------|
-| **Хемотаксис** | Градиент цитокинов → направленное движение (biased random walk) | ✖ |
-| **Контактное ингибирование** | Подавление деления при > threshold соседей | ✖ |
-| **Эффероцитоз** | Макрофаги фагоцитируют апоптотические нейтрофилы → IL-10 | ✖ |
-| **Механотрансдукция** | Механический стресс → миофибробластная активация | ✖ |
-| **Multiple cytokine fields** | Отдельные поля для TNF, IL-10, PDGF, VEGF, TGF-β, MCP-1, IL-8 | ✖ |
-| **KD-Tree** | Замена SpatialHash на `scipy.spatial.cKDTree` | ✖ |
-| **Subcycling** | Цитокиновые поля dt > агенты dt | ✖ |
+| **Хемотаксис** | ChemotaxisEngine: градиент цитокинов → направленное движение | ✔ |
+| **Контактное ингибирование** | ContactInhibitionEngine: подавление деления при > threshold | ✔ |
+| **Эффероцитоз** | EfferocytosisEngine: фагоцитоз → IL-10 + поляризация M2 | ✔ |
+| **Механотрансдукция** | MechanotransductionEngine: мех. стресс → активация миофибробластов | ✔ |
+| **Multiple cytokine fields** | MultiCytokineField: 7 полей (TNF, IL10, PDGF, VEGF, TGFb, MCP1, IL8) | ✔ |
+| **KD-Tree** | KDTreeNeighborSearch: адаптер cKDTree с query_radius/query_nearest | ✔ |
+| **Subcycling** | SubcyclingManager: разные dt для полей и агентов | ✔ |
 
-### Файлы для создания/модификации
+### Файлы
 
 | Файл | Описание | Статус |
 |------|----------|--------|
-| `src/core/abm_model.py` (модификация) | Neutrophil, Endothelial, Myofibroblast — стаб-классы добавлены | ◐ |
-| `src/core/abm_spatial.py` | `KDTreeNeighborSearch`, `ChemotaxisEngine`, `ContactInhibition` | ✖ |
-| `Description/Phase2/description_abm_model.md` | Описание базовой ABM (682 LOC) — агенты, поля, механики | ✔ |
-| `Description/Phase2/description_abm_extended.md` | Описание расширенной ABM (Neutrophil, Endothelial, Myofibroblast, хемотаксис) | ✖ |
-| `tests/unit/core/test_abm_extended.py` | TDD тесты для новых агентов и механик | ✖ |
+| `src/core/abm_model.py` | Macrophage continuous polarization, StemCell.prp_mobilization, Fibroblast.tgfb_activation, EndothelialAgent VEGF | ✔ |
+| `src/core/abm_spatial.py` | 8 классов: PlateletAgent, ChemotaxisEngine, ContactInhibitionEngine, EfferocytosisEngine, MechanotransductionEngine, MultiCytokineField, KDTreeNeighborSearch, SubcyclingManager | ✔ |
+| `Description/Phase2/description_abm_extended.md` | Описание расширенной ABM | ✔ |
+| `tests/unit/core/test_abm_extended.py` | 215 TDD тестов (все GREEN) | ✔ |
 
 ---
 
@@ -897,7 +896,7 @@ const plotData = await response.json();
 | 2.5 | Расширенная SDE (20+ переменных) | ✔ Реализовано (1104 LOC, 142 теста) | 100% |
 | 2.6 | Механистические модели терапий | ✔ Реализовано (124/124 тестов) | 100% |
 | 2.7 | Численные методы и робастность | ✔ Реализовано (148 тестов, simulate() → Фаза 3) | 95% |
-| 2.8 | Расширенная ABM | ◐ Частично (стаб-классы в abm_model.py) | 30% |
+| 2.8 | Расширенная ABM | ✔ Реализовано (429 тестов, 8 классов, 7 механик) | 100% |
 | 2.9 | Мультимасштабная интеграция | ✖ Не начато | 0% |
 | 3 | Анализ и валидация | ✖ Не начато | 0% |
 | 4 | Визуализация | ✖ Не начато | 0% |
@@ -960,7 +959,7 @@ const plotData = await response.json();
 - [x] Фаза 2.5 — Расширенная SDE (20+ переменных) ✔
 - [x] Фаза 2.6 — Механистические терапии ✔
 - [x] Фаза 2.7 — Milstein + IMEX + Adaptive + SRK + Robustness (✔ 148 тестов)
-- [ ] Фаза 2.8 — Расширенная ABM (◐ стаб-классы готовы)
+- [x] Фаза 2.8 — Расширенная ABM (✔ 429 тестов, 8 классов, 7 механик)
 - [ ] Фаза 2.9 — Equation-Free интеграция
 
 ### Milestone 2: «Валидация для публикации»
@@ -1081,5 +1080,5 @@ python -m src.analysis.parameter_estimation --data data/validation/ --output res
 ---
 
 *Документ обновлён: 8 марта 2026*
-*Версия: 4.3 (Phase 2–2.7 реализованы; 1615 тестов; Phase 2.8 частично)*
+*Версия: 4.4 (Phase 2–2.8 реализованы; 2044+ тестов)*
 *Основан на: RegenTwin_Mathematical_Framework.md, RegenTwin_Implementation_Plan.md v3.0*
