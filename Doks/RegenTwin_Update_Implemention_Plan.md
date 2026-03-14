@@ -21,37 +21,37 @@
 
 ```
 ┌───────────────────────────────────────────────────┐
-│      Tauri + React (Desktop/Web)                   │
-│  - TypeScript, Plotly.js, D3.js, Three.js          │
-│  - Компоненты: Upload, Parameters, Results, 3D     │
+│      Tauri + React (Desktop/Web)                  │
+│  - TypeScript, Plotly.js, D3.js, Three.js         │
+│  - Компоненты: Upload, Parameters, Results, 3D    │
 └────────────────────────┬──────────────────────────┘
                          │ HTTP / WebSocket
                          ▼
 ┌───────────────────────────────────────────────────┐
-│      FastAPI Backend (localhost:8000)               │
-│  - REST API для симуляций                          │
-│  - WebSocket для прогресса                         │
-│  - Celery/Background Tasks                         │
+│      FastAPI Backend (localhost:8000)             │
+│  - REST API для симуляций                         │
+│  - WebSocket для прогресса                        │
+│  - Celery/Background Tasks                        │
 └────────────────────────┬──────────────────────────┘
                          │ Python imports
                          ▼
 ┌───────────────────────────────────────────────────┐
-│      Mathematical Core (src/)                      │
+│      Mathematical Core (src/)                     │
 │  - src/core/extended_sde.py  (20+ SDE)       100% │
-│  - src/core/sde_model.py     (MVP 2-var)     100%  │
-│  - src/core/abm_model.py     (расширенная ABM) 99% │
-│  - src/core/integration.py   (SDE+ABM)       100%  │
-│  - src/core/monte_carlo.py   (параллелизация) 100% │
-│  - src/analysis/             (SALib, PyMC)   [NEW] │
-│  - src/data/                 (FCS парсинг)   100%  │
+│  - src/core/sde_model.py     (MVP 2-var)     100% │
+│  - src/core/abm_model.py     (расширенная ABM) 99%│
+│  - src/core/integration.py   (SDE+ABM)       100% │
+│  - src/core/monte_carlo.py   (параллелизация) 100%│
+│  - src/analysis/             (SALib, PyMC)   [NEW]│
+│  - src/data/                 (FCS парсинг)   100% │
 └───────────────────────────────────────────────────┘
                          │
                          ▼
 ┌───────────────────────────────────────────────────┐
-│      Data & Validation Layer                       │
-│  - PostgreSQL + Alembic миграции                   │
-│  - FlowRepository данные для валидации             │
-│  - Публичные датасеты (GEO, WHS)                   │
+│      Data & Validation Layer                      │
+│  - PostgreSQL + Alembic миграции                  │
+│  - FlowRepository данные для валидации            │
+│  - Публичные датасеты (GEO, WHS)                  │
 └───────────────────────────────────────────────────┘
 ```
 
@@ -69,7 +69,7 @@ RegenTwin/
 │   │   ├── abm_model.py          # ◐ ABM реализована, интегрирована с API, 2 стаба движения (2335 LOC)
 │   │   ├── abm_spatial.py        # ✖ KD-Tree, хемотаксис
 │   │   ├── integration.py        # ✔ SDE+ABM operator splitting (836 LOC)
-│   │   ├── equation_free.py      # ✖ Equation-Free Framework
+│   │   ├── equation_free.py      # ✔ Equation-Free Framework (570 LOC)
 │   │   ├── monte_carlo.py        # ✔ Monte Carlo + параллелизация (872 LOC)
 │   │   ├── therapy_models.py     # ✔ PRP/PEMF механистические (124 тестов, 583 LOC)
 │   │   ├── numerical_utils.py    # ✔ NumericalGuard, клиппинг, адапт. шаг (382 LOC)
@@ -491,8 +491,8 @@ RegenTwin/
 
 | Файл | Описание | Статус |
 |------|----------|--------|
-| `src/core/equation_free.py` | `EquationFreeIntegrator`, `Lifter`, `Restrictor` | ✖ |
-| `tests/unit/core/test_equation_free.py` | TDD: lifting/restricting consistency, conservation | ✖ |
+| `src/core/equation_free.py` | `EquationFreeIntegrator`, `Lifter`, `Restrictor` | ✔ |
+| `tests/unit/core/test_equation_free.py` | TDD: lifting/restricting consistency, conservation | ✔ (114 passed) |
 
 ---
 
@@ -652,10 +652,10 @@ GET  /api/v1/health              # Health check
 | Файл | Описание | Статус |
 |------|----------|--------|
 | `src/api/main.py` | FastAPI app, CORS, роутеры, Loguru middleware | ✖ |
-| `src/api/routes/upload.py` | Upload FCS + images endpoints | ✖ |
-| `src/api/routes/simulate.py` | Simulate + WebSocket progress | ✖ |
+| `src/api/routes/upload.py`  | Upload FCS + images endpoints | ✖ |
+| `src/api/routes/simulate.py`| Simulate + WebSocket progress | ✖ |
 | `src/api/routes/results.py` | Results + Export endpoints | ✖ |
-| `src/api/routes/analysis.py` | Sensitivity + Estimation endpoints | ✖ |
+| `src/api/routes/analysis.py`| Sensitivity + Estimation endpoints | ✖ |
 | `src/api/models/schemas.py` | Pydantic модели (расширенные для 20+ перем.) | ✖ |
 | `src/api/services/simulation_service.py` | Бизнес-логика: выбор MVP vs Extended, фоновое выполнение | ✖ |
 | `src/api/services/file_service.py` | Обработка загруженных файлов | ✖ |
@@ -784,7 +784,7 @@ const plotData = await response.json();
 | **`sde_numerics.py`** | `test_sde_numerics.py` | ✔ 76 тестов | ✔ |
 | **`robustness.py`** | `test_robustness.py` | ✔ 72 теста | ✔ |
 | **`abm_spatial.py`** | `test_abm_spatial.py` | ✖ | ✖ → ✔ |
-| **`equation_free.py`** | `test_equation_free.py` | ✖ | ✖ → ✔ |
+| **`equation_free.py`** | `test_equation_free.py` | ✔ | ✔ (114 passed) |
 | **`sensitivity.py`** | `test_sensitivity.py` | ✖ | ✖ → ✔ |
 | **`parameter_estimation.py`** | `test_parameter_estimation.py` | ✖ | ✖ → ✔ |
 | **API endpoints** | `test_api_*.py` | ✖ | ✖ → ✔ |
@@ -836,7 +836,7 @@ const plotData = await response.json();
 | 6 | Механистические модели терапий (PRP/PEMF) | 5 | КРИТИЧЕСКИЙ | ✔ |
 | 7 | Milstein + IMEX для расширенной SDE | 5 | Высокий | ◐ стабы |
 | 8 | Расширенная ABM (Neutrophil, Endothelial, Mf, KD-Tree) | 1, 5 | Высокий | ◐ стабы |
-| 9 | Equation-Free интеграция (расширенная) | 5, 8 | Высокий | ✖ |
+| 9 | Equation-Free интеграция (расширенная) | 5, 8 | Высокий | ✔ |
 | 10 | Параметрическая идентификация (PyMC/emcee) | 5 | КРИТИЧЕСКИЙ | ✖ |
 | 11 | Анализ чувствительности (SALib) | 5 | КРИТИЧЕСКИЙ | ✖ |
 | 12 | Загрузка реальных данных + валидация | 10, 11 | КРИТИЧЕСКИЙ | ✖ |
@@ -872,7 +872,7 @@ const plotData = await response.json();
 | `src/core/sde_numerics.py` | EM, Milstein, IMEX, Adaptive, SRK — все реализованы (880 LOC) | ✔ |
 | `src/core/abm_model.py` | Расширение ABM, стаб-классы агентов | ◐ |
 | `src/core/abm_spatial.py` | KD-Tree, хемотаксис, контактное ингибирование | ✖ |
-| `src/core/equation_free.py` | Equation-Free мультимасштабная интеграция | ✖ |
+| `src/core/equation_free.py` | Equation-Free мультимасштабная интеграция | ✔ |
 | `src/core/parameters.py` | 80+ параметров из литературы | ✔ Реализован (334 LOC) |
 | `src/core/robustness.py` | Верификация реализована: 5 классов, 148 тестов (583 LOC) | ✔ |
 | `src/analysis/sensitivity.py` | Sobol, Morris (SALib) | ✖ |
@@ -960,7 +960,7 @@ const plotData = await response.json();
 - [x] Фаза 2.6 — Механистические терапии ✔
 - [x] Фаза 2.7 — Milstein + IMEX + Adaptive + SRK + Robustness (✔ 148 тестов)
 - [x] Фаза 2.8 — Расширенная ABM (✔ 429 тестов, 8 классов, 7 механик)
-- [ ] Фаза 2.9 — Equation-Free интеграция
+- [x] Фаза 2.9 — Equation-Free интеграция (114 тестов, black/ruff/mypy чисто)
 
 ### Milestone 2: «Валидация для публикации»
 - [ ] Фаза 3 — Анализ чувствительности + параметрическая идентификация
