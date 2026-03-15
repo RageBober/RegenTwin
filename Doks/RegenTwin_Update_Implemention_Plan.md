@@ -496,22 +496,29 @@ RegenTwin/
 
 ---
 
-## Фаза 3: Анализ и валидация ✖ НЕ НАЧАТО (0%)
+## Фаза 3: Анализ и валидация ◐ В ПРОЦЕССЕ (15%)
 
 > **Цель:** Параметрическая идентификация, анализ чувствительности, валидация на данных
 > **Приоритет:** КРИТИЧЕСКИЙ для публикации
 > **Зависимости:** Фаза 2.5
 
-### 3.1 Параметрическая идентификация
+### 3.1 Параметрическая идентификация ✔ РЕАЛИЗОВАНО (100%)
+
+**Файл:** `src/core/parameter_estimation.py` (~1500 LOC)
+**Тесты:** `tests/unit/core/test_parameter_estimation.py` (104/104 passed)
+**Качество:** black ✔, ruff ✔, mypy ✔ (0 ошибок в файле)
 
 | Компонент | Библиотека | Описание | Статус |
 |-----------|-----------|----------|--------|
-| Bayesian estimation | PyMC 5 | Posterior распределения 40+ параметров | ✖ |
-| MCMC sampling | emcee | Ансамблевый сэмплер как альтернатива | ✖ |
-| Maximum Likelihood | scipy.optimize | Точечные оценки для быстрой проверки | ✖ |
-| Prior specification | PyMC | Информативные priors из литературы (табл. §8) | ✖ |
-| Confidence intervals | PyMC/emcee | 95% CI для всех параметров | ✖ |
-| Convergence diagnostics | ArviZ | R-hat, ESS, trace plots | ✖ |
+| `EstimationConfig.validate()` | — | Валидация конфигурации (priors, dt, noise_model и др.) | ✔ |
+| `PriorBuilder` | PyMC/scipy | Построение priors: PyMC distributions, log-prior closure, scipy bounds | ✔ |
+| `ForwardModelWrapper` | ExtendedSDEModel | Обёртка SDE: theta → predict({var: array}) | ✔ |
+| `BaseEstimator` | — | Абстрактный базовый класс: log-likelihood, AIC/BIC | ✔ |
+| `BayesianEstimator` | PyMC 5 | Полный Байесовский вывод (Metropolis step для black-box SDE) | ✔ |
+| `MCMCEstimator` | emcee | Ансамблевый MCMC (GaussianMove) | ✔ |
+| `MLEstimator` | scipy.optimize | MLE + Hessian-based CI | ✔ |
+| `ConvergenceAnalyzer` | ArviZ | R-hat, ESS (bulk/tail), summary, convergence check | ✔ |
+| `estimate_parameters()` | — | Unified entry point: method → fit() → EstimationResult | ✔ |
 
 ### 3.2 Анализ чувствительности
 
@@ -568,13 +575,13 @@ RegenTwin/
 |------|----------|--------|
 | `src/analysis/__init__.py` | Инициализация модуля | ✖ |
 | `src/analysis/sensitivity.py` | `SobolAnalyzer`, `MorrisScreener`, `LocalSensitivity` | ✖ |
-| `src/analysis/parameter_estimation.py` | `BayesianEstimator`, `MCMCRunner`, `MLEstimator` | ✖ |
+| `src/core/parameter_estimation.py` | `BayesianEstimator`, `MCMCEstimator`, `MLEstimator` | ✔ |
 | `src/analysis/validation.py` | `ValidationRunner`, `TemporalR2`, `PhaseTimingMetric` | ✖ |
 | `src/analysis/benchmarking.py` | `BenchmarkSuite`, сравнение с Flegg/Xue/Vodovotz | ✖ |
 | `src/visualization/analysis_plots.py` | `plot_sobol()`, `plot_posterior()`, `plot_convergence()`, `plot_morris()` | ✖ |
 | `Description/Phase3/description_analysis.md` | Описание | ✖ |
 | `tests/unit/analysis/test_sensitivity.py` | TDD тесты | ✖ |
-| `tests/unit/analysis/test_parameter_estimation.py` | TDD тесты | ✖ |
+| `tests/unit/core/test_parameter_estimation.py` | TDD тесты (104 тестов) | ✔ |
 | `tests/unit/visualization/test_analysis_plots.py` | TDD тесты analysis_plots | ✖ |
 | `tests/validation/test_on_real_data.py` | Интеграционные тесты на реальных данных | ✖ |
 
@@ -786,7 +793,7 @@ const plotData = await response.json();
 | **`abm_spatial.py`** | `test_abm_spatial.py` | ✖ | ✖ → ✔ |
 | **`equation_free.py`** | `test_equation_free.py` | ✔ | ✔ (114 passed) |
 | **`sensitivity.py`** | `test_sensitivity.py` | ✖ | ✖ → ✔ |
-| **`parameter_estimation.py`** | `test_parameter_estimation.py` | ✖ | ✖ → ✔ |
+| **`parameter_estimation.py`** | `test_parameter_estimation.py` | ✔ | ✔ (104 passed) |
 | **API endpoints** | `test_api_*.py` | ✖ | ✖ → ✔ |
 | **Visualization** | `test_plots.py` | ✖ | ✖ → ✔ |
 
@@ -876,7 +883,7 @@ const plotData = await response.json();
 | `src/core/parameters.py` | 80+ параметров из литературы | ✔ Реализован (334 LOC) |
 | `src/core/robustness.py` | Верификация реализована: 5 классов, 148 тестов (583 LOC) | ✔ |
 | `src/analysis/sensitivity.py` | Sobol, Morris (SALib) | ✖ |
-| `src/analysis/parameter_estimation.py` | Bayesian estimation (PyMC) | ✖ |
+| `src/core/parameter_estimation.py` | Параметрическая идентификация (PyMC/emcee/scipy) | ✔ Реализовано (104 теста) |
 | `src/analysis/validation.py` | Метрики валидации на реальных данных | ✖ |
 | `src/api/main.py` | FastAPI app | ✖ |
 | `src/visualization/plots.py` | Графики для 20+ переменных | ✖ |
@@ -898,7 +905,7 @@ const plotData = await response.json();
 | 2.7 | Численные методы и робастность | ✔ Реализовано (148 тестов, simulate() → Фаза 3) | 95% |
 | 2.8 | Расширенная ABM | ✔ Реализовано (429 тестов, 8 классов, 7 механик) | 100% |
 | 2.9 | Мультимасштабная интеграция | ✖ Не начато | 0% |
-| 3 | Анализ и валидация | ✖ Не начато | 0% |
+| 3 | Анализ и валидация | ◐ В процессе (3.1 готово) | 15% |
 | 4 | Визуализация | ✖ Не начато | 0% |
 | 5 | FastAPI Backend | ✖ Не начато | 0% |
 | 6 | Tauri + React Frontend | ✖ Не начато | 0% |
