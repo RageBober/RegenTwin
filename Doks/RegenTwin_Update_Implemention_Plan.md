@@ -520,14 +520,21 @@ RegenTwin/
 | `ConvergenceAnalyzer` | ArviZ | R-hat, ESS (bulk/tail), summary, convergence check | ✔ |
 | `estimate_parameters()` | — | Unified entry point: method → fit() → EstimationResult | ✔ |
 
-### 3.2 Анализ чувствительности
+### 3.2 Анализ чувствительности ✔ (100%)
 
 | Метод | Библиотека | Описание | Статус |
 |-------|-----------|----------|--------|
-| Sobol indices | SALib | Глобальная чувствительность (first-order + total) | ✖ |
-| Morris screening | SALib | Скрининг 40+ параметров для отбора ключевых | ✖ |
-| Local sensitivity | SciPy | Частные производные вблизи номинальных значений | ✖ |
-| Tornado diagrams | Matplotlib | Визуализация ранжированной чувствительности | ✖ |
+| Sobol indices | SALib | Глобальная чувствительность (first-order + total) | ✔ |
+| Morris screening | SALib | Скрининг 40+ параметров для отбора ключевых | ✔ |
+| Local sensitivity | NumPy | Частные производные вблизи номинальных значений (центральные конечные разности) | ✔ |
+| Tornado diagrams | Matplotlib | Визуализация ранжированной чувствительности | ✔ |
+
+**Реализовано в `src/core/sensitivity_analysis.py`:**
+- `SensitivityAnalyzer`: единый оркестратор (run_sobol, run_morris, run_local)
+- `_evaluate_model_single` / `_evaluate_model`: forward model evaluation с агрегацией (final/mean/max/auc)
+- `TornadoPlotter.plot`: горизонтальная tornado диаграмма с error bars
+- `run_sensitivity_analysis()`: convenience-функция
+- 90 тестов pass, black/ruff/mypy чисто
 
 ### 3.3 Валидация на данных
 
@@ -574,13 +581,13 @@ RegenTwin/
 | Файл | Описание | Статус |
 |------|----------|--------|
 | `src/analysis/__init__.py` | Инициализация модуля | ✖ |
-| `src/analysis/sensitivity.py` | `SobolAnalyzer`, `MorrisScreener`, `LocalSensitivity` | ✖ |
+| `src/core/sensitivity_analysis.py` | `SensitivityAnalyzer`, `TornadoPlotter`, `run_sensitivity_analysis` | ✔ |
 | `src/core/parameter_estimation.py` | `BayesianEstimator`, `MCMCEstimator`, `MLEstimator` | ✔ |
 | `src/analysis/validation.py` | `ValidationRunner`, `TemporalR2`, `PhaseTimingMetric` | ✖ |
 | `src/analysis/benchmarking.py` | `BenchmarkSuite`, сравнение с Flegg/Xue/Vodovotz | ✖ |
 | `src/visualization/analysis_plots.py` | `plot_sobol()`, `plot_posterior()`, `plot_convergence()`, `plot_morris()` | ✖ |
 | `Description/Phase3/description_analysis.md` | Описание | ✖ |
-| `tests/unit/analysis/test_sensitivity.py` | TDD тесты | ✖ |
+| `tests/unit/core/test_sensitivity_analysis.py` | TDD тесты (90 тестов) | ✔ |
 | `tests/unit/core/test_parameter_estimation.py` | TDD тесты (104 тестов) | ✔ |
 | `tests/unit/visualization/test_analysis_plots.py` | TDD тесты analysis_plots | ✖ |
 | `tests/validation/test_on_real_data.py` | Интеграционные тесты на реальных данных | ✖ |
