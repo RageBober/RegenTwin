@@ -1,7 +1,8 @@
 """Фикстуры для тестирования модуля визуализации.
 
 Синтетические данные для ExtendedSDETrajectory, ABMTrajectory,
-MonteCarloResults и PhaseIndicators.
+MonteCarloResults, PhaseIndicators, SobolResult, MorrisResult,
+EstimationResult.
 """
 
 from __future__ import annotations
@@ -16,8 +17,14 @@ from src.core.monte_carlo import (
     MonteCarloResults,
     TrajectoryResult,
 )
+from src.core.parameter_estimation import (
+    ConvergenceDiagnostics,
+    EstimationConfig,
+    EstimationResult,
+)
 from src.core.parameters import ParameterSet
 from src.core.sde_model import SDEConfig, SDETrajectory
+from src.core.sensitivity_analysis import MorrisResult, SobolResult
 from src.core.wound_phases import PhaseIndicators, WoundPhase
 
 
@@ -30,33 +37,35 @@ def mock_extended_trajectory() -> ExtendedSDETrajectory:
     states: list[ExtendedSDEState] = []
     for i, t in enumerate(times):
         frac = i / (n_steps - 1)
-        states.append(ExtendedSDEState(
-            # Клетки: тромбоциты падают, фибробласты растут
-            P=max(0, 500 * (1 - frac * 2)),
-            Ne=max(0, 200 * np.exp(-frac * 3) * np.sin(frac * 5 + 0.5)),
-            M1=100 * np.exp(-frac * 2),
-            M2=150 * (1 - np.exp(-frac * 3)),
-            F=300 * (1 - np.exp(-frac * 2)),
-            Mf=50 * frac * np.exp(-frac),
-            E=80 * (1 - np.exp(-frac * 1.5)),
-            S=40 * np.exp(-frac * 0.5),
-            # Цитокины: TNF падает, IL-10 растёт
-            C_TNF=10 * np.exp(-frac * 3),
-            C_IL10=5 * (1 - np.exp(-frac * 2)),
-            C_PDGF=3 * np.exp(-frac),
-            C_VEGF=4 * (1 - np.exp(-frac * 1.5)),
-            C_TGFb=2 * (1 + frac),
-            C_MCP1=6 * np.exp(-frac * 2),
-            C_IL8=8 * np.exp(-frac * 3),
-            # ECM: коллаген растёт, фибрин падает
-            rho_collagen=min(1.0, 0.1 + 0.9 * frac),
-            C_MMP=2 * np.exp(-frac),
-            rho_fibrin=max(0, 0.8 * (1 - frac * 1.5)),
-            # Вспомогательные
-            D=5 * np.exp(-frac * 4),
-            O2=80 + 20 * frac,
-            t=t,
-        ))
+        states.append(
+            ExtendedSDEState(
+                # Клетки: тромбоциты падают, фибробласты растут
+                P=max(0, 500 * (1 - frac * 2)),
+                Ne=max(0, 200 * np.exp(-frac * 3) * np.sin(frac * 5 + 0.5)),
+                M1=100 * np.exp(-frac * 2),
+                M2=150 * (1 - np.exp(-frac * 3)),
+                F=300 * (1 - np.exp(-frac * 2)),
+                Mf=50 * frac * np.exp(-frac),
+                E=80 * (1 - np.exp(-frac * 1.5)),
+                S=40 * np.exp(-frac * 0.5),
+                # Цитокины: TNF падает, IL-10 растёт
+                C_TNF=10 * np.exp(-frac * 3),
+                C_IL10=5 * (1 - np.exp(-frac * 2)),
+                C_PDGF=3 * np.exp(-frac),
+                C_VEGF=4 * (1 - np.exp(-frac * 1.5)),
+                C_TGFb=2 * (1 + frac),
+                C_MCP1=6 * np.exp(-frac * 2),
+                C_IL8=8 * np.exp(-frac * 3),
+                # ECM: коллаген растёт, фибрин падает
+                rho_collagen=min(1.0, 0.1 + 0.9 * frac),
+                C_MMP=2 * np.exp(-frac),
+                rho_fibrin=max(0, 0.8 * (1 - frac * 1.5)),
+                # Вспомогательные
+                D=5 * np.exp(-frac * 4),
+                O2=80 + 20 * frac,
+                t=t,
+            )
+        )
 
     return ExtendedSDETrajectory(
         times=times,
@@ -91,15 +100,18 @@ def mock_abm_snapshot() -> ABMSnapshot:
     agent_id = 0
     for atype, count in [("stem", 15), ("macro", 15), ("fibro", 20)]:
         for ag in _make_agents(count, atype, rng):
-            agents.append(AgentState(
-                agent_id=agent_id,
-                agent_type=ag.agent_type,
-                x=ag.x, y=ag.y,
-                age=ag.age,
-                division_count=ag.division_count,
-                energy=ag.energy,
-                alive=True,
-            ))
+            agents.append(
+                AgentState(
+                    agent_id=agent_id,
+                    agent_type=ag.agent_type,
+                    x=ag.x,
+                    y=ag.y,
+                    age=ag.age,
+                    division_count=ag.division_count,
+                    energy=ag.energy,
+                    alive=True,
+                )
+            )
             agent_id += 1
 
     return ABMSnapshot(
@@ -111,34 +123,39 @@ def mock_abm_snapshot() -> ABMSnapshot:
 
 
 @pytest.fixture
-def mock_abm_trajectory(mock_abm_snapshot: ABMSnapshot) -> ABMTrajectory:
+def mock_abm_trajectory() -> ABMTrajectory:
     """ABM траектория: 10 снимков."""
     rng = np.random.default_rng(42)
     snapshots: list[ABMSnapshot] = []
     for i in range(10):
         t = i * 24.0  # каждые 24 часа
-        n_agents = 50 + i * 5
+        50 + i * 5
         agents = []
         agent_id = 0
         for atype, base_count in [("stem", 15), ("macro", 15), ("fibro", 20 + i * 2)]:
             for ag in _make_agents(base_count, atype, rng):
-                agents.append(AgentState(
-                    agent_id=agent_id,
-                    agent_type=ag.agent_type,
-                    x=ag.x, y=ag.y,
-                    age=ag.age,
-                    division_count=ag.division_count,
-                    energy=ag.energy,
-                    alive=True,
-                ))
+                agents.append(
+                    AgentState(
+                        agent_id=agent_id,
+                        agent_type=ag.agent_type,
+                        x=ag.x,
+                        y=ag.y,
+                        age=ag.age,
+                        division_count=ag.division_count,
+                        energy=ag.energy,
+                        alive=True,
+                    )
+                )
                 agent_id += 1
 
-        snapshots.append(ABMSnapshot(
-            t=t,
-            agents=agents,
-            cytokine_field=rng.uniform(0, 5, size=(10, 10)),
-            ecm_field=rng.uniform(0, 1, size=(10, 10)),
-        ))
+        snapshots.append(
+            ABMSnapshot(
+                t=t,
+                agents=agents,
+                cytokine_field=rng.uniform(0, 5, size=(10, 10)),
+                ecm_field=rng.uniform(0, 1, size=(10, 10)),
+            )
+        )
 
     return ABMTrajectory(snapshots=snapshots, config=ABMConfig())
 
@@ -176,31 +193,27 @@ def mock_mc_results() -> MonteCarloResults:
             initial_state=None,
         )
 
-        trajectories.append(TrajectoryResult(
-            trajectory_id=i,
-            random_seed=42 + i,
-            sde_trajectory=sde_traj,
-            final_N=float(n_values[-1]),
-            final_C=float(c_values[-1]),
-            max_N=float(n_values.max()),
-            growth_rate=float((n_values[-1] - n_values[0]) / n_values[0]),
-            success=True,
-            computation_time=0.1,
-        ))
+        trajectories.append(
+            TrajectoryResult(
+                trajectory_id=i,
+                random_seed=42 + i,
+                sde_trajectory=sde_traj,
+                final_N=float(n_values[-1]),
+                final_C=float(c_values[-1]),
+                max_N=float(n_values.max()),
+                growth_rate=float((n_values[-1] - n_values[0]) / n_values[0]),
+                success=True,
+                computation_time=0.1,
+            )
+        )
 
     mean_N = np.mean(all_N, axis=0)
     std_N = np.std(all_N, axis=0)
     mean_C = np.mean(all_C, axis=0)
     std_C = np.std(all_C, axis=0)
 
-    quantiles_N = {
-        q: np.quantile(all_N, q, axis=0)
-        for q in [0.05, 0.25, 0.5, 0.75, 0.95]
-    }
-    quantiles_C = {
-        q: np.quantile(all_C, q, axis=0)
-        for q in [0.05, 0.25, 0.5, 0.75, 0.95]
-    }
+    quantiles_N = {q: np.quantile(all_N, q, axis=0) for q in [0.05, 0.25, 0.5, 0.75, 0.95]}
+    quantiles_C = {q: np.quantile(all_C, q, axis=0) for q in [0.05, 0.25, 0.5, 0.75, 0.95]}
 
     return MonteCarloResults(
         trajectories=trajectories,
@@ -248,12 +261,137 @@ def mock_phase_indicators() -> list[PhaseIndicators]:
             cells = ["F", "Mf", "E"]
             cytos = ["TGFb", "IL10", "VEGF"]
 
-        indicators.append(PhaseIndicators(
-            phase=phase,
-            confidence=confidence,
-            dominant_cells=cells,
-            dominant_cytokines=cytos,
-            phase_progress=frac,
-        ))
+        indicators.append(
+            PhaseIndicators(
+                phase=phase,
+                confidence=confidence,
+                dominant_cells=cells,
+                dominant_cytokines=cytos,
+                phase_progress=frac,
+            )
+        )
 
     return indicators
+
+
+# ── Фикстуры для analysis_plots ──────────────────────────────────
+
+
+@pytest.fixture
+def mock_sobol_result() -> SobolResult:
+    """Sobol result: 8 параметров, реалистичные S1/ST (ST >= S1)."""
+    names = [
+        "r_F",
+        "r_M1",
+        "K_F",
+        "d_Ne",
+        "alpha_PDGF",
+        "beta_TNF",
+        "gamma_IL10",
+        "sigma_noise",
+    ]
+    rng = np.random.default_rng(42)
+    s1 = np.array([0.35, 0.25, 0.15, 0.10, 0.05, 0.04, 0.03, 0.01])
+    st = np.array([0.45, 0.30, 0.20, 0.15, 0.08, 0.06, 0.04, 0.02])
+    s1_conf = rng.uniform(0.01, 0.05, len(names))
+    st_conf = rng.uniform(0.01, 0.05, len(names))
+    return SobolResult(
+        parameter_names=names,
+        S1=s1,
+        ST=st,
+        S1_conf=s1_conf,
+        ST_conf=st_conf,
+        output_variable="F",
+        n_samples=1024,
+        n_model_runs=10240,
+        elapsed_seconds=42.0,
+    )
+
+
+@pytest.fixture
+def mock_morris_result() -> MorrisResult:
+    """Morris result: 10 параметров, 4 influential при threshold=0.1."""
+    names = [
+        "r_F",
+        "r_M1",
+        "K_F",
+        "d_Ne",
+        "alpha_PDGF",
+        "beta_TNF",
+        "gamma_IL10",
+        "sigma_noise",
+        "k_diff",
+        "tau_heal",
+    ]
+    mu_star = np.array([5.0, 3.5, 2.0, 1.5, 0.4, 0.3, 0.2, 0.15, 0.1, 0.05])
+    sigma = np.array([3.0, 4.0, 1.0, 0.5, 0.3, 0.25, 0.15, 0.1, 0.08, 0.02])
+    mu = np.array([4.5, -2.0, 1.8, 1.2, 0.3, -0.2, 0.1, 0.1, 0.05, -0.03])
+    mu_star_conf = np.array([0.5, 0.4, 0.3, 0.2, 0.1, 0.08, 0.05, 0.04, 0.02, 0.01])
+    return MorrisResult(
+        parameter_names=names,
+        mu=mu,
+        mu_star=mu_star,
+        sigma=sigma,
+        mu_star_conf=mu_star_conf,
+        output_variable="F",
+        n_trajectories=50,
+        n_levels=4,
+        n_model_runs=550,
+        elapsed_seconds=15.0,
+    )
+
+
+@pytest.fixture
+def mock_estimation_result() -> EstimationResult:
+    """Bayesian estimation: 3 параметра, posterior, diagnostics, CI."""
+    rng = np.random.default_rng(42)
+    n_samples = 8000  # 4 chains × 2000
+
+    posterior_samples = {
+        "r_F": rng.normal(0.05, 0.01, n_samples),
+        "r_M1": rng.normal(0.03, 0.005, n_samples),
+        "K_F": rng.normal(5000, 500, n_samples),
+    }
+    diagnostics = ConvergenceDiagnostics(
+        rhat={"r_F": 1.01, "r_M1": 1.02, "K_F": 1.08},
+        ess_bulk={"r_F": 3500.0, "r_M1": 2800.0, "K_F": 450.0},
+        ess_tail={"r_F": 2500.0, "r_M1": 2000.0, "K_F": 200.0},
+        converged=False,
+        warnings=["K_F: R-hat > 1.05"],
+    )
+    return EstimationResult(
+        method="bayesian_pymc",
+        point_estimates={"r_F": 0.05, "r_M1": 0.03, "K_F": 5000.0},
+        ci_lower={"r_F": 0.03, "r_M1": 0.02, "K_F": 4100.0},
+        ci_upper={"r_F": 0.07, "r_M1": 0.04, "K_F": 5900.0},
+        posterior_samples=posterior_samples,
+        diagnostics=diagnostics,
+        config=EstimationConfig(
+            n_chains=4,
+            n_samples=2000,
+            observed_variables=["F", "M1", "M2"],
+        ),
+        n_observations=100,
+        n_estimated_params=3,
+        elapsed_seconds=120.0,
+    )
+
+
+@pytest.fixture
+def mock_mle_result() -> EstimationResult:
+    """MLE result: точечные оценки без posterior/diagnostics."""
+    return EstimationResult(
+        method="mle_scipy",
+        point_estimates={"r_F": 0.048, "r_M1": 0.031, "K_F": 4800.0},
+        ci_lower={"r_F": 0.035, "r_M1": 0.022, "K_F": 4200.0},
+        ci_upper={"r_F": 0.061, "r_M1": 0.040, "K_F": 5400.0},
+        posterior_samples=None,
+        diagnostics=None,
+        config=None,
+        log_likelihood=-150.0,
+        aic=306.0,
+        bic=312.0,
+        n_observations=100,
+        n_estimated_params=3,
+        elapsed_seconds=5.0,
+    )
