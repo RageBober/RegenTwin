@@ -44,9 +44,6 @@ dependencies = [
     "pydantic>=2.5.0",
     "python-multipart>=0.0.6",
 
-    # Frontend
-    "streamlit>=1.30.0",
-
     # Database
     "sqlalchemy>=2.0.0",
     "alembic>=1.13.0",
@@ -54,10 +51,17 @@ dependencies = [
     # Bayesian inference & sensitivity analysis
     "pymc>=5.10.0",
     "emcee>=3.1.0",
+    "arviz>=0.17.0",
     "SALib>=1.4.0",
 
     # Task queue
     "celery>=5.3.0",
+    "redis>=5.0.0",
+
+    # Validation metrics
+    "dtaidistance>=2.3.0",
+    "properscoring>=0.1",
+    "ruptures>=1.1.0",
 
     # Utilities
     "loguru>=0.7.0",

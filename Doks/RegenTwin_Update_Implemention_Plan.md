@@ -392,14 +392,17 @@ D(t) — сигнал повреждения, O₂(t) — кислород
 | Wound Healing Society | WHS | Клинические данные заживления | ✖ |
 | Human Protein Atlas | proteinatlas.org | Базовые уровни белков в коже | ✖ |
 
-### 3.4 Метрики валидации ✖ НЕ НАЧАТО
+### 3.4 Метрики валидации ✔ ЗАВЕРШЕНО
 
 | Метрика | Описание | Статус |
 |---------|----------|--------|
-| Temporal R² | Корреляция предсказанных и наблюдаемых траекторий | ✖ |
-| Phase timing | Правильность длительности фаз заживления | ✖ |
-| Monte Carlo envelopes | Наблюдения внутри 95% CI ансамбля | ✖ |
-| Sensitivity ranking | Согласованность Sobol indices с экспертным знанием | ✖ |
+| DTW + CRPS | Расстояние между траекториями (фазовые сдвиги) + probabilistic score | ✔ |
+| ArviZ PPC | LOO-CV + HDI coverage (ArviZ path / MC envelope fallback) | ✔ |
+| Phase timing (ruptures) | Changepoint detection: Pelt+BIC на [Ne, M1, M2, F] | ✔ |
+| Kendall's τ | Ранговая корреляция Sobol (ST) vs Morris (μ*) | ✔ |
+
+**Файл:** `src/analysis/validation.py` — реализован полностью. Тесты: 81/81 ✔
+Зависимости: `dtaidistance>=2.3.0`, `properscoring>=0.1`, `ruptures>=1.1.0`
 
 ### 3.5 Бенчмаркинг ✖ НЕ НАЧАТО
 
@@ -425,8 +428,8 @@ D(t) — сигнал повреждения, O₂(t) — кислород
 | Файл | Описание | Статус |
 |------|----------|--------|
 | `src/visualization/analysis_plots.py` | `plot_sobol()`, `plot_posterior()`, `plot_convergence()`, `plot_morris()` | ✔ |
-| `src/analysis/__init__.py` | Модуль анализа | ✖ |
-| `src/analysis/validation.py` | `ValidationRunner`, `TemporalR2`, `PhaseTimingMetric` | ✖ |
+| `src/analysis/__init__.py` | Модуль анализа | ✔ |
+| `src/analysis/validation.py` | `ValidationRunner`, `DTWCRPSResult`, `PPCResult`, `PhaseTimingResult`, `SensitivityRankingResult` | ✔ |
 | `src/analysis/benchmarking.py` | `BenchmarkSuite`, сравнение с Flegg/Xue/Vodovotz | ✖ |
 | `tests/validation/test_on_real_data.py` | Интеграционные тесты на реальных данных | ✖ |
 
