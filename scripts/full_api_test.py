@@ -228,9 +228,9 @@ def main():
             if s["status"] in ("completed", "failed"):
                 break
             time.sleep(1)
-        assert (
-            s["status"] == "completed"
-        ), f"Sensitivity status={s['status']}, result={s.get('result')}"
+        assert s["status"] == "completed", (
+            f"Sensitivity status={s['status']}, result={s.get('result')}"
+        )
 
     test("POST /api/v1/analysis/sensitivity", t_sensitivity)
 

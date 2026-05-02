@@ -121,9 +121,9 @@ class TestFlegg2010Reference:
     def test_contains_wound_area(self, flegg_data: TimeSeriesData):
         """Должна быть хотя бы одна кривая wound area."""
         wound_keys = [k for k in flegg_data.values if "wound" in k.lower() or "area" in k.lower()]
-        assert (
-            len(wound_keys) > 0
-        ), f"No wound area variables found in {list(flegg_data.values.keys())}"
+        assert len(wound_keys) > 0, (
+            f"No wound area variables found in {list(flegg_data.values.keys())}"
+        )
 
     def test_wound_area_between_0_and_1(self, flegg_data: TimeSeriesData):
         """Wound area fraction должна быть в [0, 1]."""
@@ -191,9 +191,9 @@ class TestVariableMapping:
         # Проверяем что есть маппинг для основных переменных Xue
         values = set(mapping.values())
         expected_targets = {"M_total", "F", "rho_collagen", "O2", "C_PDGF", "C_VEGF"}
-        assert expected_targets.issubset(
-            values
-        ), f"Missing mappings for: {expected_targets - values}"
+        assert expected_targets.issubset(values), (
+            f"Missing mappings for: {expected_targets - values}"
+        )
 
 
 # =============================================================================

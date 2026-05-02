@@ -433,9 +433,9 @@ class TestBiphasicRelease:
             for t in times
         ]
         for i in range(len(values) - 1):
-            assert (
-                values[i] >= values[i + 1]
-            ), f"Не убывает: v({times[i]})={values[i]} < v({times[i + 1]})={values[i + 1]}"
+            assert values[i] >= values[i + 1], (
+                f"Не убывает: v({times[i]})={values[i]} < v({times[i + 1]})={values[i + 1]}"
+            )
 
     def test_peak_time_formula(self, prp_model):
         """Пик при t_peak = τ_b·τ_s·ln(τ_s/τ_b)/(τ_s-τ_b)."""
@@ -495,9 +495,9 @@ class TestComputeRelease:
         """theta_total ∈ [0, 1]."""
         for t in [0.0, 1.0, 2.0, 5.0, 10.0, 50.0]:
             state = prp_model.compute_release(t=t)
-            assert (
-                0.0 <= state.theta_total <= 1.0
-            ), f"theta_total={state.theta_total} вне [0,1] при t={t}"
+            assert 0.0 <= state.theta_total <= 1.0, (
+                f"theta_total={state.theta_total} вне [0,1] при t={t}"
+            )
 
     def test_all_theta_nonnegative(self, prp_model):
         """Все theta >= 0 для произвольных t."""

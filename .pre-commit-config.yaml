@@ -18,7 +18,9 @@ repos:
         exclude: ^(uv\.lock|tests/fixtures/.*|ui/package-lock\.json)$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    # Pinned to match the ruff version resolved by uv.lock — иначе pre-commit
+    # и CI ruff будут форматировать по-разному и драйфить tests.
+    rev: v0.15.4
     hooks:
       - id: ruff
         # `--exit-zero` пока разгребается legacy backlog (G001/E402/F841/E741).

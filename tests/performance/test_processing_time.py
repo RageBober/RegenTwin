@@ -132,9 +132,9 @@ class TestGatingPerformance:
         results = strategy.apply(large_mock_fcs_data)
         elapsed = time.perf_counter() - start_time
 
-        assert (
-            elapsed < 30.0
-        ), f"Гейтирование 100000 событий заняло {elapsed:.2f} сек (лимит: 30 сек)"
+        assert elapsed < 30.0, (
+            f"Гейтирование 100000 событий заняло {elapsed:.2f} сек (лимит: 30 сек)"
+        )
 
         assert results.total_events == 100000
 
@@ -260,9 +260,9 @@ class TestFullPipelinePerformance:
 
         elapsed = time.perf_counter() - start_time
 
-        assert (
-            elapsed < 60.0
-        ), f"Pipeline для 100000 событий занял {elapsed:.2f} сек (лимит: 60 сек)"
+        assert elapsed < 60.0, (
+            f"Pipeline для 100000 событий занял {elapsed:.2f} сек (лимит: 60 сек)"
+        )
 
     def test_multiple_files_sequential(self, mock_fcs_data_normal):
         """Тест: обработка 10 файлов последовательно < 60 сек.

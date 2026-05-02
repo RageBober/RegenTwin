@@ -816,9 +816,9 @@ class TestIMEXBackwardEuler:
         drift_at_n = model._compute_drift(full_state)[imex._fast_indices]
         forward_euler = state_fast + drift_at_n * params.dt
 
-        assert not np.allclose(
-            result_be, forward_euler, rtol=1e-8
-        ), "_implicit_step возвращает forward Euler — Picard iteration не реализован"
+        assert not np.allclose(result_be, forward_euler, rtol=1e-8), (
+            "_implicit_step возвращает forward Euler — Picard iteration не реализован"
+        )
 
     def test_imex_simulate_uses_own_loop_not_run_simulation_loop(self):
         """simulate() override должен использовать собственный цикл с backward Euler.
@@ -1194,9 +1194,9 @@ class TestSRKSimulateMilsteinCorrection:
         x_heun = np.maximum(x_heun, 0.0)  # boundary conditions
 
         # SRI2W1 ≠ Heun: поправка 0.5*(l2-l1)*(dW²-dt)/sqrt_dt ≠ 0 при σ≠0
-        assert not np.allclose(
-            final_srk, x_heun, rtol=1e-10
-        ), "SRI2W1 simulate() идентичен Heun — поправка Milstein не добавлена"
+        assert not np.allclose(final_srk, x_heun, rtol=1e-10), (
+            "SRI2W1 simulate() идентичен Heun — поправка Milstein не добавлена"
+        )
 
     def test_srk_simulate_correction_formula(self):
         """simulate() должен точно воспроизводить формулу SRI2W1 с Milstein correction."""
@@ -1230,9 +1230,9 @@ class TestSRKSimulateMilsteinCorrection:
         x_expected = x + 0.5 * (k1 + k2) * params.dt + 0.5 * (l1 + l2) * dW + correction
         x_expected = np.maximum(x_expected, 0.0)
 
-        assert np.allclose(
-            final_srk, x_expected, rtol=1e-10
-        ), "SRI2W1 не совпадает с формулой Heun + Milstein correction"
+        assert np.allclose(final_srk, x_expected, rtol=1e-10), (
+            "SRI2W1 не совпадает с формулой Heun + Milstein correction"
+        )
 
 
 # =============================================================================

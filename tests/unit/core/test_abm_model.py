@@ -2760,9 +2760,9 @@ class TestABMVectorizedFields:
         cache_after_two = len(model._neighbor_cache)
         # Если cache_after_step == 0, проверяем только ограниченность.
         upper_bound = max(cache_after_step * 3, 10)
-        assert (
-            cache_after_two < upper_bound
-        ), f"Cache grew unboundedly: {cache_after_step} → {cache_after_two}"
+        assert cache_after_two < upper_bound, (
+            f"Cache grew unboundedly: {cache_after_step} → {cache_after_two}"
+        )
 
     def test_neighbor_cache_hit_returns_same_list(self):
         """Повторный вызов _get_neighbors_cached с теми же аргументами

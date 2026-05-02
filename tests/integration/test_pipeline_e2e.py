@@ -223,9 +223,9 @@ class TestPipelineGateHierarchy:
         results = strategy.apply(mock_fcs_data_normal)
 
         for gate_name, gate_result in results.gates.items():
-            assert (
-                0 <= gate_result.fraction <= 1
-            ), f"Gate {gate_name} has invalid fraction: {gate_result.fraction}"
+            assert 0 <= gate_result.fraction <= 1, (
+                f"Gate {gate_name} has invalid fraction: {gate_result.fraction}"
+            )
 
     def test_all_masks_correct_length(self, mock_fcs_data_normal):
         """Тест: все маски имеют правильную длину."""
@@ -235,9 +235,9 @@ class TestPipelineGateHierarchy:
         results = strategy.apply(mock_fcs_data_normal)
 
         for gate_name, gate_result in results.gates.items():
-            assert (
-                len(gate_result.mask) == n_events
-            ), f"Gate {gate_name} mask has wrong length: {len(gate_result.mask)} != {n_events}"
+            assert len(gate_result.mask) == n_events, (
+                f"Gate {gate_name} mask has wrong length: {len(gate_result.mask)} != {n_events}"
+            )
 
 
 @pytest.mark.integration
@@ -256,13 +256,13 @@ class TestPipelineParameterRanges:
 
         ranges = expected_parameter_ranges
 
-        assert (
-            ranges["n0"]["min"] <= params.n0 <= ranges["n0"]["max"]
-        ), f"n0={params.n0} not in [{ranges['n0']['min']}, {ranges['n0']['max']}]"
+        assert ranges["n0"]["min"] <= params.n0 <= ranges["n0"]["max"], (
+            f"n0={params.n0} not in [{ranges['n0']['min']}, {ranges['n0']['max']}]"
+        )
 
-        assert (
-            ranges["c0"]["min"] <= params.c0 <= ranges["c0"]["max"]
-        ), f"c0={params.c0} not in [{ranges['c0']['min']}, {ranges['c0']['max']}]"
+        assert ranges["c0"]["min"] <= params.c0 <= ranges["c0"]["max"], (
+            f"c0={params.c0} not in [{ranges['c0']['min']}, {ranges['c0']['max']}]"
+        )
 
         assert (
             ranges["inflammation_level"]["min"]

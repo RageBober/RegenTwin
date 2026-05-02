@@ -34,9 +34,9 @@ def test_simulate_extended_completes_with_all_variables(http_client: httpx.Clien
     variables = set(data["variables"].keys())
 
     assert variables >= _EXPECTED_CELL_VARS, f"missing cells: {_EXPECTED_CELL_VARS - variables}"
-    assert (
-        variables >= _EXPECTED_CYTOKINE_VARS
-    ), f"missing cytokines: {_EXPECTED_CYTOKINE_VARS - variables}"
+    assert variables >= _EXPECTED_CYTOKINE_VARS, (
+        f"missing cytokines: {_EXPECTED_CYTOKINE_VARS - variables}"
+    )
     assert variables >= _EXPECTED_ECM_VARS, f"missing ECM: {_EXPECTED_ECM_VARS - variables}"
 
     time_points = len(data["times"])

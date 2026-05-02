@@ -53,9 +53,9 @@ class TestSkinBaseline:
     def test_protein_levels_valid(self, baseline: dict[str, HPASkinExpression]):
         valid_levels = {"Not detected", "Low", "Medium", "High"}
         for expr in baseline.values():
-            assert (
-                expr.protein_level in valid_levels
-            ), f"{expr.gene_symbol}: invalid protein level '{expr.protein_level}'"
+            assert expr.protein_level in valid_levels, (
+                f"{expr.gene_symbol}: invalid protein level '{expr.protein_level}'"
+            )
 
     def test_model_variable_mapping(self, baseline: dict[str, HPASkinExpression]):
         """Каждый ген должен маппиться на переменную модели."""

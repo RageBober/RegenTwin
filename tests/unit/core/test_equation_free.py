@@ -910,9 +910,9 @@ class TestLiftRestrictConsistency:
         # Все 20 переменных должны быть ≈ оригиналу с допуском 15%
         for i in range(20):
             if original[i] > 0.0:
-                assert restored[i] == pytest.approx(
-                    original[i], rel=0.15
-                ), f"Variable index {i}: expected {original[i]}, got {restored[i]}"
+                assert restored[i] == pytest.approx(original[i], rel=0.15), (
+                    f"Variable index {i}: expected {original[i]}, got {restored[i]}"
+                )
 
     def test_full_20_vector_nonneg_after_round_trip(
         self, lifter, restrictor, ef_config, populated_state_full

@@ -986,9 +986,9 @@ class TestGatingStrategyScenarios:
         results = strategy.apply(mock_fcs_data_normal)
 
         for gate_name, gate_result in results.gates.items():
-            assert (
-                0 <= gate_result.fraction <= 1
-            ), f"Gate {gate_name} has invalid fraction: {gate_result.fraction}"
+            assert 0 <= gate_result.fraction <= 1, (
+                f"Gate {gate_name} has invalid fraction: {gate_result.fraction}"
+            )
 
     def test_all_masks_correct_length(self, mock_fcs_data_normal):
         """Тест что все маски имеют правильную длину."""
@@ -1198,9 +1198,9 @@ class TestApplyExtended:
         strategy = GatingStrategy()
         results = strategy.apply_extended(mock_fcs_data_extended_normal)
         for gate_name, gate in results.gates.items():
-            assert (
-                0 <= gate.fraction <= 1
-            ), f"Gate {gate_name} fraction={gate.fraction} out of [0,1]"
+            assert 0 <= gate.fraction <= 1, (
+                f"Gate {gate_name} fraction={gate.fraction} out of [0,1]"
+            )
 
     def test_neutrophils_parent_is_live_cells(self, mock_fcs_data_extended_normal):
         """Тест что neutrophils.parent == 'live_cells'."""
