@@ -108,6 +108,15 @@ fn spawn_python_backend(project_root: &Path, python: &Path) -> Option<Child> {
         .ok()
 }
 
+fn ensure_data_dir(root: &Path) {
+    let data_dir = root.join("data");
+    if !data_dir.exists() {
+        if let Err(e) = std::fs::create_dir_all(&data_dir) {
+            eprintln!("Could not create data dir at {}: {}", data_dir.display(), e);
+        }
+    }
+}
+
 fn start_backend() -> Option<Child> {
     let port: u16 = 8000;
 
@@ -116,19 +125,22 @@ fn start_backend() -> Option<Child> {
         return None;
     }
 
-    let project_root = match find_project_root() {
-        Some(root) => root,
-        None => {
-            eprintln!("Could not find project root (no pyproject.toml found).");
-            eprintln!("Please start backend manually: uv run uvicorn src.api.main:app --port 8000");
-            return None;
-        }
-    };
+    // В production project_root = bundled resources/ (содержит src/, venv/, pyproject.toml).
+    // В dev — обычный поиск pyproject.toml вверх от cwd / exe.
+    let bundled = bundled_resource_root();
+    let project_root = bundled.clone().or_else(find_project_root).or_else(|| {
+        eprintln!("Could not find project root (no pyproject.toml found).");
+        eprintln!("Please start backend manually: uv run uvicorn src.api.main:app --port 8000");
+        None
+    })?;
 
-    // Production-first: попытаться запустить из bundled resources/.venv (без uv).
-    let child = bundled_resource_root()
+    ensure_data_dir(&project_root);
+
+    // Production-first: bundled venv (resources/venv/Scripts/python.exe).
+    let child = bundled
+        .as_ref()
         .and_then(|res_root| {
-            for python in local_python_candidates(&res_root) {
+            for python in local_python_candidates(res_root) {
                 if python.exists() {
                     if let Some(child) = spawn_python_backend(&project_root, &python) {
                         println!("Backend started from bundled venv: {}", python.display());
@@ -138,8 +150,7 @@ fn start_backend() -> Option<Child> {
             }
             None
         })
-        // Dev fallback: пробуем uv (если установлен в PATH).
-        .or_else(|| spawn_uv_backend(&project_root))
+        // Dev fallback: project-local .venv.
         .or_else(|| {
             for python in local_python_candidates(&project_root) {
                 if python.exists() {
@@ -150,6 +161,9 @@ fn start_backend() -> Option<Child> {
             }
             None
         })
+        // Dev fallback: uv в PATH.
+        .or_else(|| spawn_uv_backend(&project_root))
+        // Last resort: системный python.
         .or_else(|| spawn_python_backend(&project_root, Path::new("python")));
 
     match &child {

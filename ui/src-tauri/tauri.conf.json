@@ -36,7 +36,10 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../../.venv": "venv"
+      "../../.venv": "venv",
+      "../../src": "src",
+      "../../alembic.ini": "alembic.ini",
+      "../../pyproject.toml": "pyproject.toml"
     },
     "windows": {
       "wix": {
