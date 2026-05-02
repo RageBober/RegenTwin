@@ -1,5 +1,4 @@
-"""
-RegenTwin Smoke Test — полная проверка системы.
+"""RegenTwin Smoke Test — полная проверка системы.
 
 Запуск:
     1. Запустите backend: python -m uvicorn src.api.main:app --port 8000
@@ -14,7 +13,7 @@ from __future__ import annotations
 
 import sys
 import time
-import json
+
 import requests
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -52,18 +51,31 @@ def post(url: str, **kwargs) -> requests.Response:
 
 # Default simulation params for viz endpoints
 DEFAULT_SIM_PARAMS = {
-    "P0": 500, "Ne0": 200, "M1_0": 100, "M2_0": 10,
-    "F0": 50, "Mf0": 0, "E0": 20, "S0": 40,
-    "C_TNF0": 10, "C_IL10_0": 0.5, "D0": 5, "O2_0": 80,
+    "P0": 500,
+    "Ne0": 200,
+    "M1_0": 100,
+    "M2_0": 10,
+    "F0": 50,
+    "Mf0": 0,
+    "E0": 20,
+    "S0": 40,
+    "C_TNF0": 10,
+    "C_IL10_0": 0.5,
+    "D0": 5,
+    "O2_0": 80,
     "t_max_hours": 48,  # short for speed
     "dt": 0.5,
-    "prp_enabled": False, "pemf_enabled": False,
-    "prp_intensity": 1.0, "pemf_frequency": 50.0, "pemf_intensity": 1.0,
+    "prp_enabled": False,
+    "pemf_enabled": False,
+    "prp_intensity": 1.0,
+    "pemf_frequency": 50.0,
+    "pemf_intensity": 1.0,
     "random_seed": 42,
 }
 
 
 # ── 1. Health ────────────────────────────────────────────────────────
+
 
 def test_health():
     print("\n1. Health Check")
@@ -82,12 +94,14 @@ def test_health():
 
 # ── 2. Upload ────────────────────────────────────────────────────────
 
+
 def test_upload():
     print("\n2. Upload")
 
     def upload_rejects_non_fcs():
         """Upload endpoint should exist (may reject non-FCS files)."""
         import io
+
         files = {"file": ("test.txt", io.BytesIO(b"not a real file"), "text/plain")}
         r = post(f"{API_V1}/upload", files=files)
         # 400 or 422 is expected (bad file type), 500 means server error
@@ -173,6 +187,7 @@ def test_simulation():
 
 # ── 4. Visualization (Plotly JSON) ───────────────────────────────────
 
+
 def test_visualization():
     print("\n4. Visualization Endpoints")
 
@@ -185,7 +200,7 @@ def test_visualization():
             assert r.status_code == 200, f"status={r.status_code}: {r.text[:300]}"
             data = r.json()
             assert "data" in data, f"Missing 'data' key. Keys: {list(data.keys())}"
-            assert "layout" in data, f"Missing 'layout' key"
+            assert "layout" in data, "Missing 'layout' key"
             n_traces = len(data["data"])
             title = data.get("layout", {}).get("title", {})
             if isinstance(title, dict):
@@ -202,6 +217,7 @@ def test_visualization():
 
 
 # ── 5. Viz Export ────────────────────────────────────────────────────
+
 
 def test_viz_export():
     print("\n5. Visualization Export")
@@ -229,6 +245,7 @@ def test_viz_export():
 
 
 # ── 6. Spatial Visualization ─────────────────────────────────────────
+
 
 def test_spatial():
     print("\n6. Spatial Visualization (ABM)")
@@ -275,6 +292,7 @@ def test_spatial():
 
 # ── 7. Analysis ──────────────────────────────────────────────────────
 
+
 def test_analysis():
     print("\n7. Analysis")
 
@@ -299,6 +317,7 @@ def test_analysis():
 
 
 # ── 8. CORS ──────────────────────────────────────────────────────────
+
 
 def test_cors():
     print("\n8. CORS")
@@ -327,6 +346,7 @@ def test_cors():
 
 # ── 9. Error Handling ────────────────────────────────────────────────
 
+
 def test_errors():
     print("\n9. Error Handling")
 
@@ -345,6 +365,7 @@ def test_errors():
 
 # ── Main ─────────────────────────────────────────────────────────────
 
+
 def main():
     print("=" * 60)
     print("  RegenTwin Smoke Test")
@@ -360,10 +381,10 @@ def main():
     except Exception as e:
         print(f"\n  ERROR: Backend not reachable at {BASE_URL}")
         print(f"  {e}")
-        print(f"\n  Start backend first:")
-        print(f"    python -m uvicorn src.api.main:app --port 8000")
-        print(f"  Or from ui/:")
-        print(f"    npm run dev:full")
+        print("\n  Start backend first:")
+        print("    python -m uvicorn src.api.main:app --port 8000")
+        print("  Or from ui/:")
+        print("    npm run dev:full")
         sys.exit(1)
 
     # Run all test groups
@@ -389,10 +410,10 @@ def main():
             print(f"  {err}")
 
     if failed:
-        print(f"\n  Some tests failed. Check backend logs for details.")
+        print("\n  Some tests failed. Check backend logs for details.")
         sys.exit(1)
     else:
-        print(f"\n  All smoke tests passed!")
+        print("\n  All smoke tests passed!")
         sys.exit(0)
 
 

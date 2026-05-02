@@ -11,6 +11,7 @@
 Подробное описание: Description/description_sde_model.md
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -256,11 +257,15 @@ class SDEModel:
     def simulate(
         self,
         initial_params: ModelParameters,
+        progress_callback: Callable[[int, int], None] | None = None,
+        cancel_callback: Callable[[], None] | None = None,
     ) -> SDETrajectory:
         """Полная симуляция SDE методом Эйлера-Маруямы.
 
         Args:
             initial_params: Начальные параметры из parameter_extraction
+            progress_callback: Необязательный callback прогресса ``(current_step, total_steps)``
+            cancel_callback: Необязательный callback кооперативной отмены
 
         Returns:
             SDETrajectory с результатами
@@ -281,9 +286,16 @@ class SDEModel:
 
         # Параметр для стохастического члена
         sqrt_dt = np.sqrt(self._config.dt)
+        report_interval = max(1, n_steps // 50) if n_steps else 1
+
+        if cancel_callback is not None:
+            cancel_callback()
 
         # Цикл Эйлера-Маруямы
         for i in range(n_steps):
+            if cancel_callback is not None:
+                cancel_callback()
+
             t = times[i]
             N = N_values[i]
             C = C_values[i]
@@ -302,6 +314,11 @@ class SDEModel:
 
             # Применение граничных условий
             N_values[i + 1], C_values[i + 1] = self._apply_boundary_conditions(N_new, C_new)
+
+            if progress_callback is not None and (
+                (i + 1) % report_interval == 0 or i + 1 == n_steps
+            ):
+                progress_callback(i + 1, n_steps)
 
         # Создание траектории
         return SDETrajectory(
@@ -352,11 +369,7 @@ class SDEModel:
         )
 
         # Drift для C: производство клетками - деградация + секреция из PRP
-        drift_C = (
-            self._config.eta * N
-            - self._config.gamma * C
-            + self._therapy_prp_secretion(t)
-        )
+        drift_C = self._config.eta * N - self._config.gamma * C + self._therapy_prp_secretion(t)
 
         return (drift_N, drift_C)
 
@@ -455,12 +468,7 @@ class SDEModel:
         sigmoid = 1.0 / (1.0 + np.exp(-self._config.k_pemf * freq_diff))
 
         # Эффект пропорционален N
-        effect = (
-            self._config.beta_pemf
-            * sigmoid
-            * self._therapy.pemf_intensity
-            * N
-        )
+        effect = self._config.beta_pemf * sigmoid * self._therapy.pemf_intensity * N
 
         return float(effect)
 
@@ -557,6 +565,8 @@ def simulate_sde(
     config: SDEConfig | None = None,
     therapy: TherapyProtocol | None = None,
     random_seed: int | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
+    cancel_callback: Callable[[], None] | None = None,
 ) -> SDETrajectory:
     """Convenience функция для SDE симуляции.
 
@@ -565,6 +575,8 @@ def simulate_sde(
         config: Конфигурация модели (опционально)
         therapy: Протокол терапии (опционально)
         random_seed: Seed для воспроизводимости
+        progress_callback: Необязательный callback прогресса
+        cancel_callback: Необязательный callback кооперативной отмены
 
     Returns:
         SDETrajectory с результатами
@@ -572,4 +584,8 @@ def simulate_sde(
     Подробное описание: Description/description_sde_model.md#simulate_sde
     """
     model = SDEModel(config=config, therapy=therapy, random_seed=random_seed)
-    return model.simulate(initial_params)
+    return model.simulate(
+        initial_params,
+        progress_callback=progress_callback,
+        cancel_callback=cancel_callback,
+    )

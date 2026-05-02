@@ -3,9 +3,8 @@
 from pathlib import Path
 
 import plotly.graph_objects as go
-import pytest
 
-from src.core.extended_sde import ExtendedSDETrajectory, VARIABLE_NAMES
+from src.core.extended_sde import VARIABLE_NAMES, ExtendedSDETrajectory
 from src.visualization.export import ExportConfig, ReportExporter
 
 

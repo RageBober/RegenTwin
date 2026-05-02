@@ -11,12 +11,15 @@
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
-from scipy.spatial import cKDTree
+from scipy.ndimage import convolve
+from scipy.spatial import KDTree
 
+from src.core.sde_model import TherapyProtocol
 from src.data.parameter_extraction import ModelParameters
 
 
@@ -261,6 +264,23 @@ class ABMTrajectory:
         }
 
 
+_POLARIZATION_STR_MAP: dict[str, float] = {"M1": 1.0, "M2": 0.0}
+
+
+def _polarization_as_float(value: Any) -> float:
+    """Map polarization state to a [0, 1] scalar (1=M1, 0=M2).
+
+    Macrophage.polarization_state is dual-typed (float | str). Converting
+    the string form via ``float()`` raises ValueError, so central step()
+    code must normalise before arithmetic.
+    """
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        return _POLARIZATION_STR_MAP.get(value, 0.5)
+    return 0.5
+
+
 class SpatialHash:
     """Пространственный хэш для эффективного поиска соседей O(1).
 
@@ -379,7 +399,7 @@ class SpatialHash:
 
 
 class KDTreeSpatialIndex:
-    """Пространственный индекс на основе scipy.spatial.cKDTree.
+    """Пространственный индекс на основе scipy.spatial.KDTree.
 
     Альтернатива SpatialHash для точного O(log n) поиска соседей.
     Использует KD-дерево для эффективных запросов по радиусу
@@ -403,13 +423,13 @@ class KDTreeSpatialIndex:
         """
         self._space_size = space_size
         self._periodic = periodic
-        self._tree: cKDTree | None = None
+        self._tree: KDTree | None = None
         self._agents: list[Agent] = []
 
     def build(self, agents: list["Agent"]) -> None:
         """Построение KD-дерева из списка агентов.
 
-        Создаёт cKDTree из координат живых агентов.
+        Создаёт KDTree из координат живых агентов.
         При periodic=True используется boxsize для тороидальных границ.
 
         Args:
@@ -423,12 +443,12 @@ class KDTreeSpatialIndex:
             return
         positions = np.array([[a.x, a.y] for a in self._agents])
         if self._periodic:
-            self._tree = cKDTree(
+            self._tree = KDTree(
                 positions,
                 boxsize=[self._space_size[0], self._space_size[1]],
             )
         else:
-            self._tree = cKDTree(positions)
+            self._tree = KDTree(positions)
 
     def query_radius(
         self,
@@ -437,7 +457,7 @@ class KDTreeSpatialIndex:
     ) -> list["Agent"]:
         """Поиск всех агентов в заданном радиусе.
 
-        Использует cKDTree.query_ball_point для эффективного
+        Использует KDTree.query_ball_point для эффективного
         поиска по радиусу. Возвращает агентов на расстоянии ≤ radius.
 
         Args:
@@ -461,7 +481,7 @@ class KDTreeSpatialIndex:
     ) -> list["Agent"]:
         """Поиск k ближайших агентов.
 
-        Использует cKDTree.query для нахождения k ближайших соседей.
+        Использует KDTree.query для нахождения k ближайших соседей.
         Если k > количества агентов, возвращает всех.
 
         Args:
@@ -479,7 +499,7 @@ class KDTreeSpatialIndex:
         distances, indices = self._tree.query(list(position), k=k)
         if k == 1:
             return [self._agents[int(indices)]]
-        return [self._agents[int(i)] for i in indices]
+        return [self._agents[int(i)] for i in np.atleast_1d(indices)]
 
 
 class Agent(ABC):
@@ -524,6 +544,7 @@ class Agent(ABC):
         self.alive = True
         self.dividing = False
         self._rng = rng if rng else np.random.default_rng()
+        self._division_boost: float = 0.0
 
     def move(
         self,
@@ -591,6 +612,10 @@ class Agent(ABC):
         Подробное описание: Description/description_abm_model.md#Agent.update
         """
         raise NotImplementedError("Stub: требуется реализация")
+
+    def _effective_division_probability(self) -> float:
+        # PRP через environment ускоряет деление; без терапии возвращает базовое.
+        return self.DIVISION_PROBABILITY * (1.0 + 0.3 * self._division_boost)
 
     def can_divide(self) -> bool:
         """Проверка возможности деления.
@@ -751,9 +776,13 @@ class StemCell(Agent):
         if cytokine_level > 0:
             self.energy = min(1.0, self.energy + 0.01 * cytokine_level * dt)
 
-        # Бонус от PRP терапии
+        # Бонус от PRP терапии (PDGF/VEGF → восстановление энергии)
+        prp_boost = float(environment.get("prp_boost", 0.0))
         if environment.get("prp_active", False):
-            self.energy = min(1.0, self.energy + 0.005 * dt)
+            self.energy = min(1.0, self.energy + 0.005 * dt * (1.0 + prp_boost))
+
+        # Запомнить boost для _effective_division_probability()
+        self._division_boost = prp_boost
 
         # Сброс флага деления
         self.dividing = False
@@ -787,7 +816,7 @@ class StemCell(Agent):
             return None
 
         # Проверка вероятности деления
-        if self._rng.random() >= self.DIVISION_PROBABILITY:
+        if self._rng.random() >= self._effective_division_probability():
             return None
 
         # Деление происходит
@@ -918,7 +947,7 @@ class Macrophage(Agent):
         Подробное описание: Description/description_abm_model.md#Macrophage.__init__
         """
         super().__init__(agent_id, x, y, age, rng)
-        self.polarization_state: float = 0.5  # 0.0=M2(anti-inflam), 1.0=M1(pro-inflam)
+        self.polarization_state: float | str = 0.5  # 0.0=M2(anti-inflam), 1.0=M1(pro-inflam)
         self.phagocytosed_count = 0
 
     def update(self, dt: float, environment: dict[str, Any]) -> None:
@@ -948,6 +977,15 @@ class Macrophage(Agent):
         inflammation = environment.get("inflammation_level", 0.0)
         self.polarize(inflammation)
 
+        # PEMF сдвигает поляризацию к M2 (anti-inflammatory).
+        if environment.get("pemf_active", False):
+            shift = float(environment.get("pemf_polarization_shift", 0.0))
+            current = _polarization_as_float(self.polarization_state)
+            self.polarization_state = max(0.0, min(1.0, current - shift * dt))
+
+        # PRP ускоряет деление (через cytokine-driven proliferation).
+        self._division_boost = float(environment.get("prp_boost", 0.0))
+
         # Сброс флага деления
         self.dividing = False
 
@@ -966,7 +1004,7 @@ class Macrophage(Agent):
             return None
 
         # Проверка вероятности деления
-        if self._rng.random() >= self.DIVISION_PROBABILITY:
+        if self._rng.random() >= self._effective_division_probability():
             return None
 
         # Деление происходит
@@ -1063,14 +1101,11 @@ class Macrophage(Agent):
         count = min(len(apoptotic_neutrophils), self.PHAGOCYTOSIS_CAPACITY)
         for n in apoptotic_neutrophils[:count]:
             n.alive = False
-        # Dual-mode polarization shift
+        # Dual-mode: строка "M1"→"M2", float → числовой сдвиг к 0.0 (M2)
         if isinstance(self.polarization_state, str):
             self.polarization_state = "M2"
         else:
-            self.polarization_state = max(
-                0.0,
-                self.polarization_state - 0.1 * count,
-            )
+            self.polarization_state = max(0.0, self.polarization_state - 0.1 * count)
         return {"IL10": count * 0.05, "phagocytosed": count}
 
 
@@ -1140,8 +1175,12 @@ class Fibroblast(Agent):
 
         # Восстановление энергии
         cytokine_level = environment.get("cytokine_level", 0.0)
+        prp_boost = float(environment.get("prp_boost", 0.0))
         if cytokine_level > 0:
-            self.energy = min(1.0, self.energy + 0.005 * cytokine_level * dt)
+            self.energy = min(
+                1.0,
+                self.energy + 0.005 * cytokine_level * dt * (1.0 + 0.3 * prp_boost),
+            )
 
         # Активация при высоком уровне воспаления
         inflammation = environment.get("inflammation_level", 0.0)
@@ -1149,9 +1188,12 @@ class Fibroblast(Agent):
             if self._rng.random() < 0.01 * dt:
                 self.activate()
 
-        # Производство ECM
-        ecm_amount = self.produce_ecm(dt)
+        # Производство ECM (PRP → PDGF → ускоряет матричный синтез).
+        ecm_amount = self.produce_ecm(dt, prp_boost=prp_boost)
         self.ecm_produced += ecm_amount
+
+        # PRP ускоряет пролиферацию фибробластов.
+        self._division_boost = prp_boost
 
         # Сброс флага деления
         self.dividing = False
@@ -1171,7 +1213,7 @@ class Fibroblast(Agent):
             return None
 
         # Проверка вероятности деления
-        if self._rng.random() >= self.DIVISION_PROBABILITY:
+        if self._rng.random() >= self._effective_division_probability():
             return None
 
         # Деление происходит
@@ -1193,11 +1235,12 @@ class Fibroblast(Agent):
 
         return offspring
 
-    def produce_ecm(self, dt: float) -> float:
+    def produce_ecm(self, dt: float, prp_boost: float = 0.0) -> float:
         """Производство ECM.
 
         Args:
             dt: Временной шаг
+            prp_boost: PRP-модуляция скорости ECM (PDGF стимулирует синтез коллагена).
 
         Returns:
             Количество произведённого ECM
@@ -1207,7 +1250,7 @@ class Fibroblast(Agent):
         if not self.alive:
             return 0.0
 
-        rate = self.ECM_PRODUCTION_RATE
+        rate = self.ECM_PRODUCTION_RATE * (1.0 + 0.2 * prp_boost)
         if self.activated:
             rate *= 2.0  # Миофибробласты производят больше ECM
 
@@ -1309,9 +1352,13 @@ class NeutrophilAgent(Agent):
         self.age += dt
         energy_consumption = 0.003 * dt
         self.energy = max(0.0, self.energy - energy_consumption)
+        # Восстановление энергии при фагоцитозе debris
+        debris = environment.get("debris_count", 0)
+        if debris > 0 and self.phagocytosed_count < self.PHAGOCYTOSIS_CAPACITY:
+            self.energy = min(1.0, self.energy + 0.005 * dt)
         self.dividing = False
 
-    def divide(self, new_id: int) -> "Agent | None":
+    def divide(self, new_id: int) -> "Agent | None":  # noqa: ARG002
         """Деление нейтрофила — всегда None.
 
         Нейтрофилы не пролиферируют в ткани (MAX_DIVISIONS = 0).
@@ -1443,8 +1490,16 @@ class EndothelialAgent(Agent):
         energy_consumption = 0.001 * dt
         self.energy = max(0.0, self.energy - energy_consumption)
         vegf_level = environment.get("vegf_level", 0.0)
+        prp_boost = float(environment.get("prp_boost", 0.0))
+        pemf_boost = float(environment.get("pemf_boost", 0.0))
         if vegf_level > 0:
-            self.energy = min(1.0, self.energy + 0.005 * vegf_level * dt)
+            # PRP поставляет VEGF, PEMF стимулирует ангиогенез через Ca²⁺-NO.
+            self.energy = min(
+                1.0,
+                self.energy + 0.005 * vegf_level * dt * (1.0 + 0.2 * prp_boost + 0.5 * pemf_boost),
+            )
+        # Аддитивная PEMF-пролиферация независима от VEGF (sde_model.py:469-477).
+        self._division_boost = prp_boost + pemf_boost
         self.dividing = False
 
     def divide(self, new_id: int) -> "EndothelialAgent | None":
@@ -1463,7 +1518,7 @@ class EndothelialAgent(Agent):
         """
         if not self.can_divide():
             return None
-        if self._rng.random() >= self.DIVISION_PROBABILITY:
+        if self._rng.random() >= self._effective_division_probability():
             return None
         self.dividing = True
         self.division_count += 1
@@ -1479,7 +1534,7 @@ class EndothelialAgent(Agent):
         offspring.division_count = 0
         return offspring
 
-    def form_junction(self, neighbor: "EndothelialAgent") -> bool:
+    def form_junction(self, neighbor: Agent) -> bool:
         """Формирование сосудистого контакта (tight junction).
 
         Два эндотелиальных агента формируют контакт если находятся
@@ -1487,7 +1542,7 @@ class EndothelialAgent(Agent):
         стабилизирует обе клетки (снижает DEATH_PROBABILITY).
 
         Args:
-            neighbor: Соседняя эндотелиальная клетка
+            neighbor: Соседняя клетка (контакт только с EndothelialAgent)
 
         Returns:
             True если контакт сформирован
@@ -1583,6 +1638,10 @@ class MyofibroblastAgent(Agent):
         self.age += dt
         energy_consumption = 0.002 * dt
         self.energy = max(0.0, self.energy - energy_consumption)
+        # TGF-β поддерживает выживание миофибробласта
+        tgfb = environment.get("tgfb_level", 0.0)
+        if tgfb > 0:
+            self.energy = min(1.0, self.energy + 0.003 * tgfb * dt)
         self.dividing = False
 
     def divide(self, new_id: int) -> "MyofibroblastAgent | None":
@@ -1682,12 +1741,14 @@ class ABMModel:
         self,
         config: ABMConfig | None = None,
         random_seed: int | None = None,
+        therapy: TherapyProtocol | None = None,
     ) -> None:
         """Инициализация ABM.
 
         Args:
             config: Конфигурация модели
             random_seed: Seed для воспроизводимости
+            therapy: Протокол PRP/PEMF терапии. None → TherapyProtocol() с отключёнными.
 
         Подробное описание: Description/description_abm_model.md#ABMModel.__init__
         """
@@ -1699,6 +1760,16 @@ class ABMModel:
         self._dead_agents: list[Agent] = []
         self._next_agent_id = 0
         self._current_time = 0.0
+
+        self._therapy: TherapyProtocol = therapy if therapy else TherapyProtocol()
+        self._therapy_active: dict[str, bool] = {"prp": False, "pemf": False}
+        self._therapy_mods: dict[str, float] = {
+            "prp_boost": 0.0,
+            "pemf_boost": 0.0,
+            "synergy": 1.0,
+            "prp_secretion_rate": 0.0,
+            "pemf_polarization_shift": 0.0,
+        }
 
         # Cytokine field (discrete grid)
         self._grid_shape = (
@@ -1717,6 +1788,26 @@ class ABMModel:
             ),
             periodic=(self._config.boundary_type == "periodic"),
         )
+
+        # Кэш среднего уровня воспаления (обновляется раз в шаг, не per-agent)
+        self._inflammation_cache: float = 0.5
+
+        # Кэш neighbor-queries на тик (инвалидируется в step() после rebuild).
+        # Key: (x, y, radius, id_of_exclude) → list[Agent].
+        self._neighbor_cache: dict[tuple[float, float, float, int], list[Agent]] = {}
+
+        # Расширенные пространственные движки (Phase 2.8)
+        # Ленивый импорт: abm_spatial импортирует Agent/Macrophage из abm_model
+        self._efferocytosis_engine = None
+        self._mechanotransduction_engine = None
+
+        if self._config.enable_efferocytosis or self._config.enable_mechanotransduction:
+            from src.core.abm_spatial import EfferocytosisEngine, MechanotransductionEngine
+
+            if self._config.enable_efferocytosis:
+                self._efferocytosis_engine = EfferocytosisEngine()
+            if self._config.enable_mechanotransduction:
+                self._mechanotransduction_engine = MechanotransductionEngine()
 
     @property
     def config(self) -> ABMConfig:
@@ -1782,12 +1873,16 @@ class ABMModel:
         self,
         initial_params: ModelParameters,
         snapshot_interval: float = 24.0,  # часов
+        progress_callback: Callable[[int, int], None] | None = None,
+        cancel_callback: Callable[[], None] | None = None,
     ) -> ABMTrajectory:
         """Полная симуляция ABM.
 
         Args:
             initial_params: Начальные параметры
             snapshot_interval: Интервал сохранения снимков (часы)
+            progress_callback: Необязательный callback прогресса ``(current_step, total_steps)``
+            cancel_callback: Необязательный callback кооперативной отмены
 
         Returns:
             ABMTrajectory с результатами
@@ -1800,6 +1895,8 @@ class ABMModel:
         snapshots: list[ABMSnapshot] = []
         dt = self._config.dt
         t_max = self._config.t_max
+        total_steps = max(0, int(np.ceil(max(t_max - self._current_time, 0.0) / dt)))
+        report_interval = max(1, total_steps // 50) if total_steps else 1
 
         # Начальный снимок
         snapshots.append(self._get_snapshot())
@@ -1807,15 +1904,31 @@ class ABMModel:
         # Время следующего снимка
         next_snapshot_time = snapshot_interval
 
+        if cancel_callback is not None:
+            cancel_callback()
+
+        current_step = 0
+
         # Основной цикл симуляции
         while self._current_time < t_max:
+            if cancel_callback is not None:
+                cancel_callback()
+
             # Шаг симуляции
-            self.step(dt)
+            self.step(dt, cancel_callback=cancel_callback)
+            current_step += 1
 
             # Проверка сохранения снимка
             if self._current_time >= next_snapshot_time:
                 snapshots.append(self._get_snapshot())
                 next_snapshot_time += snapshot_interval
+
+            if progress_callback is not None and (
+                current_step % report_interval == 0
+                or self._current_time >= t_max
+                or not self._agents
+            ):
+                progress_callback(current_step, total_steps)
 
             # Проверка на вымирание
             if not self._agents:
@@ -1830,45 +1943,135 @@ class ABMModel:
             config=self._config,
         )
 
-    def step(self, dt: float) -> None:
+    def _update_therapy_state(self) -> None:
+        # SDE оперирует в днях, ABM — в часах; конвертируем.
+        t_days = self._current_time / 24.0
+        th = self._therapy
+        prp_end = (
+            th.prp_end_time if th.prp_end_time is not None else th.prp_start_time + th.prp_duration
+        )
+        pemf_end = (
+            th.pemf_end_time
+            if th.pemf_end_time is not None
+            else th.pemf_start_time + th.pemf_duration
+        )
+        self._therapy_active["prp"] = (
+            bool(th.prp_enabled) and th.prp_start_time <= t_days <= prp_end
+        )
+        self._therapy_active["pemf"] = (
+            bool(th.pemf_enabled) and th.pemf_start_time <= t_days <= pemf_end
+        )
+
+    def _therapy_modifiers(self) -> dict[str, float]:
+        # SDEConfig-эквивалентные константы: alpha_prp=0.5, lambda_prp=0.3,
+        # beta_pemf=0.1, f0_pemf=50, k_pemf=0.1. Формулы из sde_model.py:414-480.
+        th = self._therapy
+        t_days = self._current_time / 24.0
+        mods = {
+            "prp_boost": 0.0,
+            "pemf_boost": 0.0,
+            "synergy": 1.0,
+            "prp_secretion_rate": 0.0,
+            "pemf_polarization_shift": 0.0,
+        }
+        if self._therapy_active["prp"]:
+            t_therapy = max(0.0, t_days - th.prp_start_time)
+            decay = float(np.exp(-0.3 * t_therapy))
+            mods["prp_boost"] = 0.5 * th.prp_initial_concentration * decay * th.prp_intensity
+            mods["prp_secretion_rate"] = (
+                th.prp_initial_concentration * decay * th.prp_intensity * 0.1
+            )
+        if self._therapy_active["pemf"]:
+            freq_diff = th.pemf_frequency - 50.0
+            sigmoid = 1.0 / (1.0 + float(np.exp(-0.1 * freq_diff)))
+            mods["pemf_boost"] = 0.1 * sigmoid * th.pemf_intensity
+            mods["pemf_polarization_shift"] = 0.3 * sigmoid * th.pemf_intensity
+        if self._therapy_active["prp"] and self._therapy_active["pemf"]:
+            mods["synergy"] = th.synergy_factor
+            mods["prp_boost"] *= th.synergy_factor
+            mods["pemf_boost"] *= th.synergy_factor
+        return mods
+
+    def step(
+        self,
+        dt: float,
+        cancel_callback: Callable[[], None] | None = None,
+    ) -> None:
         """Один шаг симуляции.
 
         Args:
             dt: Временной шаг (часы)
+            cancel_callback: Необязательный callback кооперативной отмены
 
         Подробное описание: Description/description_abm_model.md#ABMModel.step
         """
+        if cancel_callback is not None:
+            cancel_callback()
+
+        self._update_therapy_state()
+        self._therapy_mods = self._therapy_modifiers()
+
         # 0. Перестроение пространственного хэша для поиска соседей
         self._spatial_hash.rebuild(self._agents)
 
+        # Инвалидируем neighbor cache при каждом rebuild.
+        self._neighbor_cache.clear()
+
+        if cancel_callback is not None:
+            cancel_callback()
+
         # 1. Обновление агентов (движение, потребление энергии, etc.)
-        self._update_agents(dt)
+        # Кэшируем уровень воспаления один раз на шаг (вместо O(N) на каждый агент)
+        macros = [a for a in self._agents if isinstance(a, Macrophage) and a.alive]
+        self._inflammation_cache = (
+            sum(_polarization_as_float(a.polarization_state) for a in macros) / len(macros)
+            if macros
+            else 0.5
+        )
+        self._update_agents(dt, cancel_callback=cancel_callback)
 
-        # 2. Обработка делений
-        self._handle_divisions()
+        # 2. Эффероцитоз (макрофаги фагоцитируют апоптотических нейтрофилов)
+        self._process_efferocytosis(cancel_callback=cancel_callback)
 
-        # 3. Обработка дифференциаций
-        self._handle_differentiations()
+        # 3. Обработка делений
+        self._handle_divisions(cancel_callback=cancel_callback)
 
-        # 4. Удаление мёртвых агентов
+        # 4. Обработка дифференциаций
+        self._handle_differentiations(cancel_callback=cancel_callback)
+
+        # 5. Механотрансдукция (Fibroblast → MyofibroblastAgent)
+        self._process_mechanotransduction(cancel_callback=cancel_callback)
+
+        # 6. Удаление мёртвых агентов
         self._remove_dead_agents()
 
-        # 5. Обновление полей
-        self._update_cytokine_field(dt)
-        self._update_ecm_field(dt)
+        if cancel_callback is not None:
+            cancel_callback()
 
-        # 6. Обновление времени
+        # 7. Обновление полей
+        self._update_cytokine_field(dt, cancel_callback=cancel_callback)
+        self._update_ecm_field(dt, cancel_callback=cancel_callback)
+
+        # 8. Обновление времени
         self._current_time += dt
 
-    def _update_agents(self, dt: float) -> None:
+    def _update_agents(
+        self,
+        dt: float,
+        cancel_callback: Callable[[], None] | None = None,
+    ) -> None:
         """Обновление всех агентов.
 
         Args:
             dt: Временной шаг
+            cancel_callback: Необязательный callback кооперативной отмены
 
         Подробное описание: Description/description_abm_model.md#ABMModel._update_agents
         """
-        for agent in self._agents:
+        for i, agent in enumerate(self._agents):
+            if cancel_callback is not None and i % 50 == 0:
+                cancel_callback()
+
             if not agent.alive:
                 continue
 
@@ -1893,13 +2096,73 @@ class ABMModel:
             dx += repulsion_x * dt
             dy += repulsion_y * dt
 
+            # Силы адгезии (endo↔endo, myofibro↔myofibro)
+            if isinstance(agent, (EndothelialAgent, MyofibroblastAgent)):
+                adhesion_radius = self._config.adhesion_equilibrium_distance * 2
+                adh_neighbors = self._get_neighbors_cached(
+                    agent.x,
+                    agent.y,
+                    adhesion_radius,
+                    exclude=agent,
+                )
+                for other in adh_neighbors:
+                    adh_dist = np.sqrt((agent.x - other.x) ** 2 + (agent.y - other.y) ** 2)
+                    adhesion = self._calculate_adhesion_force(agent, other, adh_dist)
+                    dx += adhesion[0] * dt
+                    dy += adhesion[1] * dt
+
             agent.move(dx, dy, self._config.space_size, self._config.boundary_type)
 
             # Проверка смерти
             if agent.should_die(dt):
                 agent.alive = False
 
-    def _handle_divisions(self) -> None:
+    def _process_efferocytosis(
+        self,
+        cancel_callback: Callable[[], None] | None = None,
+    ) -> None:
+        """Эффероцитоз: макрофаги фагоцитируют апоптотических нейтрофилов.
+
+        Делегирует EfferocytosisEngine.process() для каждого макрофага.
+        IL-10 от фагоцитоза записывается в цитокиновое поле.
+        """
+        if self._efferocytosis_engine is None:
+            return
+
+        for agent in self._agents:
+            if cancel_callback is not None:
+                cancel_callback()
+
+            if not isinstance(agent, Macrophage) or not agent.alive:
+                continue
+
+            # Поиск апоптотических нейтрофилов в радиусе фагоцитоза
+            neighbors = self._get_neighbors_cached(
+                agent.x,
+                agent.y,
+                agent.PHAGOCYTOSIS_RADIUS,
+                exclude=agent,
+            )
+            apoptotic = [
+                n
+                for n in neighbors
+                if isinstance(n, NeutrophilAgent) and n.alive and n.energy <= 0.1
+            ]
+            if not apoptotic:
+                continue
+
+            result = self._efferocytosis_engine.process(agent, apoptotic)
+
+            # Запись IL-10 в цитокиновое поле
+            if result["IL10"] > 0:
+                grid_x = int(agent.x / self._config.grid_resolution) % self._grid_shape[0]
+                grid_y = int(agent.y / self._config.grid_resolution) % self._grid_shape[1]
+                self._cytokine_field[grid_x, grid_y] += result["IL10"]
+
+    def _handle_divisions(
+        self,
+        cancel_callback: Callable[[], None] | None = None,
+    ) -> None:
         """Обработка делений агентов.
 
         Подробное описание: Description/description_abm_model.md#ABMModel._handle_divisions
@@ -1911,6 +2174,9 @@ class ABMModel:
         new_agents: list[Agent] = []
 
         for agent in self._agents:
+            if cancel_callback is not None:
+                cancel_callback()
+
             if not agent.alive or not agent.can_divide():
                 continue
 
@@ -1930,7 +2196,10 @@ class ABMModel:
 
         self._agents.extend(new_agents)
 
-    def _handle_differentiations(self) -> None:
+    def _handle_differentiations(
+        self,
+        cancel_callback: Callable[[], None] | None = None,
+    ) -> None:
         """Обработка дифференциаций стволовых клеток.
 
         Подробное описание: Description/description_abm_model.md#ABMModel._handle_differentiations
@@ -1938,6 +2207,9 @@ class ABMModel:
         new_fibroblasts: list[Fibroblast] = []
 
         for agent in self._agents:
+            if cancel_callback is not None:
+                cancel_callback()
+
             if not isinstance(agent, StemCell) or not agent.alive:
                 continue
 
@@ -1947,6 +2219,56 @@ class ABMModel:
                 new_fibroblasts.append(fibroblast)
 
         self._agents.extend(new_fibroblasts)
+
+    def _process_mechanotransduction(
+        self,
+        cancel_callback: Callable[[], None] | None = None,
+    ) -> None:
+        """Механотрансдукция: мех. стресс → Fibroblast → MyofibroblastAgent.
+
+        Использует MechanotransductionEngine для вычисления стресса и
+        вероятностной активации фибробластов в миофибробласты.
+        """
+        if self._mechanotransduction_engine is None:
+            return
+
+        new_myofibros: list[MyofibroblastAgent] = []
+
+        for agent in self._agents:
+            if cancel_callback is not None:
+                cancel_callback()
+
+            if not isinstance(agent, Fibroblast) or not agent.alive:
+                continue
+
+            neighbors = self._get_neighbors_cached(
+                agent.x,
+                agent.y,
+                self._config.interaction_radius,
+                exclude=agent,
+            )
+
+            grid_x = int(agent.x / self._config.grid_resolution) % self._grid_shape[0]
+            grid_y = int(agent.y / self._config.grid_resolution) % self._grid_shape[1]
+            ecm_density = float(self._ecm_field[grid_x, grid_y])
+
+            stress = self._mechanotransduction_engine.compute_stress(
+                agent,
+                neighbors,
+                ecm_density,
+            )
+            if self._mechanotransduction_engine.should_activate(agent, stress):
+                myofibro = MyofibroblastAgent(
+                    agent_id=self._next_agent_id,
+                    x=agent.x,
+                    y=agent.y,
+                    rng=agent._rng,
+                )
+                self._next_agent_id += 1
+                agent.alive = False
+                new_myofibros.append(myofibro)
+
+        self._agents.extend(new_myofibros)
 
     def _remove_dead_agents(self) -> None:
         """Удаление мёртвых агентов.
@@ -1960,67 +2282,109 @@ class ABMModel:
         # Оставляем только живых
         self._agents = [agent for agent in self._agents if agent.alive]
 
-    def _update_cytokine_field(self, dt: float) -> None:
+    def _update_cytokine_field(
+        self,
+        dt: float,
+        cancel_callback: Callable[[], None] | None = None,
+    ) -> None:
         """Обновление поля цитокинов (диффузия + секреция + деградация).
 
         Args:
             dt: Временной шаг
+            cancel_callback: Необязательный callback кооперативной отмены
 
         Подробное описание: Description/description_abm_model.md#ABMModel._update_cytokine_field
         """
         # Деградация
         self._cytokine_field *= 1.0 - self._config.cytokine_decay * dt
 
+        # PRP: фоновая секреция PDGF/VEGF в поле (sde_model.py:_therapy_prp_secretion).
+        # Масштабирование нг/мл → grid units согласовано с integration._spatial_scaling (÷10).
+        prp_secretion = self._therapy_mods.get("prp_secretion_rate", 0.0)
+        if prp_secretion > 0:
+            self._cytokine_field += prp_secretion * dt / 10.0
+
         # Диффузия (упрощённая - усреднение с соседями)
         if self._config.cytokine_diffusion > 0:
+            pemf_boost = self._therapy_mods.get("pemf_boost", 0.0)
+            # PEMF ускоряет миграцию цитокинов (MAPK/ERK → повышенная диффузия).
             diffusion_coeff = (
-                self._config.cytokine_diffusion * dt / (self._config.grid_resolution**2)
+                self._config.cytokine_diffusion
+                * dt
+                * (1.0 + pemf_boost)
+                / (self._config.grid_resolution**2)
             )
             diffusion_coeff = min(diffusion_coeff, 0.25)  # Стабильность
 
-            new_field = self._cytokine_field.copy()
-            for i in range(self._grid_shape[0]):
-                for j in range(self._grid_shape[1]):
-                    neighbors = []
-                    for di, dj in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                        ni = (i + di) % self._grid_shape[0]
-                        nj = (j + dj) % self._grid_shape[1]
-                        neighbors.append(self._cytokine_field[ni, nj])
-                    avg_neighbors = np.mean(neighbors)
-                    new_field[i, j] += diffusion_coeff * (
-                        avg_neighbors - self._cytokine_field[i, j]
-                    )
-            self._cytokine_field = new_field
+            if cancel_callback is not None:
+                cancel_callback()
 
-        # Секреция от агентов
+            # Векторизованная диффузия: 5-точечный Лапласиан с периодическими BCs.
+            # Эквивалентно прежнему per-cell avg-of-4-neighbors, но через FFT-friendly convolve.
+            kernel = np.array(
+                [[0.0, 0.25, 0.0], [0.25, 0.0, 0.25], [0.0, 0.25, 0.0]],
+                dtype=self._cytokine_field.dtype,
+            )
+            avg = convolve(self._cytokine_field, kernel, mode="wrap")
+            self._cytokine_field = self._cytokine_field + diffusion_coeff * (
+                avg - self._cytokine_field
+            )
+
+        # Секреция от агентов (векторизованная через np.add.at)
+        if cancel_callback is not None:
+            cancel_callback()
+
+        secretion_xs: list[int] = []
+        secretion_ys: list[int] = []
+        secretion_vals: list[float] = []
+        res = self._config.grid_resolution
+        gx, gy = self._grid_shape
+
         for agent in self._agents:
             if not agent.alive:
                 continue
 
-            grid_x = int(agent.x / self._config.grid_resolution) % self._grid_shape[0]
-            grid_y = int(agent.y / self._config.grid_resolution) % self._grid_shape[1]
+            grid_x = int(agent.x / res) % gx
+            grid_y = int(agent.y / res) % gy
 
             if isinstance(agent, StemCell):
-                secretion = agent.secrete_cytokines(dt)
-                self._cytokine_field[grid_x, grid_y] += secretion
+                secretion_xs.append(grid_x)
+                secretion_ys.append(grid_y)
+                secretion_vals.append(float(agent.secrete_cytokines(dt)))
             elif isinstance(agent, Macrophage):
                 cytokines = agent.secrete_cytokines(dt)
-                total_secretion = sum(cytokines.values())
-                self._cytokine_field[grid_x, grid_y] += total_secretion
+                secretion_xs.append(grid_x)
+                secretion_ys.append(grid_y)
+                secretion_vals.append(float(sum(cytokines.values())))
+
+        if secretion_vals:
+            np.add.at(
+                self._cytokine_field,
+                (np.asarray(secretion_xs), np.asarray(secretion_ys)),
+                np.asarray(secretion_vals, dtype=self._cytokine_field.dtype),
+            )
 
         # Ограничение значений
         self._cytokine_field = np.clip(self._cytokine_field, 0.0, 100.0)
 
-    def _update_ecm_field(self, dt: float) -> None:
+    def _update_ecm_field(
+        self,
+        dt: float,
+        cancel_callback: Callable[[], None] | None = None,
+    ) -> None:
         """Обновление поля ECM.
 
         Args:
             dt: Временной шаг
+            cancel_callback: Необязательный callback кооперативной отмены
 
         Подробное описание: Description/description_abm_model.md#ABMModel._update_ecm_field
         """
         # Производство ECM фибробластами
         for agent in self._agents:
+            if cancel_callback is not None:
+                cancel_callback()
+
             if not isinstance(agent, Fibroblast) or not agent.alive:
                 continue
 
@@ -2053,19 +2417,21 @@ class ABMModel:
         cytokine_level = self._cytokine_field[grid_x, grid_y]
         ecm_level = self._ecm_field[grid_x, grid_y]
 
-        # Расчёт уровня воспаления на основе непрерывной поляризации
-        macros = [a for a in self._agents if isinstance(a, Macrophage) and a.alive]
-        if macros:
-            inflammation_level = sum(float(a.polarization_state) for a in macros) / len(macros)
-        else:
-            inflammation_level = 0.5
+        # Уровень воспаления берём из кэша (обновляется в step() один раз на шаг)
+        inflammation_level = self._inflammation_cache
 
         return {
             "cytokine_level": float(cytokine_level),
             "ecm_level": float(ecm_level),
             "inflammation_level": float(inflammation_level),
-            "prp_active": False,  # Будет устанавливаться при интеграции
-            "pemf_active": False,
+            "prp_active": self._therapy_active["prp"],
+            "pemf_active": self._therapy_active["pemf"],
+            "prp_boost": self._therapy_mods["prp_boost"],
+            "pemf_boost": self._therapy_mods["pemf_boost"],
+            "synergy": self._therapy_mods["synergy"],
+            "pemf_polarization_shift": self._therapy_mods["pemf_polarization_shift"],
+            # PRP увеличивает VEGF; используем cytokine_level как прокси + PRP-добавка.
+            "vegf_level": float(cytokine_level) + 0.1 * self._therapy_mods["prp_boost"],
         }
 
     def _get_cytokine_gradient(self, x: float, y: float) -> tuple[float, float]:
@@ -2104,6 +2470,26 @@ class ABMModel:
             return (grad_x / magnitude, grad_y / magnitude)
         return (0.0, 0.0)
 
+    def _get_neighbors_cached(
+        self,
+        x: float,
+        y: float,
+        radius: float,
+        exclude: "Agent | None" = None,
+    ) -> list["Agent"]:
+        """Кешированный wrapper над SpatialHash.get_neighbors.
+
+        Кеш сбрасывается в step() после rebuild — в течение одного тика spatial hash
+        неизменен, поэтому при совпадении (x, y, radius, exclude) возвращаем cached list.
+        """
+        key = (x, y, radius, id(exclude) if exclude is not None else 0)
+        hit = self._neighbor_cache.get(key)
+        if hit is not None:
+            return hit
+        result = self._spatial_hash.get_neighbors(x, y, radius, exclude=exclude)
+        self._neighbor_cache[key] = result
+        return result
+
     def _count_neighbors(self, agent: Agent, radius: float) -> int:
         """Подсчёт соседей агента в заданном радиусе (оптимизировано через SpatialHash).
 
@@ -2119,7 +2505,7 @@ class ABMModel:
 
         Подробное описание: Description/description_abm_model.md#ABMModel._count_neighbors
         """
-        neighbors = self._spatial_hash.get_neighbors(agent.x, agent.y, radius, exclude=agent)
+        neighbors = self._get_neighbors_cached(agent.x, agent.y, radius, exclude=agent)
         return len(neighbors)
 
     def _calculate_repulsion_force(self, agent: Agent) -> tuple[float, float]:
@@ -2140,7 +2526,7 @@ class ABMModel:
         r0 = self._config.interaction_radius
 
         # Получаем только соседей в радиусе взаимодействия через spatial hash
-        neighbors = self._spatial_hash.get_neighbors(agent.x, agent.y, r0, exclude=agent)
+        neighbors = self._get_neighbors_cached(agent.x, agent.y, r0, exclude=agent)
 
         for other in neighbors:
             # Вектор от other к agent
@@ -2226,7 +2612,7 @@ class ABMModel:
 
     def _apply_contact_inhibition(
         self,
-        agent: Agent,
+        agent: Agent,  # noqa: ARG002
         neighbors_count: int,
     ) -> float:
         """Модификатор пролиферации на основе контактного ингибирования.
@@ -2363,6 +2749,8 @@ def simulate_abm(
     config: ABMConfig | None = None,
     random_seed: int | None = None,
     snapshot_interval: float = 24.0,
+    progress_callback: Callable[[int, int], None] | None = None,
+    cancel_callback: Callable[[], None] | None = None,
 ) -> ABMTrajectory:
     """Convenience функция для ABM симуляции.
 
@@ -2371,6 +2759,8 @@ def simulate_abm(
         config: Конфигурация модели (опционально)
         random_seed: Seed для воспроизводимости
         snapshot_interval: Интервал сохранения снимков (часы)
+        progress_callback: Необязательный callback прогресса
+        cancel_callback: Необязательный callback кооперативной отмены
 
     Returns:
         ABMTrajectory с результатами
@@ -2378,4 +2768,9 @@ def simulate_abm(
     Подробное описание: Description/description_abm_model.md#simulate_abm
     """
     model = ABMModel(config=config, random_seed=random_seed)
-    return model.simulate(initial_params, snapshot_interval=snapshot_interval)
+    return model.simulate(
+        initial_params,
+        snapshot_interval=snapshot_interval,
+        progress_callback=progress_callback,
+        cancel_callback=cancel_callback,
+    )

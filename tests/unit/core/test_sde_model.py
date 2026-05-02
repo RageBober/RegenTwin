@@ -1,5 +1,4 @@
-"""
-TDD тесты для модуля sde_model.py
+"""TDD тесты для модуля sde_model.py
 
 Тестирует:
 - SDEConfig dataclass и валидацию
@@ -23,8 +22,6 @@ from src.core.sde_model import (
     TherapyProtocol,
     simulate_sde,
 )
-from src.data.parameter_extraction import ModelParameters
-
 
 # =============================================================================
 # Тесты для SDEConfig
@@ -251,8 +248,8 @@ class TestSDETrajectory:
         final_state = sample_trajectory.get_final_state()
 
         assert final_state.t == sample_trajectory.times[-1]
-        assert final_state.N == sample_trajectory.N_values[-1]
-        assert final_state.C == sample_trajectory.C_values[-1]
+        assert sample_trajectory.N_values[-1] == final_state.N
+        assert sample_trajectory.C_values[-1] == final_state.C
 
     def test_get_statistics_returns_dict(self, sample_trajectory):
         """Тест что get_statistics() возвращает словарь."""

@@ -1,5 +1,4 @@
-"""
-Генераторы mock данных для тестирования flow cytometry модулей.
+"""Генераторы mock данных для тестирования flow cytometry модулей.
 
 Используется для создания реалистичных FCS-подобных данных
 с известными характеристиками популяций.
@@ -7,8 +6,6 @@
 
 import numpy as np
 import pandas as pd
-from typing import Optional
-
 
 # =============================================================================
 # Константы из документации
@@ -62,13 +59,13 @@ SCENARIO_FRACTIONS = {
 # Генераторы данных
 # =============================================================================
 
+
 def generate_normal_fcs_data(
     n_events: int = 10000,
-    seed: Optional[int] = 42,
-    channels: Optional[list] = None,
+    seed: int | None = 42,
+    channels: list | None = None,
 ) -> pd.DataFrame:
-    """
-    Генерирует mock FCS данные с нормальными распределениями популяций.
+    """Генерирует mock FCS данные с нормальными распределениями популяций.
 
     Популяции:
     - Debris: ~20%
@@ -86,7 +83,7 @@ def generate_normal_fcs_data(
     channels : list, optional
         Список каналов. По умолчанию DEFAULT_CHANNELS
 
-    Returns
+    Returns:
     -------
     pd.DataFrame
         DataFrame с mock FCS данными
@@ -114,11 +111,10 @@ def generate_normal_fcs_data(
 
 def generate_inflamed_fcs_data(
     n_events: int = 10000,
-    seed: Optional[int] = 43,
-    channels: Optional[list] = None,
+    seed: int | None = 43,
+    channels: list | None = None,
 ) -> pd.DataFrame:
-    """
-    Генерирует mock FCS данные с повышенным воспалением.
+    """Генерирует mock FCS данные с повышенным воспалением.
 
     Характеристики:
     - Макрофаги: ~8% (повышено)
@@ -134,7 +130,7 @@ def generate_inflamed_fcs_data(
     channels : list, optional
         Список каналов
 
-    Returns
+    Returns:
     -------
     pd.DataFrame
         DataFrame с mock FCS данными
@@ -161,11 +157,10 @@ def generate_inflamed_fcs_data(
 
 def generate_regenerating_fcs_data(
     n_events: int = 10000,
-    seed: Optional[int] = 44,
-    channels: Optional[list] = None,
+    seed: int | None = 44,
+    channels: list | None = None,
 ) -> pd.DataFrame:
-    """
-    Генерирует mock FCS данные с высокой регенерацией.
+    """Генерирует mock FCS данные с высокой регенерацией.
 
     Характеристики:
     - CD34+ стволовые: ~10% (повышено)
@@ -182,7 +177,7 @@ def generate_regenerating_fcs_data(
     channels : list, optional
         Список каналов
 
-    Returns
+    Returns:
     -------
     pd.DataFrame
         DataFrame с mock FCS данными
@@ -216,8 +211,7 @@ def _generate_population_data(
     n_live_other: int,
     channels: list,
 ) -> dict:
-    """
-    Внутренняя функция для генерации данных всех популяций.
+    """Внутренняя функция для генерации данных всех популяций.
 
     Parameters
     ----------
@@ -228,7 +222,7 @@ def _generate_population_data(
     channels : list
         Список каналов
 
-    Returns
+    Returns:
     -------
     dict
         Словарь с данными для каждого канала
@@ -236,65 +230,79 @@ def _generate_population_data(
     data = {}
 
     # === FSC-A ===
-    data["FSC-A"] = np.concatenate([
-        rng.uniform(5000, 30000, n_debris),           # Debris - низкий
-        rng.normal(100000, 20000, n_live_other),      # Обычные живые
-        rng.normal(95000, 18000, n_cd34),             # CD34+
-        rng.normal(105000, 22000, n_macro),           # Макрофаги
-        rng.normal(70000, 25000, n_apopt),            # Апоптотические
-    ])
+    data["FSC-A"] = np.concatenate(
+        [
+            rng.uniform(5000, 30000, n_debris),  # Debris - низкий
+            rng.normal(100000, 20000, n_live_other),  # Обычные живые
+            rng.normal(95000, 18000, n_cd34),  # CD34+
+            rng.normal(105000, 22000, n_macro),  # Макрофаги
+            rng.normal(70000, 25000, n_apopt),  # Апоптотические
+        ]
+    )
 
     # === FSC-H (пропорционально FSC-A) ===
     n_singlets = n_live_other + n_cd34 + n_macro + n_apopt
-    fsc_h_ratio = np.concatenate([
-        rng.normal(0.9, 0.15, n_debris),              # Debris - вариабельно
-        rng.normal(0.95, 0.03, n_singlets - n_apopt), # Синглеты
-        rng.normal(0.95, 0.05, n_apopt),              # Апоптотические
-    ])
+    fsc_h_ratio = np.concatenate(
+        [
+            rng.normal(0.9, 0.15, n_debris),  # Debris - вариабельно
+            rng.normal(0.95, 0.03, n_singlets - n_apopt),  # Синглеты
+            rng.normal(0.95, 0.05, n_apopt),  # Апоптотические
+        ]
+    )
     data["FSC-H"] = data["FSC-A"] * fsc_h_ratio
 
     # === SSC-A ===
-    data["SSC-A"] = np.concatenate([
-        rng.uniform(3000, 20000, n_debris),           # Debris - низкий
-        rng.normal(50000, 15000, n_live_other),       # Обычные живые
-        rng.normal(40000, 12000, n_cd34),             # CD34+ - низкий SSC
-        rng.normal(70000, 20000, n_macro),            # Макрофаги - высокий SSC
-        rng.normal(40000, 20000, n_apopt),            # Апоптотические
-    ])
+    data["SSC-A"] = np.concatenate(
+        [
+            rng.uniform(3000, 20000, n_debris),  # Debris - низкий
+            rng.normal(50000, 15000, n_live_other),  # Обычные живые
+            rng.normal(40000, 12000, n_cd34),  # CD34+ - низкий SSC
+            rng.normal(70000, 20000, n_macro),  # Макрофаги - высокий SSC
+            rng.normal(40000, 20000, n_apopt),  # Апоптотические
+        ]
+    )
 
     # === CD34-APC ===
-    data["CD34-APC"] = np.concatenate([
-        rng.exponential(3000, n_debris),
-        rng.exponential(5000, n_live_other),
-        rng.normal(150000, 30000, n_cd34),            # CD34+ - высокий
-        rng.exponential(5000, n_macro),
-        rng.exponential(4000, n_apopt),
-    ])
+    data["CD34-APC"] = np.concatenate(
+        [
+            rng.exponential(3000, n_debris),
+            rng.exponential(5000, n_live_other),
+            rng.normal(150000, 30000, n_cd34),  # CD34+ - высокий
+            rng.exponential(5000, n_macro),
+            rng.exponential(4000, n_apopt),
+        ]
+    )
 
     # === CD14-PE ===
-    data["CD14-PE"] = np.concatenate([
-        rng.exponential(5000, n_debris),
-        rng.exponential(8000, n_live_other),
-        rng.exponential(7000, n_cd34),
-        rng.normal(100000, 20000, n_macro),           # Макрофаги - высокий
-        rng.exponential(6000, n_apopt),
-    ])
+    data["CD14-PE"] = np.concatenate(
+        [
+            rng.exponential(5000, n_debris),
+            rng.exponential(8000, n_live_other),
+            rng.exponential(7000, n_cd34),
+            rng.normal(100000, 20000, n_macro),  # Макрофаги - высокий
+            rng.exponential(6000, n_apopt),
+        ]
+    )
 
     # === CD68-FITC ===
-    data["CD68-FITC"] = np.concatenate([
-        rng.exponential(2000, n_debris),
-        rng.exponential(3000, n_live_other),
-        rng.exponential(2500, n_cd34),
-        rng.normal(80000, 15000, n_macro),            # Макрофаги - высокий
-        rng.exponential(2500, n_apopt),
-    ])
+    data["CD68-FITC"] = np.concatenate(
+        [
+            rng.exponential(2000, n_debris),
+            rng.exponential(3000, n_live_other),
+            rng.exponential(2500, n_cd34),
+            rng.normal(80000, 15000, n_macro),  # Макрофаги - высокий
+            rng.exponential(2500, n_apopt),
+        ]
+    )
 
     # === Annexin-V-Pacific Blue ===
-    data["Annexin-V-Pacific Blue"] = np.concatenate([
-        rng.exponential(3000, n_debris),
-        rng.exponential(2000, n_live_other + n_cd34 + n_macro),  # Живые - низкий
-        rng.normal(120000, 20000, n_apopt),           # Апоптотические - высокий
-    ])
+    data["Annexin-V-Pacific Blue"] = np.concatenate(
+        [
+            rng.exponential(3000, n_debris),
+            rng.exponential(2000, n_live_other + n_cd34 + n_macro),  # Живые - низкий
+            rng.normal(120000, 20000, n_apopt),  # Апоптотические - высокий
+        ]
+    )
 
     # Клипируем значения к допустимому диапазону FCS
     for key in data:
@@ -310,10 +318,9 @@ def generate_bimodal_data(
     high_mean: float = 100000,
     high_std: float = 20000,
     high_fraction: float = 0.1,
-    seed: Optional[int] = None,
+    seed: int | None = None,
 ) -> np.ndarray:
-    """
-    Генерирует бимодальные данные для тестирования автопорогов.
+    """Генерирует бимодальные данные для тестирования автопорогов.
 
     Parameters
     ----------
@@ -328,7 +335,7 @@ def generate_bimodal_data(
     seed : int, optional
         Seed для воспроизводимости
 
-    Returns
+    Returns:
     -------
     np.ndarray
         1D массив с бимодальными данными
@@ -350,10 +357,9 @@ def generate_bimodal_data(
 def generate_singlets_doublets_data(
     n_events: int = 1000,
     doublet_fraction: float = 0.1,
-    seed: Optional[int] = None,
+    seed: int | None = None,
 ) -> tuple:
-    """
-    Генерирует данные FSC-A/FSC-H с синглетами и дублетами.
+    """Генерирует данные FSC-A/FSC-H с синглетами и дублетами.
 
     Parameters
     ----------
@@ -364,7 +370,7 @@ def generate_singlets_doublets_data(
     seed : int, optional
         Seed для воспроизводимости
 
-    Returns
+    Returns:
     -------
     tuple
         (fsc_a, fsc_h) - два numpy массива

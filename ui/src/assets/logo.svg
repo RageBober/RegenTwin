@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Outer cell membrane -->
+  <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="1.5" opacity="0.25"/>
+  <!-- Inner organelle ring -->
+  <circle cx="16" cy="16" r="9" stroke="currentColor" stroke-width="1.2" opacity="0.4" stroke-dasharray="3 2"/>
+  <!-- DNA double helix - strand 1 -->
+  <path d="M12 6 C14 10, 18 12, 16 16 C14 20, 18 22, 20 26" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+  <!-- DNA double helix - strand 2 -->
+  <path d="M20 6 C18 10, 14 12, 16 16 C18 20, 14 22, 12 26" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+  <!-- Cross rungs -->
+  <line x1="13.5" y1="9" x2="18.5" y2="9" stroke="currentColor" stroke-width="1" opacity="0.5" stroke-linecap="round"/>
+  <line x1="14.5" y1="13" x2="17.5" y2="13" stroke="currentColor" stroke-width="1" opacity="0.5" stroke-linecap="round"/>
+  <line x1="14.5" y1="19" x2="17.5" y2="19" stroke="currentColor" stroke-width="1" opacity="0.5" stroke-linecap="round"/>
+  <line x1="13.5" y1="23" x2="18.5" y2="23" stroke="currentColor" stroke-width="1" opacity="0.5" stroke-linecap="round"/>
+  <!-- Regeneration pulse -->
+  <circle cx="16" cy="16" r="3" fill="currentColor" opacity="0.15"/>
+  <circle cx="16" cy="16" r="1.5" fill="currentColor" opacity="0.35"/>
+</svg>

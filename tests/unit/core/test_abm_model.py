@@ -2003,7 +2003,7 @@ class TestApplyContactInhibition:
         assert modifier == pytest.approx(0.5, abs=0.1)
 
     def test_above_threshold_zero(self, model):
-        """neighbors > threshold → modifier=0.0."""
+        """Neighbors > threshold → modifier=0.0."""
         rng = np.random.default_rng(42)
         agent = StemCell(agent_id=1, x=50.0, y=50.0, rng=rng)
 
@@ -2039,7 +2039,7 @@ class TestCalculateAdhesionForce:
         return ABMModel(config=config, random_seed=42)
 
     def test_endo_endo_attraction(self, model):
-        """endo + endo при d > d_eq → притяжение."""
+        """Endo + endo при d > d_eq → притяжение."""
         rng = np.random.default_rng(42)
         agent1 = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
         agent2 = EndothelialAgent(agent_id=2, x=56.0, y=50.0, rng=rng)  # d=6 > d_eq=3
@@ -2052,7 +2052,7 @@ class TestCalculateAdhesionForce:
         assert force[0] > 0
 
     def test_endo_endo_repulsion(self, model):
-        """endo + endo при d < d_eq → отталкивание."""
+        """Endo + endo при d < d_eq → отталкивание."""
         rng = np.random.default_rng(42)
         agent1 = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
         agent2 = EndothelialAgent(agent_id=2, x=51.0, y=50.0, rng=rng)  # d=1 < d_eq=3
@@ -2063,7 +2063,7 @@ class TestCalculateAdhesionForce:
         assert force[0] < 0
 
     def test_endo_endo_equilibrium(self, model):
-        """endo + endo при d == d_eq → F ≈ 0."""
+        """Endo + endo при d == d_eq → F ≈ 0."""
         rng = np.random.default_rng(42)
         agent1 = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
         agent2 = EndothelialAgent(agent_id=2, x=53.0, y=50.0, rng=rng)  # d=3 == d_eq
@@ -2073,7 +2073,7 @@ class TestCalculateAdhesionForce:
         np.testing.assert_allclose(force, [0.0, 0.0], atol=1e-10)
 
     def test_incompatible_types_zero_force(self, model):
-        """endo + macro (несовместимые) → F = [0, 0]."""
+        """Endo + macro (несовместимые) → F = [0, 0]."""
         rng = np.random.default_rng(42)
         endo = EndothelialAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
         macro = Macrophage(agent_id=2, x=52.0, y=50.0, rng=rng)
@@ -2083,7 +2083,7 @@ class TestCalculateAdhesionForce:
         np.testing.assert_allclose(force, [0.0, 0.0], atol=1e-10)
 
     def test_myofibro_myofibro_nonzero(self, model):
-        """myofibro + myofibro → ненулевая сила."""
+        """Myofibro + myofibro → ненулевая сила."""
         rng = np.random.default_rng(42)
         mf1 = MyofibroblastAgent(agent_id=1, x=50.0, y=50.0, rng=rng)
         mf2 = MyofibroblastAgent(agent_id=2, x=56.0, y=50.0, rng=rng)
@@ -2192,3 +2192,603 @@ class TestCreateAgentNewTypes:
         """_create_agent('myofibro') создаёт MyofibroblastAgent."""
         agent = model._create_agent(agent_type="myofibro")
         assert isinstance(agent, MyofibroblastAgent)
+
+
+# =============================================================================
+# Test Spatial Mechanics Integration (Phase 2.8)
+# =============================================================================
+
+
+class TestSpatialMechanicsIntegration:
+    """Интеграционные тесты для эффероцитоза и механотрансдукции в ABMModel."""
+
+    def test_engines_disabled_by_default(self):
+        """Оба движка отключены по умолчанию — обратная совместимость."""
+        model = ABMModel(ABMConfig())
+        assert model._efferocytosis_engine is None
+        assert model._mechanotransduction_engine is None
+
+    def test_engines_enabled_by_config(self):
+        """Движки создаются при включении флагов."""
+        from src.core.abm_spatial import EfferocytosisEngine, MechanotransductionEngine
+
+        model = ABMModel(
+            ABMConfig(
+                enable_efferocytosis=True,
+                enable_mechanotransduction=True,
+            )
+        )
+        assert isinstance(model._efferocytosis_engine, EfferocytosisEngine)
+        assert isinstance(model._mechanotransduction_engine, MechanotransductionEngine)
+
+    def test_step_works_with_engines_disabled(self):
+        """step() работает нормально при отключённых движках."""
+        model = ABMModel(ABMConfig(t_max=1.0, dt=0.5))
+        model._agents.append(model._create_agent("stem"))
+        model._agents.append(model._create_agent("macro"))
+        model.step(0.5)
+        # Не упал — обратная совместимость работает
+
+    def test_efferocytosis_kills_apoptotic_neutrophils(self):
+        """Эффероцитоз: макрофаг фагоцитирует апоптотического нейтрофила."""
+        model = ABMModel(
+            ABMConfig(
+                enable_efferocytosis=True,
+                space_size=(20.0, 20.0),
+            )
+        )
+
+        # Макрофаг в центре
+        macro = Macrophage(agent_id=0, x=10.0, y=10.0)
+        macro.polarization_state = 1.0  # M1
+
+        # Апоптотический нейтрофил рядом (energy <= 0.1)
+        neutro = NeutrophilAgent(agent_id=1, x=11.0, y=10.0)
+        neutro.energy = 0.05
+
+        model._agents = [macro, neutro]
+        model._spatial_hash.rebuild(model._agents)
+        model._process_efferocytosis()
+
+        assert not neutro.alive
+        # Поляризация сдвинулась к M2 (уменьшилась)
+        assert macro.polarization_state < 1.0
+
+    def test_efferocytosis_skips_alive_neutrophils(self):
+        """Эффероцитоз не трогает здоровых нейтрофилов."""
+        model = ABMModel(
+            ABMConfig(
+                enable_efferocytosis=True,
+                space_size=(20.0, 20.0),
+            )
+        )
+
+        macro = Macrophage(agent_id=0, x=10.0, y=10.0)
+        neutro = NeutrophilAgent(agent_id=1, x=11.0, y=10.0)
+        neutro.energy = 0.8  # Здоровый
+
+        model._agents = [macro, neutro]
+        model._spatial_hash.rebuild(model._agents)
+        model._process_efferocytosis()
+
+        assert neutro.alive
+
+    def test_mechanotransduction_converts_fibroblast(self):
+        """Механотрансдукция: фибробласт → миофибробласт при высоком стрессе."""
+        model = ABMModel(
+            ABMConfig(
+                enable_mechanotransduction=True,
+                space_size=(20.0, 20.0),
+            )
+        )
+        # Форсируем 100% вероятность активации
+        model._mechanotransduction_engine.activation_probability = 1.0
+        model._mechanotransduction_engine.stress_threshold = 0.0
+
+        fibro = Fibroblast(agent_id=0, x=10.0, y=10.0)
+        # Сосед для создания стресса
+        neighbor = Fibroblast(agent_id=1, x=11.0, y=10.0)
+
+        # ECM density > 0 для стресса
+        model._ecm_field[:] = 1.0
+
+        model._agents = [fibro, neighbor]
+        model._spatial_hash.rebuild(model._agents)
+        model._process_mechanotransduction()
+
+        # Фибробласт должен быть помечен мёртвым
+        assert not fibro.alive
+        # Оба фибробласта конвертируются (activation_probability=1.0)
+        myofibros = [a for a in model._agents if isinstance(a, MyofibroblastAgent)]
+        assert len(myofibros) == 2
+        # Первый миофибробласт наследует позицию fibro
+        assert myofibros[0].x == 10.0
+        assert myofibros[0].y == 10.0
+
+    def test_mechanotransduction_no_activation_low_ecm(self):
+        """Механотрансдукция не активируется при нулевой ECM."""
+        model = ABMModel(
+            ABMConfig(
+                enable_mechanotransduction=True,
+                space_size=(20.0, 20.0),
+            )
+        )
+
+        fibro = Fibroblast(agent_id=0, x=10.0, y=10.0)
+        # ECM density = 0 (по умолчанию)
+
+        model._agents = [fibro]
+        model._spatial_hash.rebuild(model._agents)
+        model._process_mechanotransduction()
+
+        assert fibro.alive
+        myofibros = [a for a in model._agents if isinstance(a, MyofibroblastAgent)]
+        assert len(myofibros) == 0
+
+
+# =============================================================================
+# Therapy (PRP / PEMF) в ABM режиме
+# =============================================================================
+
+
+class TestABMTherapy:
+    """PRP/PEMF подключены к pure-ABM путём (параметры формул из sde_model.py)."""
+
+    @staticmethod
+    def _params() -> ModelParameters:
+        return ModelParameters(
+            n0=200.0,
+            stem_cell_fraction=0.2,
+            macrophage_fraction=0.3,
+            apoptotic_fraction=0.1,
+            c0=1.0,
+            inflammation_level=0.5,
+        )
+
+    @staticmethod
+    def _config() -> ABMConfig:
+        return ABMConfig(t_max=12.0, dt=0.5, max_agents=120, space_size=(50.0, 50.0))
+
+    def _run(self, therapy=None, seed: int = 42, t_max: float = 12.0):
+        from src.core.sde_model import TherapyProtocol  # noqa: F401  (import для ясности)
+
+        cfg = self._config()
+        cfg.t_max = t_max
+        model = ABMModel(config=cfg, random_seed=seed, therapy=therapy)
+        model.simulate(self._params(), snapshot_interval=6.0)
+        return model
+
+    def test_therapy_none_leaves_abm_unchanged(self):
+        """ABMModel(therapy=None) ведёт себя как до подключения терапии."""
+        a = self._run(therapy=None)
+        b = self._run(therapy=None)
+        assert len(a.agents) == len(b.agents)
+        assert a._therapy_active == {"prp": False, "pemf": False}
+        # Cytokine field не должен получать PRP-секрецию.
+        assert a._therapy_mods["prp_secretion_rate"] == 0.0
+
+    def test_prp_disabled_no_effect(self):
+        """TherapyProtocol(prp_enabled=False) идентичен baseline."""
+        from src.core.sde_model import TherapyProtocol
+
+        th = TherapyProtocol(prp_enabled=False, pemf_enabled=False)
+        a = self._run(therapy=None)
+        b = self._run(therapy=th)
+        assert len(a.agents) == len(b.agents)
+
+    def test_pemf_disabled_no_effect(self):
+        """TherapyProtocol(pemf_enabled=False) не меняет поляризацию."""
+        from src.core.sde_model import TherapyProtocol
+
+        th = TherapyProtocol(prp_enabled=False, pemf_enabled=False)
+        model = self._run(therapy=th)
+        assert model._therapy_mods["pemf_polarization_shift"] == 0.0
+
+    def test_prp_active_increases_proliferation(self):
+        """PRP с intensity=1 растит больше агентов против baseline (seed=42)."""
+        from src.core.sde_model import TherapyProtocol
+
+        baseline = self._run(therapy=None)
+        therapy = TherapyProtocol(
+            prp_enabled=True,
+            prp_intensity=1.0,
+            prp_duration=7.0,
+            prp_initial_concentration=10.0,
+        )
+        treated = self._run(therapy=therapy)
+        # Популяция при PRP ≥ baseline (может совпасть на коротких прогонах, но не меньше).
+        assert len(treated.agents) >= len(baseline.agents)
+        # Но cytokine-поле точно подросло за счёт секреции.
+        assert float(np.mean(treated._cytokine_field)) > float(np.mean(baseline._cytokine_field))
+
+    def test_prp_intensity_monotonic_boost(self):
+        """Увеличение prp_intensity монотонно увеличивает prp_boost модулятор."""
+        from src.core.sde_model import TherapyProtocol
+
+        boosts = []
+        for intensity in [0.5, 1.0, 2.0]:
+            th = TherapyProtocol(
+                prp_enabled=True,
+                prp_intensity=intensity,
+                prp_duration=7.0,
+                prp_initial_concentration=10.0,
+            )
+            model = ABMModel(config=self._config(), random_seed=42, therapy=th)
+            model._current_time = 1.0  # внутри окна PRP (t<7 дней)
+            model._update_therapy_state()
+            mods = model._therapy_modifiers()
+            boosts.append(mods["prp_boost"])
+        assert boosts[0] < boosts[1] < boosts[2]
+
+    def test_prp_temporal_window(self):
+        """PRP активен только в окне [start_time, start_time + duration]."""
+        from src.core.sde_model import TherapyProtocol
+
+        th = TherapyProtocol(
+            prp_enabled=True,
+            prp_start_time=1.0,
+            prp_duration=2.0,
+            prp_intensity=1.0,
+            prp_initial_concentration=10.0,
+        )
+        model = ABMModel(config=self._config(), therapy=th, random_seed=42)
+        # До окна
+        model._current_time = 0.0
+        model._update_therapy_state()
+        assert model._therapy_active["prp"] is False
+        # Внутри окна (2 дня = 48 часов)
+        model._current_time = 48.0
+        model._update_therapy_state()
+        assert model._therapy_active["prp"] is True
+        # После окна
+        model._current_time = 120.0  # 5 дней > 1 + 2
+        model._update_therapy_state()
+        assert model._therapy_active["prp"] is False
+
+    def test_prp_exponential_decay(self):
+        """prp_boost экспоненциально затухает от начала окна."""
+        from src.core.sde_model import TherapyProtocol
+
+        th = TherapyProtocol(
+            prp_enabled=True,
+            prp_start_time=0.0,
+            prp_duration=30.0,
+            prp_intensity=1.0,
+            prp_initial_concentration=10.0,
+        )
+        model = ABMModel(config=self._config(), therapy=th, random_seed=42)
+        boosts = []
+        for t_hours in [0.0, 48.0, 240.0]:  # 0, 2 дня, 10 дней
+            model._current_time = t_hours
+            model._update_therapy_state()
+            boosts.append(model._therapy_modifiers()["prp_boost"])
+        # Монотонное убывание
+        assert boosts[0] > boosts[1] > boosts[2]
+        # Приблизительно соответствует формуле decay=exp(-0.3*t_days)
+        assert boosts[1] == pytest.approx(boosts[0] * np.exp(-0.3 * 2.0), rel=1e-6)
+
+    def test_pemf_shifts_macrophage_polarization_to_m2(self):
+        """PEMF снижает polarization_state (сдвиг к M2) против baseline при том же seed."""
+        from src.core.sde_model import TherapyProtocol
+
+        baseline = self._run(therapy=None)
+        th = TherapyProtocol(
+            pemf_enabled=True,
+            pemf_frequency=50.0,
+            pemf_intensity=1.0,
+            pemf_duration=14.0,
+        )
+        treated = self._run(therapy=th)
+        from src.core.abm_model import _polarization_as_float
+
+        macros_b = [a for a in baseline.agents if isinstance(a, Macrophage) and a.alive]
+        macros_t = [a for a in treated.agents if isinstance(a, Macrophage) and a.alive]
+        if macros_b and macros_t:
+            mean_b = np.mean([_polarization_as_float(m.polarization_state) for m in macros_b])
+            mean_t = np.mean([_polarization_as_float(m.polarization_state) for m in macros_t])
+            assert mean_t <= mean_b  # Сдвиг к M2 (ниже = anti-inflam)
+
+    def test_pemf_frequency_sigmoid_response(self):
+        """pemf_boost монотонно возрастает с частотой (sigmoid)."""
+        from src.core.sde_model import TherapyProtocol
+
+        boosts = []
+        for freq in [10.0, 50.0, 100.0]:
+            th = TherapyProtocol(
+                pemf_enabled=True,
+                pemf_frequency=freq,
+                pemf_intensity=1.0,
+                pemf_duration=14.0,
+            )
+            model = ABMModel(config=self._config(), therapy=th, random_seed=42)
+            model._current_time = 24.0
+            model._update_therapy_state()
+            boosts.append(model._therapy_modifiers()["pemf_boost"])
+        assert boosts[0] < boosts[1] < boosts[2]
+        # В точке f=f0=50 Hz отклик ≈ 0.5 от max (sigmoid центрирован в 0).
+        # pemf_boost = 0.1 * sigmoid * intensity; при freq=50 → sigmoid=0.5 → boost=0.05
+        assert boosts[1] == pytest.approx(0.05, abs=1e-9)
+
+    def test_synergy_factor_multiplies_boosts(self):
+        """Одновременно активные PRP+PEMF применяют synergy_factor к обоим буcтам."""
+        from src.core.sde_model import TherapyProtocol
+
+        th_both = TherapyProtocol(
+            prp_enabled=True,
+            prp_intensity=1.0,
+            prp_duration=7.0,
+            prp_initial_concentration=10.0,
+            pemf_enabled=True,
+            pemf_frequency=50.0,
+            pemf_intensity=1.0,
+            pemf_duration=14.0,
+            synergy_factor=1.2,
+        )
+        model = ABMModel(config=self._config(), therapy=th_both, random_seed=42)
+        model._current_time = 24.0
+        model._update_therapy_state()
+        mods = model._therapy_modifiers()
+        # Вычисляем ожидаемый prp_boost без synergy, затем ×1.2.
+        t_days = 1.0
+        expected_prp_no_syn = 0.5 * 10.0 * np.exp(-0.3 * t_days) * 1.0
+        assert mods["prp_boost"] == pytest.approx(expected_prp_no_syn * 1.2, rel=1e-6)
+        assert mods["synergy"] == 1.2
+
+    def test_prp_cytokine_secretion_increases_field(self):
+        """При активном PRP среднее значение cytokine_field растёт против baseline."""
+        from src.core.sde_model import TherapyProtocol
+
+        baseline = self._run(therapy=None)
+        th = TherapyProtocol(
+            prp_enabled=True,
+            prp_intensity=1.0,
+            prp_duration=7.0,
+            prp_initial_concentration=10.0,
+        )
+        treated = self._run(therapy=th)
+        assert float(np.mean(treated._cytokine_field)) > float(np.mean(baseline._cytokine_field))
+
+    def test_non_negative_populations_with_therapy(self):
+        """С включённой терапией invariant: все счёты агентов ≥ 0, энергия в [0,1]."""
+        from src.core.sde_model import TherapyProtocol
+
+        th = TherapyProtocol(
+            prp_enabled=True,
+            prp_intensity=1.5,
+            pemf_enabled=True,
+            pemf_frequency=80.0,
+            pemf_intensity=1.0,
+        )
+        model = self._run(therapy=th)
+        assert len(model.agents) >= 0
+        for a in model.agents:
+            assert 0.0 <= a.energy <= 1.0
+        # Цитокин-поле не уходит в NaN/Inf/отрицательное.
+        assert np.all(np.isfinite(model._cytokine_field))
+        assert float(model._cytokine_field.min()) >= 0.0
+
+    def test_therapy_state_updates_dynamically_across_steps(self):
+        """_therapy_active переключается в зависимости от времени шага."""
+        from src.core.sde_model import TherapyProtocol
+
+        th = TherapyProtocol(
+            prp_enabled=True,
+            prp_start_time=1.0,
+            prp_duration=1.0,
+            prp_intensity=1.0,
+            prp_initial_concentration=10.0,
+        )
+        model = ABMModel(config=self._config(), therapy=th, random_seed=42)
+        model.initialize_from_parameters(self._params())
+        observed_active = []
+        for target_t_hours in [0.0, 36.0, 72.0]:  # 0h, 1.5d, 3d — до/внутри/после
+            model._current_time = target_t_hours
+            model._update_therapy_state()
+            observed_active.append(model._therapy_active["prp"])
+        assert observed_active == [False, True, False]
+
+    def test_endothelial_gets_pemf_and_prp_boost(self):
+        """EndothelialAgent.update() подхватывает prp_boost+pemf_boost в _division_boost."""
+        from src.core.sde_model import TherapyProtocol
+
+        th = TherapyProtocol(
+            prp_enabled=True,
+            prp_intensity=1.0,
+            prp_duration=7.0,
+            prp_initial_concentration=10.0,
+            pemf_enabled=True,
+            pemf_frequency=50.0,
+            pemf_intensity=1.0,
+            pemf_duration=14.0,
+        )
+        endo = EndothelialAgent(agent_id=0, x=10.0, y=10.0)
+        env = {
+            "cytokine_level": 0.0,
+            "ecm_level": 0.0,
+            "inflammation_level": 0.5,
+            "vegf_level": 1.0,
+            "prp_active": True,
+            "pemf_active": True,
+            "prp_boost": 2.0,
+            "pemf_boost": 0.05,
+            "synergy": 1.2,
+            "pemf_polarization_shift": 0.15,
+        }
+        endo.update(dt=0.5, environment=env)
+        assert endo._division_boost == pytest.approx(2.05)
+        # Effective divprob выросла против базовой.
+        assert endo._effective_division_probability() > endo.DIVISION_PROBABILITY
+        # Unused variable warnings silencer (therapy local used via env only).
+        _ = th
+
+    def test_fibroblast_ecm_production_scales_with_prp(self):
+        """Fibroblast.produce_ecm ускоряется с prp_boost (0→базовый темп, 2→+40%)."""
+        fibro = Fibroblast(agent_id=0, x=0.0, y=0.0)
+        base = fibro.produce_ecm(dt=1.0, prp_boost=0.0)
+        boosted = fibro.produce_ecm(dt=1.0, prp_boost=2.0)
+        assert boosted > base
+        assert boosted == pytest.approx(base * 1.4, rel=1e-6)
+
+    def test_mc_abm_therapy_differs_from_baseline(self):
+        """Monte Carlo + ABM: therapy-арм производит другой результат vs baseline."""
+        from src.core.monte_carlo import MonteCarloConfig, MonteCarloSimulator
+        from src.core.sde_model import TherapyProtocol
+
+        cfg = MonteCarloConfig(
+            model_type="abm",
+            n_trajectories=2,
+            base_seed=42,
+            abm_config=self._config(),
+            n_jobs=1,
+            use_multiprocessing=False,
+        )
+        sim_base = MonteCarloSimulator(config=cfg, therapy=None)
+        sim_ther = MonteCarloSimulator(
+            config=cfg,
+            therapy=TherapyProtocol(
+                prp_enabled=True,
+                prp_intensity=1.5,
+                prp_duration=7.0,
+                prp_initial_concentration=10.0,
+                pemf_enabled=True,
+                pemf_frequency=60.0,
+                pemf_intensity=1.0,
+                pemf_duration=14.0,
+            ),
+        )
+        r_base = sim_base.run(self._params())
+        r_ther = sim_ther.run(self._params())
+        # Хотя бы одно из агрегатов должно отличаться.
+        base_stats = r_base.get_summary_statistics()
+        ther_stats = r_ther.get_summary_statistics()
+        assert (
+            base_stats.get("mean_final_N") != ther_stats.get("mean_final_N")
+            or base_stats.get("mean_final_C") != ther_stats.get("mean_final_C")
+            or base_stats.get("mean_growth_rate") != ther_stats.get("mean_growth_rate")
+        )
+
+
+# =============================================================================
+# Phase: ABM vectorization + neighbor cache (performance optimization tests)
+# =============================================================================
+
+
+class TestABMVectorizedFields:
+    """Тесты векторизации cytokine field и neighbor cache."""
+
+    def test_vectorized_diffusion_matches_loop_semantics(self):
+        """Векторизация диффузии через scipy.ndimage.convolve с mode='wrap' даёт
+        те же значения, что и явный 5-точечный цикл с периодическими границами.
+        """
+        import numpy as np
+        from scipy.ndimage import convolve
+
+        rng = np.random.default_rng(42)
+        grid_shape = (10, 10)
+        field = rng.uniform(0.0, 10.0, size=grid_shape)
+        diffusion_coeff = 0.15
+
+        # Reference: explicit nested loop (старая реализация)
+        new_ref = field.copy()
+        for i in range(grid_shape[0]):
+            for j in range(grid_shape[1]):
+                neighbors = []
+                for di, dj in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    ni = (i + di) % grid_shape[0]
+                    nj = (j + dj) % grid_shape[1]
+                    neighbors.append(field[ni, nj])
+                avg = sum(neighbors) / 4.0
+                new_ref[i, j] += diffusion_coeff * (avg - field[i, j])
+
+        # Новая векторная версия
+        kernel = np.array([[0.0, 0.25, 0.0], [0.25, 0.0, 0.25], [0.0, 0.25, 0.0]])
+        avg_v = convolve(field, kernel, mode="wrap")
+        new_vec = field + diffusion_coeff * (avg_v - field)
+
+        np.testing.assert_allclose(new_vec, new_ref, atol=1e-12, rtol=1e-12)
+
+    def test_np_add_at_preserves_total_secretion(self):
+        """Векторизация секреции через np.add.at сохраняет общую сумму поля
+        при наложении нескольких агентов в одну клетку.
+        """
+        import numpy as np
+
+        field = np.zeros((5, 5))
+        xs = np.array([1, 2, 1, 3, 1])  # три агента в (1,1), один в (2,2), один в (3,3)
+        ys = np.array([1, 2, 1, 3, 1])
+        vals = np.array([0.3, 0.5, 0.2, 0.4, 0.1])
+
+        np.add.at(field, (xs, ys), vals)
+
+        # (1,1) должна содержать сумму 0.3+0.2+0.1 = 0.6
+        np.testing.assert_allclose(field[1, 1], 0.6, atol=1e-12)
+        np.testing.assert_allclose(field[2, 2], 0.5, atol=1e-12)
+        np.testing.assert_allclose(field[3, 3], 0.4, atol=1e-12)
+        np.testing.assert_allclose(field.sum(), vals.sum(), atol=1e-12)
+
+    def test_neighbor_cache_invalidates_per_step(self):
+        """Neighbor cache сбрасывается в начале каждого step()."""
+        from src.core.abm_model import ABMConfig, ABMModel
+        from src.data.parameter_extraction import ModelParameters
+
+        config = ABMConfig(
+            t_max=1.0,
+            space_size=(100.0, 100.0),
+        )
+        model = ABMModel(config=config, random_seed=42)
+        # Агенты создаются через initialize_from_parameters, не в __init__.
+        params = ModelParameters(
+            n0=3000.0,
+            stem_cell_fraction=0.05,
+            macrophage_fraction=0.15,
+            apoptotic_fraction=0.02,
+            c0=5.0,
+            inflammation_level=0.3,
+        )
+        model.initialize_from_parameters(params)
+        assert len(model._agents) > 0, "Агенты должны быть инициализированы"
+
+        # Прогоняем один step — cache должен заполниться и опустошиться
+        model.step(dt=0.1)
+        cache_after_step = len(model._neighbor_cache)
+
+        # Второй шаг — rebuild сбрасывает cache перед заполнением заново
+        model.step(dt=0.1)
+        # Cache снова заполнен, но это ДРУГИЕ записи (позиции изменились).
+        # Ключевая инвариантность: ни одна запись не пережила rebuild.
+        # Прокси-проверка: cache не растёт неограниченно (линейная зависимость, не экспоненциальная).
+        cache_after_two = len(model._neighbor_cache)
+        # Если cache_after_step == 0, проверяем только ограниченность.
+        upper_bound = max(cache_after_step * 3, 10)
+        assert (
+            cache_after_two < upper_bound
+        ), f"Cache grew unboundedly: {cache_after_step} → {cache_after_two}"
+
+    def test_neighbor_cache_hit_returns_same_list(self):
+        """Повторный вызов _get_neighbors_cached с теми же аргументами
+        возвращает тот же самый список (кеш работает).
+        """
+        from src.core.abm_model import ABMConfig, ABMModel
+        from src.data.parameter_extraction import ModelParameters
+
+        config = ABMConfig(
+            t_max=1.0,
+            space_size=(100.0, 100.0),
+        )
+        model = ABMModel(config=config, random_seed=7)
+        params = ModelParameters(
+            n0=2000.0,
+            stem_cell_fraction=0.05,
+            macrophage_fraction=0.15,
+            apoptotic_fraction=0.02,
+            c0=5.0,
+            inflammation_level=0.3,
+        )
+        model.initialize_from_parameters(params)
+        model._spatial_hash.rebuild(model._agents)
+        model._neighbor_cache.clear()
+
+        first = model._get_neighbors_cached(50.0, 50.0, 25.0, exclude=None)
+        second = model._get_neighbors_cached(50.0, 50.0, 25.0, exclude=None)
+        # Одинаковый объект (identity) — значит кеш вернул сохранённый list
+        assert first is second

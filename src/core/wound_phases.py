@@ -52,14 +52,14 @@ class PhaseIndicators:
     """
 
     phase: WoundPhase = WoundPhase.HEMOSTASIS  # Текущая фаза
-    confidence: float = 0.0       # Уверенность (0-1)
+    confidence: float = 0.0  # Уверенность (0-1)
     dominant_cells: list[str] = field(
         default_factory=list,
     )  # Доминирующие клетки
     dominant_cytokines: list[str] = field(
         default_factory=list,
     )  # Доминирующие цитокины
-    phase_progress: float = 0.0   # Прогресс внутри фазы (0-1)
+    phase_progress: float = 0.0  # Прогресс внутри фазы (0-1)
 
 
 class WoundPhaseDetector:
@@ -88,7 +88,8 @@ class WoundPhaseDetector:
         self.params = params if params is not None else ParameterSet()
 
     def detect_phase(
-        self, state: ExtendedSDEState,
+        self,
+        state: ExtendedSDEState,
     ) -> PhaseIndicators:
         """Определение текущей фазы заживления по состоянию.
 
@@ -111,30 +112,39 @@ class WoundPhaseDetector:
             WoundPhase.PROLIFERATION: self._is_proliferation(state),
             WoundPhase.REMODELING: self._is_remodeling(state),
         }
-        best_phase = max(confidences, key=confidences.get)
+        best_phase = max(confidences, key=lambda k: confidences[k])
         best_confidence = confidences[best_phase]
 
         # Доминирующие клетки (топ-3 по значению)
         cells = {
-            "P": state.P, "Ne": state.Ne, "M1": state.M1, "M2": state.M2,
-            "F": state.F, "Mf": state.Mf, "E": state.E, "S": state.S,
+            "P": state.P,
+            "Ne": state.Ne,
+            "M1": state.M1,
+            "M2": state.M2,
+            "F": state.F,
+            "Mf": state.Mf,
+            "E": state.E,
+            "S": state.S,
         }
         dominant_cells = [
-            name for name, val
-            in sorted(cells.items(), key=lambda x: x[1], reverse=True)[:3]
+            name
+            for name, val in sorted(cells.items(), key=lambda x: x[1], reverse=True)[:3]
             if val > 0
         ]
 
         # Доминирующие цитокины (топ-3 по значению)
         cytos = {
-            "TNF": state.C_TNF, "IL10": state.C_IL10,
-            "PDGF": state.C_PDGF, "VEGF": state.C_VEGF,
-            "TGFb": state.C_TGFb, "MCP1": state.C_MCP1,
+            "TNF": state.C_TNF,
+            "IL10": state.C_IL10,
+            "PDGF": state.C_PDGF,
+            "VEGF": state.C_VEGF,
+            "TGFb": state.C_TGFb,
+            "MCP1": state.C_MCP1,
             "IL8": state.C_IL8,
         }
         dominant_cytokines = [
-            name for name, val
-            in sorted(cytos.items(), key=lambda x: x[1], reverse=True)[:3]
+            name
+            for name, val in sorted(cytos.items(), key=lambda x: x[1], reverse=True)[:3]
             if val > 0
         ]
 
@@ -147,7 +157,8 @@ class WoundPhaseDetector:
         )
 
     def detect_phase_trajectory(
-        self, trajectory: ExtendedSDETrajectory,
+        self,
+        trajectory: ExtendedSDETrajectory,
     ) -> list[PhaseIndicators]:
         """Определение фаз для всей траектории.
 
@@ -186,10 +197,7 @@ class WoundPhaseDetector:
         fibrin_score = min(state.rho_fibrin, 1.0)
         d_score = min(state.D / self.params.D0, 1.0) if self.params.D0 > 0 else 0.0
         immune_low = 1.0 / (1.0 + state.Ne / 100.0 + state.M1 / 100.0)
-        confidence = (
-            0.3 * p_score + 0.3 * fibrin_score
-            + 0.2 * d_score + 0.2 * immune_low
-        )
+        confidence = 0.3 * p_score + 0.3 * fibrin_score + 0.2 * d_score + 0.2 * immune_low
         return max(0.0, min(1.0, confidence))
 
     def _is_inflammation(self, state: ExtendedSDEState) -> float:
@@ -217,8 +225,7 @@ class WoundPhaseDetector:
         il8_score = min(state.C_IL8 / 3.0, 1.0)
         activity = min((state.M1 + state.Ne) / 300.0, 1.0)
         confidence = (
-            0.3 * ne_score + 0.25 * m1_ratio + 0.2 * tnf_score
-            + 0.15 * il8_score + 0.1 * activity
+            0.3 * ne_score + 0.25 * m1_ratio + 0.2 * tnf_score + 0.15 * il8_score + 0.1 * activity
         )
         return max(0.0, min(1.0, confidence))
 
@@ -245,15 +252,15 @@ class WoundPhaseDetector:
         m_total = state.M1 + state.M2 + 1e-10
         m2_ratio = state.M2 / m_total
         collagen_score = min(
-            state.rho_collagen / self.params.rho_c_max, 1.0,
+            state.rho_collagen / self.params.rho_c_max,
+            1.0,
         )
         vegf_score = min(state.C_VEGF / 2.0, 1.0)
         pdgf_score = min(state.C_PDGF / 3.0, 1.0)
         gf_score = 0.5 * vegf_score + 0.5 * pdgf_score
         e_score = min(state.E / 200.0, 1.0)
         confidence = (
-            0.25 * f_score + 0.2 * m2_ratio + 0.2 * collagen_score
-            + 0.2 * gf_score + 0.15 * e_score
+            0.25 * f_score + 0.2 * m2_ratio + 0.2 * collagen_score + 0.2 * gf_score + 0.15 * e_score
         )
         return max(0.0, min(1.0, confidence))
 
@@ -277,7 +284,8 @@ class WoundPhaseDetector:
             Description/Phase2/description_wound_phases.md#_is_remodeling
         """
         collagen_score = min(
-            state.rho_collagen / self.params.rho_c_max, 1.0,
+            state.rho_collagen / self.params.rho_c_max,
+            1.0,
         )
         mmp_score = min(state.C_MMP / 0.5, 1.0)
         low_ne = 1.0 / (1.0 + state.Ne / 50.0)
@@ -288,15 +296,18 @@ class WoundPhaseDetector:
         # Ремоделирование требует значимого коллагена как обязательного маркера
         maturity_gate = min(collagen_score / 0.3, 1.0)
         raw = (
-            0.3 * collagen_score + 0.2 * mmp_score
-            + 0.2 * low_cellularity + 0.15 * low_fibrin
+            0.3 * collagen_score
+            + 0.2 * mmp_score
+            + 0.2 * low_cellularity
+            + 0.15 * low_fibrin
             + 0.15 * low_mf
         )
         confidence = raw * maturity_gate
         return max(0.0, min(1.0, confidence))
 
     def get_phase_boundaries(
-        self, trajectory: ExtendedSDETrajectory,
+        self,
+        trajectory: ExtendedSDETrajectory,
     ) -> dict[WoundPhase, tuple[float, float]]:
         """Определение временных границ каждой фазы в траектории.
 

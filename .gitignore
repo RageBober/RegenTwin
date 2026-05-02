@@ -76,8 +76,7 @@ target/
 profile_default/
 ipython_config.py
 
-# pyenv
-.python-version
+# pyenv (.python-version коммитится в репо для консистентного uv-окружения)
 
 # Celery stuff
 celerybeat-schedule
@@ -119,9 +118,8 @@ dmypy.json
 # ruff
 .ruff_cache/
 
-# UV
+# UV (uv.lock коммитится в репо для воспроизводимости)
 .uv/
-uv.lock
 
 # IDE
 .vscode/
@@ -139,10 +137,26 @@ data/raw/
 data/processed/
 data/results/
 data/regentwin.db
+data/regentwin.db-shm
+data/regentwin.db-wal
+data/regentwin.duckdb
+data/regentwin.duckdb.wal
+data/validation/
 *.fcs
 !data/mock/*.fcs
 *.pdf
 *.docx
+
+# Output: всё локальное, кроме report.md и figures для встраивания в MkDocs.
+output/*
+!output/benchmarks/
+output/benchmarks/*
+!output/benchmarks/.gitkeep
+!output/benchmarks/report.md
+!output/benchmarks/figures/
+output/benchmarks/figures/*
+!output/benchmarks/figures/.gitkeep
+!output/benchmarks/figures/*.png
 
 # Secrets
 .env
@@ -167,3 +181,10 @@ temp/
 
 # Windows artifacts
 nul
+ui/src-tauri/target-tauri/
+
+# Playwright E2E artefacts
+ui/playwright-report/
+ui/test-results/
+ui/e2e/fixtures/
+tests/e2e/fixtures/

@@ -269,7 +269,7 @@ class EfferocytosisEngine:
         count = min(len(apoptotic_neutrophils), macrophage.PHAGOCYTOSIS_CAPACITY)
         for n in apoptotic_neutrophils[:count]:
             n.alive = False
-        # Dual-mode polarization shift toward M2
+        # Dual-mode: строка "M1"→"M2", float → числовой сдвиг к 0.0 (M2)
         if isinstance(macrophage.polarization_state, str):
             macrophage.polarization_state = "M2"
         else:

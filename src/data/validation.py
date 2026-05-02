@@ -121,24 +121,35 @@ class DataSchema:
 FCS_DATA_SCHEMA = DataSchema(
     name="fcs_data",
     columns=[
-        ColumnSchema("FSC-A", "float", required=True, min_value=0,
-                      description="Forward Scatter Area"),
-        ColumnSchema("FSC-H", "float", required=True, min_value=0,
-                      description="Forward Scatter Height"),
-        ColumnSchema("SSC-A", "float", required=True, min_value=0,
-                      description="Side Scatter Area"),
-        ColumnSchema("CD34", "float", required=True, min_value=0,
-                      description="CD34-APC (стволовые клетки)"),
-        ColumnSchema("CD14", "float", required=False, min_value=0,
-                      description="CD14-PE (моноциты/макрофаги)"),
-        ColumnSchema("CD68", "float", required=False, min_value=0,
-                      description="CD68-FITC (макрофаги)"),
-        ColumnSchema("Annexin-V", "float", required=True, min_value=0,
-                      description="Annexin-V-Pacific Blue (апоптоз)"),
-        ColumnSchema("CD66b", "float", required=False, min_value=0,
-                      description="CD66b-PE-Cy7 (нейтрофилы)"),
-        ColumnSchema("CD31", "float", required=False, min_value=0,
-                      description="CD31-BV421 (эндотелий)"),
+        ColumnSchema(
+            "FSC-A", "float", required=True, min_value=0, description="Forward Scatter Area"
+        ),
+        ColumnSchema(
+            "FSC-H", "float", required=True, min_value=0, description="Forward Scatter Height"
+        ),
+        ColumnSchema("SSC-A", "float", required=True, min_value=0, description="Side Scatter Area"),
+        ColumnSchema(
+            "CD34", "float", required=True, min_value=0, description="CD34-APC (стволовые клетки)"
+        ),
+        ColumnSchema(
+            "CD14", "float", required=False, min_value=0, description="CD14-PE (моноциты/макрофаги)"
+        ),
+        ColumnSchema(
+            "CD68", "float", required=False, min_value=0, description="CD68-FITC (макрофаги)"
+        ),
+        ColumnSchema(
+            "Annexin-V",
+            "float",
+            required=True,
+            min_value=0,
+            description="Annexin-V-Pacific Blue (апоптоз)",
+        ),
+        ColumnSchema(
+            "CD66b", "float", required=False, min_value=0, description="CD66b-PE-Cy7 (нейтрофилы)"
+        ),
+        ColumnSchema(
+            "CD31", "float", required=False, min_value=0, description="CD31-BV421 (эндотелий)"
+        ),
     ],
     min_rows=100,
     description="Схема для flow cytometry данных (7-9 каналов)",
@@ -147,13 +158,22 @@ FCS_DATA_SCHEMA = DataSchema(
 TIME_SERIES_SCHEMA = DataSchema(
     name="time_series",
     columns=[
-        ColumnSchema("time", "float", required=True, min_value=0,
-                      description="Время (часы)"),
-        ColumnSchema("cell_count", "float", required=False, min_value=0,
-                      description="Общее количество клеток"),
-        ColumnSchema("wound_area", "float", required=False,
-                      min_value=0, max_value=1,
-                      description="Площадь раны (0=зажила, 1=начальная)"),
+        ColumnSchema("time", "float", required=True, min_value=0, description="Время (часы)"),
+        ColumnSchema(
+            "cell_count",
+            "float",
+            required=False,
+            min_value=0,
+            description="Общее количество клеток",
+        ),
+        ColumnSchema(
+            "wound_area",
+            "float",
+            required=False,
+            min_value=0,
+            max_value=1,
+            description="Площадь раны (0=зажила, 1=начальная)",
+        ),
     ],
     min_rows=2,
     description="Схема для временных рядов заживления",
@@ -162,22 +182,20 @@ TIME_SERIES_SCHEMA = DataSchema(
 CYTOKINE_TIMESERIES_SCHEMA = DataSchema(
     name="cytokine_timeseries",
     columns=[
-        ColumnSchema("time", "float", required=True, min_value=0,
-                      description="Время (часы)"),
-        ColumnSchema("TNF_alpha", "float", required=False, min_value=0,
-                      description="TNF-α (нг/мл)"),
-        ColumnSchema("IL_10", "float", required=False, min_value=0,
-                      description="IL-10 (нг/мл)"),
-        ColumnSchema("PDGF", "float", required=False, min_value=0,
-                      description="PDGF (нг/мл)"),
-        ColumnSchema("VEGF", "float", required=False, min_value=0,
-                      description="VEGF (нг/мл)"),
-        ColumnSchema("TGF_beta", "float", required=False, min_value=0,
-                      description="TGF-β (нг/мл)"),
-        ColumnSchema("MCP_1", "float", required=False, min_value=0,
-                      description="MCP-1/CCL2 (нг/мл)"),
-        ColumnSchema("IL_8", "float", required=False, min_value=0,
-                      description="IL-8/CXCL8 (нг/мл)"),
+        ColumnSchema("time", "float", required=True, min_value=0, description="Время (часы)"),
+        ColumnSchema(
+            "TNF_alpha", "float", required=False, min_value=0, description="TNF-α (нг/мл)"
+        ),
+        ColumnSchema("IL_10", "float", required=False, min_value=0, description="IL-10 (нг/мл)"),
+        ColumnSchema("PDGF", "float", required=False, min_value=0, description="PDGF (нг/мл)"),
+        ColumnSchema("VEGF", "float", required=False, min_value=0, description="VEGF (нг/мл)"),
+        ColumnSchema("TGF_beta", "float", required=False, min_value=0, description="TGF-β (нг/мл)"),
+        ColumnSchema(
+            "MCP_1", "float", required=False, min_value=0, description="MCP-1/CCL2 (нг/мл)"
+        ),
+        ColumnSchema(
+            "IL_8", "float", required=False, min_value=0, description="IL-8/CXCL8 (нг/мл)"
+        ),
     ],
     min_rows=2,
     description="Схема для временных рядов цитокинов",
@@ -319,7 +337,7 @@ class DataValidator:
 
         # Проверка монотонности time
         if "time" in data.columns and len(data) >= 2:
-            time_vals = data["time"].values
+            time_vals = data["time"].to_numpy()
             if not np.all(np.diff(time_vals) > 0):
                 errors.append("Time column is not monotonically increasing")
 
@@ -386,19 +404,13 @@ class DataValidator:
         warnings: list[str] = []
 
         if gating_results.total_events <= 0:
-            errors.append(
-                f"total_events must be > 0, got {gating_results.total_events}"
-            )
+            errors.append(f"total_events must be > 0, got {gating_results.total_events}")
 
         for gate_name, gate in gating_results.gates.items():
             if gate.fraction < 0 or gate.fraction > 1:
-                errors.append(
-                    f"Gate '{gate_name}' fraction {gate.fraction} not in [0, 1]"
-                )
+                errors.append(f"Gate '{gate_name}' fraction {gate.fraction} not in [0, 1]")
             if gate.n_events < 0:
-                errors.append(
-                    f"Gate '{gate_name}' n_events {gate.n_events} is negative"
-                )
+                errors.append(f"Gate '{gate_name}' n_events {gate.n_events} is negative")
 
         is_valid = len(errors) == 0
         return ValidationResult(is_valid=is_valid, errors=errors, warnings=warnings)

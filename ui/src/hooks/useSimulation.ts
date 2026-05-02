@@ -33,7 +33,7 @@ export function useSimulationStatus(id: string | null) {
       if (status === 'completed' || status === 'failed' || status === 'cancelled') {
         return false;
       }
-      return 2000;
+      return 5000;
     },
   });
 }

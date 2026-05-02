@@ -4,8 +4,8 @@ import './i18n';
 import './index.css';
 import App from './App';
 
-// Apply saved dark mode before first render to prevent flash
-const savedTheme = localStorage.getItem('regentwin-theme');
+// Apply saved dark mode before first render to prevent flash.
+const savedTheme = localStorage.getItem('regentwin-theme') || 'dark';
 if (savedTheme === 'dark') {
   document.documentElement.classList.add('dark');
 }

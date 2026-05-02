@@ -603,14 +603,16 @@ class IntegratedModel:
 
         if therapy.prp_enabled:
             prp_end = getattr(
-                therapy, "prp_end_time",
+                therapy,
+                "prp_end_time",
                 therapy.prp_start_time + therapy.prp_duration,
             )
             prp_active = therapy.prp_start_time <= current_time_days <= prp_end
 
         if therapy.pemf_enabled:
             pemf_end = getattr(
-                therapy, "pemf_end_time",
+                therapy,
+                "pemf_end_time",
                 therapy.pemf_start_time + therapy.pemf_duration,
             )
             pemf_active = therapy.pemf_start_time <= current_time_days <= pemf_end
@@ -651,9 +653,7 @@ class IntegratedModel:
         elif direction == "abm_to_sde":
             return float(np.mean(abm_field))
         else:
-            raise ValueError(
-                f"direction must be 'sde_to_abm' or 'abm_to_sde', got '{direction}'"
-            )
+            raise ValueError(f"direction must be 'sde_to_abm' or 'abm_to_sde', got '{direction}'")
 
     def _lifting(self, macro_state: dict[str, float]) -> ABMSnapshot:
         """Equation-Free lifting: макросостояние SDE → микросостояние ABM.
@@ -689,15 +689,17 @@ class IntegratedModel:
         for i in range(n_agents):
             x = float(self._rng.uniform(0, space_size[0]))
             y = float(self._rng.uniform(0, space_size[1]))
-            agents.append(AgentState(
-                agent_id=i,
-                agent_type="stem",
-                x=x,
-                y=y,
-                age=0.0,
-                division_count=0,
-                energy=1.0,
-            ))
+            agents.append(
+                AgentState(
+                    agent_id=i,
+                    agent_type="stem",
+                    x=x,
+                    y=y,
+                    age=0.0,
+                    division_count=0,
+                    energy=1.0,
+                )
+            )
 
         grid_shape = (
             int(space_size[0] / grid_res),

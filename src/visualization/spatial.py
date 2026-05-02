@@ -16,7 +16,6 @@ import plotly.graph_objects as go
 from src.core.abm_model import ABMSnapshot, ABMTrajectory
 from src.visualization.theme import (
     POPULATION_COLORS,
-    VARIABLE_LABELS,
     apply_default_layout,
 )
 
@@ -77,19 +76,22 @@ def heatmap_density(
     n_bins_y = max(1, int(np.ceil(y_max / bin_size)))
 
     density, x_edges, y_edges = np.histogram2d(
-        x_coords, y_coords,
+        x_coords,
+        y_coords,
         bins=[n_bins_x, n_bins_y],
         range=[[0, x_max], [0, y_max]],
     )
 
-    fig = go.Figure(data=go.Heatmap(
-        z=density.T,
-        x=x_edges[:-1] + bin_size / 2,
-        y=y_edges[:-1] + bin_size / 2,
-        colorscale="YlOrRd",
-        colorbar_title="Агентов",
-        hovertemplate="X: %{x:.0f} мкм<br>Y: %{y:.0f} мкм<br>Количество: %{z}<extra></extra>",
-    ))
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=density.T,
+            x=x_edges[:-1] + bin_size / 2,
+            y=y_edges[:-1] + bin_size / 2,
+            colorscale="YlOrRd",
+            colorbar_title="Агентов",
+            hovertemplate="X: %{x:.0f} мкм<br>Y: %{y:.0f} мкм<br>Количество: %{z}<extra></extra>",
+        )
+    )
 
     fig.update_xaxes(title_text="X (мкм)")
     fig.update_yaxes(title_text="Y (мкм)", scaleanchor="x", scaleratio=1)
@@ -131,53 +133,93 @@ def scatter_agents(
 
     if color_by == "type":
         # Группируем по типу
-        types_seen: dict[str, tuple[list[float], list[float]]] = {}
+        types_seen: dict[str, dict[str, list[float]]] = {}
         for a in agents:
             if a.agent_type not in types_seen:
-                types_seen[a.agent_type] = ([], [])
-            types_seen[a.agent_type][0].append(a.x)
-            types_seen[a.agent_type][1].append(a.y)
+                types_seen[a.agent_type] = {"x": [], "y": [], "energy": [], "age": []}
+            types_seen[a.agent_type]["x"].append(a.x)
+            types_seen[a.agent_type]["y"].append(a.y)
+            types_seen[a.agent_type]["energy"].append(a.energy)
+            types_seen[a.agent_type]["age"].append(a.age)
 
-        for atype, (xs, ys) in types_seen.items():
+        for atype, points in types_seen.items():
             color = _AGENT_TYPE_COLORS.get(atype, "#333333")
             label = _AGENT_TYPE_LABELS.get(atype, atype)
-            fig.add_trace(go.Scatter(
-                x=xs, y=ys,
-                mode="markers",
-                name=label,
-                marker=dict(color=color, size=6, opacity=0.8),
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=points["x"],
+                    y=points["y"],
+                    mode="markers",
+                    name=label,
+                    marker=dict(color=color, size=6, opacity=0.8),
+                    customdata=np.column_stack([points["energy"], points["age"]]),
+                    hovertemplate=(
+                        "%{fullData.name}"
+                        "<br>X: %{x:.1f}, Y: %{y:.1f}"
+                        "<br>Энергия: %{customdata[0]:.2f}"
+                        "<br>Возраст: %{customdata[1]:.1f} ч"
+                        "<extra></extra>"
+                    ),
+                )
+            )
     elif color_by == "energy":
         x = [a.x for a in agents]
         y = [a.y for a in agents]
         energy = [a.energy for a in agents]
-        fig.add_trace(go.Scatter(
-            x=x, y=y,
-            mode="markers",
-            marker=dict(
-                color=energy,
-                colorscale="Viridis",
-                size=6,
-                colorbar_title="Энергия",
-                cmin=0, cmax=1,
-            ),
-            name="Энергия",
-        ))
+        labels = [_AGENT_TYPE_LABELS.get(a.agent_type, a.agent_type) for a in agents]
+        ages = [a.age for a in agents]
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=y,
+                mode="markers",
+                marker=dict(
+                    color=energy,
+                    colorscale="Viridis",
+                    size=6,
+                    colorbar_title="Энергия",
+                    cmin=0,
+                    cmax=1,
+                ),
+                name="Энергия",
+                customdata=[[l, e, a] for l, e, a in zip(labels, energy, ages, strict=False)],
+                hovertemplate=(
+                    "%{customdata[0]}"
+                    "<br>X: %{x:.1f}, Y: %{y:.1f}"
+                    "<br>Энергия: %{customdata[1]:.2f}"
+                    "<br>Возраст: %{customdata[2]:.1f} ч"
+                    "<extra></extra>"
+                ),
+            )
+        )
     elif color_by == "age":
         x = [a.x for a in agents]
         y = [a.y for a in agents]
         ages = [a.age for a in agents]
-        fig.add_trace(go.Scatter(
-            x=x, y=y,
-            mode="markers",
-            marker=dict(
-                color=ages,
-                colorscale="Plasma",
-                size=6,
-                colorbar_title="Возраст (ч)",
-            ),
-            name="Возраст",
-        ))
+        labels = [_AGENT_TYPE_LABELS.get(a.agent_type, a.agent_type) for a in agents]
+        energy = [a.energy for a in agents]
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=y,
+                mode="markers",
+                marker=dict(
+                    color=ages,
+                    colorscale="Plasma",
+                    size=6,
+                    colorbar_title="Возраст (ч)",
+                ),
+                name="Возраст",
+                customdata=[[l, e, a] for l, e, a in zip(labels, energy, ages, strict=False)],
+                hovertemplate=(
+                    "%{customdata[0]}"
+                    "<br>X: %{x:.1f}, Y: %{y:.1f}"
+                    "<br>Энергия: %{customdata[1]:.2f}"
+                    "<br>Возраст: %{customdata[2]:.1f} ч"
+                    "<extra></extra>"
+                ),
+            )
+        )
 
     fig.update_xaxes(title_text="X (мкм)")
     fig.update_yaxes(title_text="Y (мкм)", scaleanchor="x", scaleratio=1)
@@ -217,13 +259,16 @@ def inflammation_map(
     field_max = np.max(np.abs(field)) if np.max(np.abs(field)) > 0 else 1.0
     normalized = field / field_max
 
-    fig = go.Figure(data=go.Heatmap(
-        z=normalized,
-        colorscale="RdYlGn_r",  # Красный = высокое воспаление
-        zmin=-1, zmax=1,
-        colorbar_title="Уровень<br>воспаления",
-        hovertemplate="X: %{x}<br>Y: %{y}<br>Уровень: %{z:.2f}<extra></extra>",
-    ))
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=normalized,
+            colorscale="RdYlGn_r",  # Красный = высокое воспаление
+            zmin=-1,
+            zmax=1,
+            colorbar_title="Уровень<br>воспаления",
+            hovertemplate="X: %{x}<br>Y: %{y}<br>Уровень: %{z:.2f}<extra></extra>",
+        )
+    )
 
     fig.update_xaxes(title_text="X")
     fig.update_yaxes(title_text="Y", scaleanchor="x", scaleratio=1)
@@ -272,11 +317,14 @@ def field_heatmap(
 
     cs = colorscale if colorscale else default_colorscale
 
-    fig = go.Figure(data=go.Heatmap(
-        z=data,
-        colorscale=cs,
-        colorbar_title=colorbar_title,
-    ))
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=data,
+            colorscale=cs,
+            colorbar_title=colorbar_title,
+            hovertemplate=f"X: %{{x}}<br>Y: %{{y}}<br>{colorbar_title}: %{{z:.2f}}<extra></extra>",
+        )
+    )
 
     fig.update_xaxes(title_text="X")
     fig.update_yaxes(title_text="Y", scaleanchor="x", scaleratio=1)
@@ -333,25 +381,30 @@ def _create_plotly_animation(
 
     # Данные первого кадра
     if show_fields and first.cytokine_field is not None and first.cytokine_field.size > 0:
-        fig.add_trace(go.Heatmap(
-            z=first.cytokine_field,
-            colorscale="YlOrRd",
-            opacity=0.3,
-            showscale=False,
-            name="Цитокины (фон)",
-        ))
+        fig.add_trace(
+            go.Heatmap(
+                z=first.cytokine_field,
+                colorscale="YlOrRd",
+                opacity=0.3,
+                showscale=False,
+                name="Цитокины (фон)",
+            )
+        )
 
     # Агенты по типам
     types_data = _group_agents_by_type(agents)
     for atype, (xs, ys) in types_data.items():
         color = _AGENT_TYPE_COLORS.get(atype, "#333333")
         label = _AGENT_TYPE_LABELS.get(atype, atype)
-        fig.add_trace(go.Scatter(
-            x=xs, y=ys,
-            mode="markers",
-            name=label,
-            marker=dict(color=color, size=5, opacity=0.8),
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=xs,
+                y=ys,
+                mode="markers",
+                name=label,
+                marker=dict(color=color, size=5, opacity=0.8),
+            )
+        )
 
     # Кадры анимации
     frames = []
@@ -359,56 +412,86 @@ def _create_plotly_animation(
         frame_data = []
 
         if show_fields and snap.cytokine_field is not None and snap.cytokine_field.size > 0:
-            frame_data.append(go.Heatmap(
-                z=snap.cytokine_field,
-                colorscale="YlOrRd",
-                opacity=0.3,
-                showscale=False,
-            ))
+            frame_data.append(
+                go.Heatmap(
+                    z=snap.cytokine_field,
+                    colorscale="YlOrRd",
+                    opacity=0.3,
+                    showscale=False,
+                )
+            )
 
         snap_agents = [a for a in snap.agents if a.alive]
         snap_types = _group_agents_by_type(snap_agents)
         for atype in types_data:
             xs, ys = snap_types.get(atype, ([], []))
             color = _AGENT_TYPE_COLORS.get(atype, "#333333")
-            frame_data.append(go.Scatter(
-                x=xs, y=ys,
-                mode="markers",
-                marker=dict(color=color, size=5, opacity=0.8),
-            ))
+            frame_data.append(
+                go.Scatter(
+                    x=xs,
+                    y=ys,
+                    mode="markers",
+                    marker=dict(color=color, size=5, opacity=0.8),
+                )
+            )
 
-        frames.append(go.Frame(
-            data=frame_data,
-            name=f"t={snap.t:.0f}",
-        ))
+        frames.append(
+            go.Frame(
+                data=frame_data,
+                name=f"t={snap.t:.0f}",
+            )
+        )
 
     fig.frames = frames
 
     # Slider + кнопки
     fig.update_layout(
-        updatemenus=[dict(
-            type="buttons",
-            showactive=False,
-            y=0,
-            x=0.5,
-            xanchor="center",
-            buttons=[
-                dict(label="▶ Play", method="animate",
-                     args=[None, {"frame": {"duration": 200, "redraw": True}, "fromcurrent": True}]),
-                dict(label="⏸ Pause", method="animate",
-                     args=[[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate"}]),
-            ],
-        )],
-        sliders=[dict(
-            active=0,
-            steps=[
-                dict(args=[[f.name], {"frame": {"duration": 0, "redraw": True}, "mode": "immediate"}],
-                     label=f.name, method="animate")
-                for f in frames
-            ],
-            x=0.1, len=0.8,
-            currentvalue=dict(prefix="Время: ", visible=True),
-        )],
+        updatemenus=[
+            dict(
+                type="buttons",
+                showactive=False,
+                y=0,
+                x=0.5,
+                xanchor="center",
+                buttons=[
+                    dict(
+                        label="▶ Play",
+                        method="animate",
+                        args=[
+                            None,
+                            {"frame": {"duration": 200, "redraw": True}, "fromcurrent": True},
+                        ],
+                    ),
+                    dict(
+                        label="⏸ Pause",
+                        method="animate",
+                        args=[
+                            [None],
+                            {"frame": {"duration": 0, "redraw": False}, "mode": "immediate"},
+                        ],
+                    ),
+                ],
+            )
+        ],
+        sliders=[
+            dict(
+                active=0,
+                steps=[
+                    dict(
+                        args=[
+                            [f.name],
+                            {"frame": {"duration": 0, "redraw": True}, "mode": "immediate"},
+                        ],
+                        label=f.name,
+                        method="animate",
+                    )
+                    for f in frames
+                ],
+                x=0.1,
+                len=0.8,
+                currentvalue=dict(prefix="Время: ", visible=True),
+            )
+        ],
     )
 
     fig.update_xaxes(title_text="X (мкм)")
@@ -435,27 +518,37 @@ def _save_animation_file(
     snapshots = trajectory.snapshots
     fig_mpl, ax = plt.subplots(figsize=(6, 6))
 
-    def update(frame_idx: int) -> None:
+    def update(frame_idx: int) -> list:
         ax.clear()
         snap = snapshots[frame_idx]
         agents = [a for a in snap.agents if a.alive]
 
         if show_fields and snap.cytokine_field is not None and snap.cytokine_field.size > 0:
             ax.imshow(
-                snap.cytokine_field.T, origin="lower",
-                cmap="YlOrRd", alpha=0.3, aspect="equal",
-                extent=[0, 100, 0, 100],
+                snap.cytokine_field.T,
+                origin="lower",
+                cmap="YlOrRd",
+                alpha=0.3,
+                aspect="equal",
+                extent=(0, 100, 0, 100),
             )
 
-        for atype, color_key in [("stem", "S"), ("macro", "M1"), ("fibro", "F"),
-                                  ("neutrophil", "Ne"), ("endothelial", "E"), ("myofibroblast", "Mf")]:
+        for atype, color_key in [
+            ("stem", "S"),
+            ("macro", "M1"),
+            ("fibro", "F"),
+            ("neutrophil", "Ne"),
+            ("endothelial", "E"),
+            ("myofibroblast", "Mf"),
+        ]:
             typed_agents = [a for a in agents if a.agent_type == atype]
             if typed_agents:
                 xs = [a.x for a in typed_agents]
                 ys = [a.y for a in typed_agents]
                 color = POPULATION_COLORS.get(color_key, "#333333")
-                ax.scatter(xs, ys, c=color, s=10, alpha=0.8,
-                           label=_AGENT_TYPE_LABELS.get(atype, atype))
+                ax.scatter(
+                    xs, ys, c=color, s=10, alpha=0.8, label=_AGENT_TYPE_LABELS.get(atype, atype)
+                )
 
         ax.set_xlim(0, 100)
         ax.set_ylim(0, 100)
@@ -465,6 +558,7 @@ def _save_animation_file(
         ax.set_aspect("equal")
         if frame_idx == 0:
             ax.legend(fontsize=7, loc="upper right")
+        return []
 
     anim = FuncAnimation(fig_mpl, update, frames=len(snapshots), interval=1000 // fps)
 

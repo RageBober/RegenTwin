@@ -585,8 +585,14 @@ class ValidationRunner:
         detected: list[PhaseBreakpoint] = []
         for idx, bkpt_idx in enumerate(bkpt_indices):
             t_hours = float(trajectory.times[min(bkpt_idx, len(trajectory.times) - 1)])
-            before = phase_labels[min(idx, len(phase_labels) - 1)]
-            after = phase_labels[min(idx + 1, len(phase_labels) - 1)]
+            # Если ruptures вернул больше точек разрыва, чем каноничных фаз —
+            # используем generic-метки, чтобы не схлопывать пары в "remodeling→remodeling".
+            if idx < len(phase_labels) - 1:
+                before = phase_labels[idx]
+                after = phase_labels[idx + 1]
+            else:
+                before = f"phase_{idx}"
+                after = f"phase_{idx + 1}"
             detected.append(
                 PhaseBreakpoint(
                     time_hours=t_hours,
@@ -673,8 +679,8 @@ class ValidationRunner:
         morris_ranks[morris_rank_order] = np.arange(1, len(common) + 1)
 
         kt_result = kendalltau(sobol_ranks, morris_ranks)
-        tau = float(kt_result[0])
-        p_val = float(kt_result[1])
+        tau = float(kt_result[0])  # type: ignore[arg-type]
+        p_val = float(kt_result[1])  # type: ignore[arg-type]
 
         comparisons = [
             RankingComparison(

@@ -11,10 +11,25 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import numpy as np
 import plotly.graph_objects as go
+from loguru import logger
 
-from src.core.extended_sde import ExtendedSDETrajectory, VARIABLE_NAMES
+from src.core.extended_sde import VARIABLE_NAMES, ExtendedSDETrajectory
+
+
+def _ensure_kaleido_server() -> None:
+    """Ensure the kaleido render server is running (lazy singleton).
+
+    Starts a persistent Chrome process on the first call and keeps it alive
+    for the lifetime of the process — avoids ~1.5s startup cost on every export.
+    """
+    try:
+        import kaleido
+
+        if not kaleido._global_server.is_running():
+            kaleido.start_sync_server(silence_warnings=True)
+    except Exception as exc:
+        logger.warning("Kaleido server startup failed: {}", exc)
 
 
 @dataclass
@@ -96,22 +111,25 @@ class ReportExporter:
         output_dir: Path | None,
         fmt: str,
     ) -> list[Path]:
-        """Общий метод экспорта изображений."""
+        """Общий метод экспорта изображений (persistent kaleido server)."""
         out = Path(output_dir) if output_dir else self._config.output_dir
         out.mkdir(parents=True, exist_ok=True)
 
-        paths: list[Path] = []
-        for name, fig in self._figures.items():
-            filepath = out / f"{name}.{fmt}"
-            fig.write_image(
-                str(filepath),
-                width=self._config.width,
-                height=self._config.height,
-                scale=self._config.dpi / 72,
-            )
-            paths.append(filepath)
+        items = [(name, fig, out / f"{name}.{fmt}") for name, fig in self._figures.items()]
+        if not items:
+            return []
 
-        return paths
+        width = self._config.width
+        height = self._config.height
+        scale = self._config.dpi / 72
+
+        def _render(entry: tuple[str, go.Figure, Path]) -> Path:
+            _, fig, filepath = entry
+            fig.write_image(str(filepath), width=width, height=height, scale=scale)
+            return filepath
+
+        _ensure_kaleido_server()
+        return [_render(item) for item in items]
 
     def to_csv(self, output_dir: Path | None = None) -> list[Path]:
         """Экспорт данных траекторий в CSV.
@@ -153,7 +171,7 @@ class ReportExporter:
             state = trajectory.states[i]
             values = [f"{times[i]:.4f}"]
             for var_name in VARIABLE_NAMES:
-                val = getattr(state, var_name)
+                val = getattr(state, var_name, 0.0)
                 values.append(f"{val:.6f}")
             rows.append(sep.join(values))
 
@@ -167,7 +185,10 @@ class ReportExporter:
         Returns:
             Путь к PDF файлу.
         """
-        from fpdf import FPDF
+        try:
+            from fpdf import FPDF
+        except ImportError:
+            raise ImportError("fpdf2 is required for PDF export: pip install fpdf2") from None
 
         out_dir = self._config.output_dir
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -181,7 +202,14 @@ class ReportExporter:
         pdf.set_font("Helvetica", "B", 24)
         pdf.cell(0, 40, "RegenTwin Report", new_x="LMARGIN", new_y="NEXT", align="C")
         pdf.set_font("Helvetica", "", 12)
-        pdf.cell(0, 10, "Tissue Regeneration Simulation Results", new_x="LMARGIN", new_y="NEXT", align="C")
+        pdf.cell(
+            0,
+            10,
+            "Tissue Regeneration Simulation Results",
+            new_x="LMARGIN",
+            new_y="NEXT",
+            align="C",
+        )
 
         # Метаданные
         if self._metadata:
@@ -192,20 +220,31 @@ class ReportExporter:
             for key, value in self._metadata.items():
                 pdf.cell(0, 7, f"{key}: {value}", new_x="LMARGIN", new_y="NEXT")
 
-        # Графики (каждый на новой странице)
+        # Графики (каждый на новой странице, persistent kaleido server)
         if self._figures:
             import tempfile
 
             with tempfile.TemporaryDirectory() as tmpdir:
+                items = []
                 for name, fig in self._figures.items():
-                    img_path = Path(tmpdir) / f"{name}.png"
-                    fig.write_image(
-                        str(img_path),
-                        width=self._config.width,
-                        height=self._config.height,
-                        scale=2,
-                    )
+                    items.append((name, fig, Path(tmpdir) / f"{name}.png"))
 
+                width = self._config.width
+                height = self._config.height
+                scale = self._config.dpi / 72
+
+                def _render_for_pdf(
+                    entry: tuple[str, go.Figure, Path],
+                    image_scale: float,
+                ) -> tuple[str, Path]:
+                    n, f, p = entry
+                    f.write_image(str(p), width=width, height=height, scale=image_scale)
+                    return (n, p)
+
+                _ensure_kaleido_server()
+                rendered = [_render_for_pdf(it, scale) for it in items]
+
+                for name, img_path in rendered:
                     pdf.add_page()
                     pdf.set_font("Helvetica", "B", 14)
                     pdf.cell(0, 10, name.replace("_", " ").title(), new_x="LMARGIN", new_y="NEXT")
@@ -225,18 +264,24 @@ class ReportExporter:
                 pdf.set_font("Helvetica", "", 9)
 
                 stats = trajectory.get_statistics()
-                pdf.cell(0, 6, f"Time points: {len(trajectory.times)}", new_x="LMARGIN", new_y="NEXT")
-                pdf.cell(0, 6, f"Duration: {trajectory.times[-1]:.1f} h", new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(
+                    0, 6, f"Time points: {len(trajectory.times)}", new_x="LMARGIN", new_y="NEXT"
+                )
+                pdf.cell(
+                    0, 6, f"Duration: {trajectory.times[-1]:.1f} h", new_x="LMARGIN", new_y="NEXT"
+                )
 
                 # Таблица ключевых переменных
                 for var in ["F", "M2", "rho_collagen", "C_TNF", "C_IL10"]:
                     if var in stats:
                         s = stats[var]
                         pdf.cell(
-                            0, 5,
+                            0,
+                            5,
                             f"  {var}: final={s['final']:.2f}, "
                             f"mean={s['mean']:.2f}, max={s['max']:.2f}",
-                            new_x="LMARGIN", new_y="NEXT",
+                            new_x="LMARGIN",
+                            new_y="NEXT",
                         )
 
         pdf.output(str(pdf_path))

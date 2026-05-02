@@ -1,5 +1,4 @@
-"""
-TDD тесты для модуля gating.py
+"""TDD тесты для модуля gating.py
 
 Тестирует:
 - GateResult dataclass
@@ -16,17 +15,15 @@ TDD тесты для модуля gating.py
 - Apoptotic: ~2%
 """
 
-import pytest
 import numpy as np
-import pandas as pd
-from unittest.mock import Mock, patch
+import pytest
 
 from src.data.gating import GateResult, GatingResults, GatingStrategy
-
 
 # =============================================================================
 # Тесты для GateResult
 # =============================================================================
+
 
 class TestGateResult:
     """Тесты для dataclass GateResult."""
@@ -41,7 +38,7 @@ class TestGateResult:
             n_events=3,
             fraction=0.6,
             parent="singlets",
-            statistics={"mean_fsc": 100000}
+            statistics={"mean_fsc": 100000},
         )
 
         assert gate.name == "live_cells"
@@ -53,35 +50,20 @@ class TestGateResult:
 
     def test_gate_result_statistics_default_empty_dict(self):
         """Тест что statistics по умолчанию пустой словарь."""
-        gate = GateResult(
-            name="test",
-            mask=np.array([True]),
-            n_events=1,
-            fraction=1.0
-        )
+        gate = GateResult(name="test", mask=np.array([True]), n_events=1, fraction=1.0)
 
         assert gate.statistics == {} or gate.statistics is None
 
     def test_gate_result_parent_default_none(self):
         """Тест что parent по умолчанию None."""
-        gate = GateResult(
-            name="test",
-            mask=np.array([True]),
-            n_events=1,
-            fraction=1.0
-        )
+        gate = GateResult(name="test", mask=np.array([True]), n_events=1, fraction=1.0)
 
         assert gate.parent is None
 
     def test_gate_result_mask_is_boolean_array(self):
         """Тест что mask - boolean массив."""
         mask = np.array([True, False, True])
-        gate = GateResult(
-            name="test",
-            mask=mask,
-            n_events=2,
-            fraction=0.67
-        )
+        gate = GateResult(name="test", mask=mask, n_events=2, fraction=0.67)
 
         assert gate.mask.dtype == bool
 
@@ -89,6 +71,7 @@ class TestGateResult:
 # =============================================================================
 # Тесты для GatingResults
 # =============================================================================
+
 
 class TestGatingResults:
     """Тесты для GatingResults."""
@@ -103,14 +86,14 @@ class TestGatingResults:
                 name="live_cells",
                 mask=np.array([True] * 7 + [False] * 3),
                 n_events=7,
-                fraction=0.70
+                fraction=0.70,
             ),
             "cd34_positive": GateResult(
                 name="cd34_positive",
                 mask=np.array([True] * 1 + [False] * 9),
                 n_events=1,
                 fraction=0.10,
-                parent="live_cells"
+                parent="live_cells",
             ),
         }
 
@@ -161,6 +144,7 @@ class TestGatingResults:
 # Тесты для GatingStrategy.__init__
 # =============================================================================
 
+
 class TestGatingStrategyInit:
     """Тесты для GatingStrategy.__init__."""
 
@@ -203,6 +187,7 @@ class TestGatingStrategyInit:
 # Тесты для GatingStrategy._find_channel
 # =============================================================================
 
+
 class TestGatingStrategyFindChannel:
     """Тесты для GatingStrategy._find_channel."""
 
@@ -237,6 +222,7 @@ class TestGatingStrategyFindChannel:
 # =============================================================================
 # Тесты для GatingStrategy.debris_gate
 # =============================================================================
+
 
 class TestGatingStrategyDebrisGate:
     """Тесты для GatingStrategy.debris_gate."""
@@ -328,6 +314,7 @@ class TestGatingStrategyDebrisGate:
 # Тесты для GatingStrategy.singlets_gate
 # =============================================================================
 
+
 class TestGatingStrategySingletsGate:
     """Тесты для GatingStrategy.singlets_gate."""
 
@@ -404,6 +391,7 @@ class TestGatingStrategySingletsGate:
 # Тесты для GatingStrategy.live_cells_gate
 # =============================================================================
 
+
 class TestGatingStrategyLiveCellsGate:
     """Тесты для GatingStrategy.live_cells_gate."""
 
@@ -469,6 +457,7 @@ class TestGatingStrategyLiveCellsGate:
 # =============================================================================
 # Тесты для GatingStrategy.cd34_gate
 # =============================================================================
+
 
 class TestGatingStrategyCd34Gate:
     """Тесты для GatingStrategy.cd34_gate."""
@@ -544,6 +533,7 @@ class TestGatingStrategyCd34Gate:
 # Тесты для GatingStrategy.macrophage_gate
 # =============================================================================
 
+
 class TestGatingStrategyMacrophageGate:
     """Тесты для GatingStrategy.macrophage_gate."""
 
@@ -594,11 +584,7 @@ class TestGatingStrategyMacrophageGate:
         cd68 = np.array([3000, 3000, 3000, 80000, 80000])
 
         strategy = GatingStrategy()
-        mask = strategy.macrophage_gate(
-            cd14, cd68,
-            cd14_threshold=50000,
-            cd68_threshold=50000
-        )
+        mask = strategy.macrophage_gate(cd14, cd68, cd14_threshold=50000, cd68_threshold=50000)
 
         # OR логика: CD14+ OR CD68+
         # [0]: оба низкие -> False
@@ -624,6 +610,7 @@ class TestGatingStrategyMacrophageGate:
 # =============================================================================
 # Тесты для GatingStrategy.apoptotic_gate
 # =============================================================================
+
 
 class TestGatingStrategyApoptoticGate:
     """Тесты для GatingStrategy.apoptotic_gate."""
@@ -652,10 +639,9 @@ class TestGatingStrategyApoptoticGate:
     def test_apoptotic_gate_inverse_of_live_cells(self):
         """Тест что апоптотический гейт - инверсия живых клеток для общего порога."""
         rng = np.random.default_rng(42)
-        annexin = np.concatenate([
-            rng.exponential(3000, size=800),
-            rng.normal(120000, 20000, size=200)
-        ])
+        annexin = np.concatenate(
+            [rng.exponential(3000, size=800), rng.normal(120000, 20000, size=200)]
+        )
 
         strategy = GatingStrategy()
         threshold = 50000
@@ -682,6 +668,7 @@ class TestGatingStrategyApoptoticGate:
 # Тесты для GatingStrategy.apply
 # =============================================================================
 
+
 class TestGatingStrategyApply:
     """Тесты для GatingStrategy.apply."""
 
@@ -700,8 +687,12 @@ class TestGatingStrategyApply:
         results = strategy.apply(mock_fcs_data_normal)
 
         expected_gates = [
-            "non_debris", "singlets", "live_cells",
-            "cd34_positive", "macrophages", "apoptotic"
+            "non_debris",
+            "singlets",
+            "live_cells",
+            "cd34_positive",
+            "macrophages",
+            "apoptotic",
         ]
         for gate_name in expected_gates:
             assert gate_name in results.gates, f"Missing gate: {gate_name}"
@@ -780,6 +771,7 @@ class TestGatingStrategyApply:
 # =============================================================================
 # Тесты для GatingStrategy._auto_threshold
 # =============================================================================
+
 
 class TestGatingStrategyAutoThreshold:
     """Тесты для GatingStrategy._auto_threshold."""
@@ -879,7 +871,7 @@ class TestGatingStrategyAutoThreshold:
         import src.data.gating as gating_module
 
         # Проверяем что HAS_SKIMAGE определен
-        assert hasattr(gating_module, 'HAS_SKIMAGE')
+        assert hasattr(gating_module, "HAS_SKIMAGE")
         assert isinstance(gating_module.HAS_SKIMAGE, bool)
 
         # Если skimage установлен, HAS_SKIMAGE = True
@@ -887,6 +879,7 @@ class TestGatingStrategyAutoThreshold:
         # В любом случае модуль загрузился успешно
         try:
             from skimage.filters import threshold_otsu
+
             assert gating_module.HAS_SKIMAGE is True
         except ImportError:
             assert gating_module.HAS_SKIMAGE is False
@@ -895,6 +888,7 @@ class TestGatingStrategyAutoThreshold:
 # =============================================================================
 # Тесты для GatingStrategy._density_gate
 # =============================================================================
+
 
 class TestGatingStrategyDensityGate:
     """Тесты для GatingStrategy._density_gate."""
@@ -961,6 +955,7 @@ class TestGatingStrategyDensityGate:
 # Интеграционные тесты с разными сценариями данных
 # =============================================================================
 
+
 class TestGatingStrategyScenarios:
     """Интеграционные тесты с разными сценариями."""
 
@@ -991,8 +986,9 @@ class TestGatingStrategyScenarios:
         results = strategy.apply(mock_fcs_data_normal)
 
         for gate_name, gate_result in results.gates.items():
-            assert 0 <= gate_result.fraction <= 1, \
-                f"Gate {gate_name} has invalid fraction: {gate_result.fraction}"
+            assert (
+                0 <= gate_result.fraction <= 1
+            ), f"Gate {gate_name} has invalid fraction: {gate_result.fraction}"
 
     def test_all_masks_correct_length(self, mock_fcs_data_normal):
         """Тест что все маски имеют правильную длину."""
@@ -1002,13 +998,13 @@ class TestGatingStrategyScenarios:
         results = strategy.apply(mock_fcs_data_normal)
 
         for gate_name, gate_result in results.gates.items():
-            assert len(gate_result.mask) == n_events, \
-                f"Gate {gate_name} mask has wrong length"
+            assert len(gate_result.mask) == n_events, f"Gate {gate_name} mask has wrong length"
 
 
 # =============================================================================
 # Тесты для GatingStrategy.neutrophil_gate (расширенное гейтирование)
 # =============================================================================
+
 
 class TestNeutrophilGate:
     """Тесты для метода neutrophil_gate (CD66b+)."""
@@ -1017,10 +1013,12 @@ class TestNeutrophilGate:
         """Тест что ~5% событий проходят нейтрофильный гейт."""
         rng = np.random.default_rng(60)
         # 95% — фоновый сигнал, 5% — высокий CD66b
-        cd66b = np.concatenate([
-            rng.exponential(4000, 950),
-            rng.normal(120000, 25000, 50),
-        ])
+        cd66b = np.concatenate(
+            [
+                rng.exponential(4000, 950),
+                rng.normal(120000, 25000, 50),
+            ]
+        )
         strategy = GatingStrategy()
         mask = strategy.neutrophil_gate(cd66b)
 
@@ -1080,6 +1078,7 @@ class TestNeutrophilGate:
 # Тесты для GatingStrategy.endothelial_gate (расширенное гейтирование)
 # =============================================================================
 
+
 class TestEndothelialGate:
     """Тесты для метода endothelial_gate (CD31+)."""
 
@@ -1087,10 +1086,12 @@ class TestEndothelialGate:
         """Тест что ~3% событий проходят эндотелиальный гейт."""
         rng = np.random.default_rng(61)
         # 97% — фоновый сигнал, 3% — высокий CD31
-        cd31 = np.concatenate([
-            rng.exponential(3000, 970),
-            rng.normal(100000, 20000, 30),
-        ])
+        cd31 = np.concatenate(
+            [
+                rng.exponential(3000, 970),
+                rng.normal(100000, 20000, 30),
+            ]
+        )
         strategy = GatingStrategy()
         mask = strategy.endothelial_gate(cd31)
 
@@ -1149,6 +1150,7 @@ class TestEndothelialGate:
 # Тесты для GatingStrategy.apply_extended (расширенное гейтирование)
 # =============================================================================
 
+
 class TestApplyExtended:
     """Тесты для метода apply_extended (9 каналов → 8 популяций)."""
 
@@ -1180,8 +1182,14 @@ class TestApplyExtended:
         strategy = GatingStrategy()
         results = strategy.apply_extended(mock_fcs_data_extended_normal)
         expected_keys = {
-            "non_debris", "singlets", "live_cells", "cd34_positive",
-            "macrophages", "apoptotic", "neutrophils", "endothelial",
+            "non_debris",
+            "singlets",
+            "live_cells",
+            "cd34_positive",
+            "macrophages",
+            "apoptotic",
+            "neutrophils",
+            "endothelial",
         }
         assert set(results.gates.keys()) == expected_keys
 
@@ -1190,8 +1198,9 @@ class TestApplyExtended:
         strategy = GatingStrategy()
         results = strategy.apply_extended(mock_fcs_data_extended_normal)
         for gate_name, gate in results.gates.items():
-            assert 0 <= gate.fraction <= 1, \
-                f"Gate {gate_name} fraction={gate.fraction} out of [0,1]"
+            assert (
+                0 <= gate.fraction <= 1
+            ), f"Gate {gate_name} fraction={gate.fraction} out of [0,1]"
 
     def test_neutrophils_parent_is_live_cells(self, mock_fcs_data_extended_normal):
         """Тест что neutrophils.parent == 'live_cells'."""

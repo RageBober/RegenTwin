@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Index, JSON, String
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, String
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 def _uuid() -> str:
@@ -14,7 +15,7 @@ def _uuid() -> str:
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Base(DeclarativeBase):
@@ -30,16 +31,16 @@ class SimulationRecord(Base):
         Index("ix_simulations_created_at", "created_at"),
     )
 
-    id = Column(String, primary_key=True, default=_uuid)
-    mode = Column(String, nullable=False)
-    status = Column(String, nullable=False, default="pending")
-    progress = Column(Float, default=0.0)
-    message = Column(String, nullable=True)
-    params_json = Column(JSON, nullable=False)
-    result_path = Column(String, nullable=True)
-    created_at = Column(DateTime, default=_utcnow)
-    completed_at = Column(DateTime, nullable=True)
-    error_message = Column(String, nullable=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    mode: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    progress: Mapped[float] = mapped_column(Float, default=0.0)
+    message: Mapped[str | None] = mapped_column(String, nullable=True)
+    params_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    result_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class UploadRecord(Base):
@@ -51,13 +52,13 @@ class UploadRecord(Base):
         Index("ix_uploads_created_at", "created_at"),
     )
 
-    id = Column(String, primary_key=True, default=_uuid)
-    filename = Column(String, nullable=False)
-    file_path = Column(String, nullable=False)
-    status = Column(String, default="processing")
-    description = Column(String, nullable=True)
-    created_at = Column(DateTime, default=_utcnow)
-    metadata_json = Column(JSON, nullable=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    filename: Mapped[str] = mapped_column(String, nullable=False)
+    file_path: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, default="processing")
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
 
 class AnalysisRecord(Base):
@@ -70,12 +71,14 @@ class AnalysisRecord(Base):
         Index("ix_analyses_simulation_id", "simulation_id"),
     )
 
-    id = Column(String, primary_key=True, default=_uuid)
-    analysis_type = Column(String, nullable=False)
-    status = Column(String, default="pending")
-    progress = Column(Float, default=0.0)
-    params_json = Column(JSON, nullable=False)
-    result_json = Column(JSON, nullable=True)
-    simulation_id = Column(String, ForeignKey("simulations.id"), nullable=True)
-    created_at = Column(DateTime, default=_utcnow)
-    completed_at = Column(DateTime, nullable=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    analysis_type: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, default="pending")
+    progress: Mapped[float] = mapped_column(Float, default=0.0)
+    params_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    result_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    simulation_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("simulations.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

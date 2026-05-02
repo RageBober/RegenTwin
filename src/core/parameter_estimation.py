@@ -13,6 +13,7 @@ from __future__ import annotations
 import dataclasses
 import math
 import time
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -794,6 +795,10 @@ class BayesianEstimator(BaseEstimator):
                     raise TypeError("Mock priors detected")
             except Exception:
                 # Fallback: create simple Normal priors for each parameter
+                warnings.warn(
+                    "Failed to build real PyMC priors, falling back to Normal defaults",
+                    stacklevel=2,
+                )
                 priors_dict = {}
                 for i, name in enumerate(param_names):
                     mu = float(initial[i]) if i < len(initial) else 0.0
@@ -858,6 +863,10 @@ class BayesianEstimator(BaseEstimator):
             try:
                 samples = np.array(idata.posterior[name]).flatten()
             except Exception:
+                warnings.warn(
+                    f"Failed to extract posterior for '{name}', using zeros",
+                    stacklevel=2,
+                )
                 samples = np.zeros(100)
             point_estimates[name] = float(np.mean(samples))
             ci_lower[name] = float(np.percentile(samples, 2.5))
@@ -1116,6 +1125,11 @@ class MLEstimator(BaseEstimator):
             bounds=bounds,
             options={"maxiter": self.config.mle_maxiter},
         )
+        if not opt_result.success:
+            warnings.warn(
+                f"MLE optimization did not converge: {opt_result.message}",
+                stacklevel=2,
+            )
         theta_opt = opt_result.x
         ci_lower, ci_upper = self._estimate_ci_from_hessian(theta_opt)
         log_lik = self._compute_log_likelihood(theta_opt)
@@ -1299,7 +1313,7 @@ class ConvergenceAnalyzer:
             import arviz as az
 
             rhat_data = az.rhat(inference_data)
-            return {str(k): float(v) for k, v in rhat_data.items()}
+            return {str(k): float(v) for k, v in rhat_data.items()}  # type: ignore[union-attr]
         except Exception:
             # Fallback for mock inference data
             try:

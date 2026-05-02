@@ -379,16 +379,12 @@ class TestBiphasicRelease:
     def test_decays_over_time(self, prp_model):
         """Значение при t=48 меньше значения при t=2 (после пика)."""
         val_peak = prp_model._biphasic_release(t=2.0, c0=20.0, tau_burst=1.0, tau_sustained=48.0)
-        val_late = prp_model._biphasic_release(
-            t=48.0, c0=20.0, tau_burst=1.0, tau_sustained=48.0
-        )
+        val_late = prp_model._biphasic_release(t=48.0, c0=20.0, tau_burst=1.0, tau_sustained=48.0)
         assert val_late < val_peak
 
     def test_large_t_near_zero(self, prp_model):
         """t=200ч → ≈ 0 (экспоненциальное затухание)."""
-        result = prp_model._biphasic_release(
-            t=200.0, c0=20.0, tau_burst=1.0, tau_sustained=48.0
-        )
+        result = prp_model._biphasic_release(t=200.0, c0=20.0, tau_burst=1.0, tau_sustained=48.0)
         assert result == pytest.approx(0.0, abs=0.1)
 
     def test_c0_zero_returns_zero(self, prp_model):
@@ -405,9 +401,7 @@ class TestBiphasicRelease:
     def test_result_nonnegative(self, prp_model):
         """Результат >= 0 для произвольных t >= 0."""
         for t in [0.0, 0.1, 1.0, 5.0, 10.0, 50.0, 100.0]:
-            result = prp_model._biphasic_release(
-                t=t, c0=20.0, tau_burst=1.0, tau_sustained=48.0
-            )
+            result = prp_model._biphasic_release(t=t, c0=20.0, tau_burst=1.0, tau_sustained=48.0)
             assert result >= 0.0, f"Отрицательный результат при t={t}"
 
     def test_dose_scaling(self):
@@ -439,16 +433,18 @@ class TestBiphasicRelease:
             for t in times
         ]
         for i in range(len(values) - 1):
-            assert values[i] >= values[i + 1], (
-                f"Не убывает: v({times[i]})={values[i]} < v({times[i+1]})={values[i+1]}"
-            )
+            assert (
+                values[i] >= values[i + 1]
+            ), f"Не убывает: v({times[i]})={values[i]} < v({times[i+1]})={values[i+1]}"
 
     def test_peak_time_formula(self, prp_model):
         """Пик при t_peak = τ_b·τ_s·ln(τ_s/τ_b)/(τ_s-τ_b)."""
         tau_b, tau_s = 1.0, 48.0
         t_peak = tau_b * tau_s * math.log(tau_s / tau_b) / (tau_s - tau_b)
         # Значение в пике должно быть больше значений чуть раньше и позже
-        val_peak = prp_model._biphasic_release(t=t_peak, c0=20.0, tau_burst=tau_b, tau_sustained=tau_s)
+        val_peak = prp_model._biphasic_release(
+            t=t_peak, c0=20.0, tau_burst=tau_b, tau_sustained=tau_s
+        )
         val_before = prp_model._biphasic_release(
             t=t_peak * 0.5, c0=20.0, tau_burst=tau_b, tau_sustained=tau_s
         )
@@ -499,9 +495,9 @@ class TestComputeRelease:
         """theta_total ∈ [0, 1]."""
         for t in [0.0, 1.0, 2.0, 5.0, 10.0, 50.0]:
             state = prp_model.compute_release(t=t)
-            assert 0.0 <= state.theta_total <= 1.0, (
-                f"theta_total={state.theta_total} вне [0,1] при t={t}"
-            )
+            assert (
+                0.0 <= state.theta_total <= 1.0
+            ), f"theta_total={state.theta_total} вне [0,1] при t={t}"
 
     def test_all_theta_nonnegative(self, prp_model):
         """Все theta >= 0 для произвольных t."""
@@ -850,12 +846,8 @@ class TestComputeEffects:
         assert effects.anti_inflammatory == pytest.approx(
             pemf_model.compute_anti_inflammatory(t=0.0)
         )
-        assert effects.proliferation == pytest.approx(
-            pemf_model.compute_proliferation_boost(t=0.0)
-        )
-        assert effects.migration == pytest.approx(
-            pemf_model.compute_migration_boost(t=0.0)
-        )
+        assert effects.proliferation == pytest.approx(pemf_model.compute_proliferation_boost(t=0.0))
+        assert effects.migration == pytest.approx(pemf_model.compute_migration_boost(t=0.0))
 
 
 # ============================================================================
@@ -1018,8 +1010,7 @@ class TestBiologicalProperties:
     def test_egf_fast_peak_decay_12h(self, prp_model):
         """EGF: пик < 1 ч, затухание к 12 ч (Anitua 2004)."""
         values = {
-            t: prp_model.compute_release(t=t).theta_egf
-            for t in [0.2, 0.5, 1.0, 2.0, 5.0, 12.0]
+            t: prp_model.compute_release(t=t).theta_egf for t in [0.2, 0.5, 1.0, 2.0, 5.0, 12.0]
         }
         peak_time = max(values, key=values.get)
         assert peak_time <= 1.0

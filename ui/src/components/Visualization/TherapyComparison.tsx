@@ -8,14 +8,15 @@ const VARIABLES = ['F', 'P', 'Ne', 'M1', 'M2', 'Mf', 'E', 'S'];
 
 interface Props {
   params: SimulationParams;
+  simulationId?: string;
 }
 
-export default function TherapyComparison({ params }: Props) {
+export default function TherapyComparison({ params, simulationId }: Props) {
   const { t } = useTranslation();
   const [variable, setVariable] = useState('F');
   const [showAll, setShowAll] = useState(false);
 
-  const { data, isLoading, error } = useComparison(params, variable, showAll);
+  const { data, isLoading, error } = useComparison(params, variable, showAll, simulationId);
 
   return (
     <div>

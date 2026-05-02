@@ -48,7 +48,10 @@ class TestWoundPhaseEnum:
         """Все 4 строковых значения присутствуют."""
         values = {p.value for p in WoundPhase}
         assert values == {
-            "hemostasis", "inflammation", "proliferation", "remodeling",
+            "hemostasis",
+            "inflammation",
+            "proliferation",
+            "remodeling",
         }
 
     def test_biological_order(self):
@@ -139,7 +142,10 @@ class TestDetectPhase:
     def test_hemostasis_detected(self, wound_phase_detector):
         """Состояние гемостаза -> HEMOSTASIS."""
         state = ExtendedSDEState(
-            P=10000.0, D=1.0, rho_fibrin=1.0, t=1.0,
+            P=10000.0,
+            D=1.0,
+            rho_fibrin=1.0,
+            t=1.0,
         )
         result = wound_phase_detector.detect_phase(state)
         assert result.phase == WoundPhase.HEMOSTASIS
@@ -147,8 +153,13 @@ class TestDetectPhase:
     def test_inflammation_detected(self, wound_phase_detector):
         """Состояние воспаления -> INFLAMMATION."""
         state = ExtendedSDEState(
-            Ne=500.0, M1=200.0, M2=50.0,
-            C_TNF=5.0, C_IL8=3.0, D=0.3, t=48.0,
+            Ne=500.0,
+            M1=200.0,
+            M2=50.0,
+            C_TNF=5.0,
+            C_IL8=3.0,
+            D=0.3,
+            t=48.0,
         )
         result = wound_phase_detector.detect_phase(state)
         assert result.phase == WoundPhase.INFLAMMATION
@@ -156,8 +167,14 @@ class TestDetectPhase:
     def test_proliferation_detected(self, wound_phase_detector):
         """Состояние пролиферации -> PROLIFERATION."""
         state = ExtendedSDEState(
-            F=1000.0, M2=300.0, M1=50.0, E=200.0,
-            C_VEGF=2.0, C_PDGF=3.0, rho_collagen=0.5, t=240.0,
+            F=1000.0,
+            M2=300.0,
+            M1=50.0,
+            E=200.0,
+            C_VEGF=2.0,
+            C_PDGF=3.0,
+            rho_collagen=0.5,
+            t=240.0,
         )
         result = wound_phase_detector.detect_phase(state)
         assert result.phase == WoundPhase.PROLIFERATION
@@ -165,8 +182,13 @@ class TestDetectPhase:
     def test_remodeling_detected(self, wound_phase_detector):
         """Состояние ремоделирования -> REMODELING."""
         state = ExtendedSDEState(
-            rho_collagen=0.9, C_MMP=0.5, Mf=5.0,
-            Ne=0.0, M1=0.0, rho_fibrin=0.01, t=600.0,
+            rho_collagen=0.9,
+            C_MMP=0.5,
+            Mf=5.0,
+            Ne=0.0,
+            M1=0.0,
+            rho_fibrin=0.01,
+            t=600.0,
         )
         result = wound_phase_detector.detect_phase(state)
         assert result.phase == WoundPhase.REMODELING
@@ -219,7 +241,9 @@ class TestIsHemostasis:
     def test_high_markers_high_confidence(self, wound_phase_detector):
         """P=10000, D=1, fibrin=1: высокий confidence."""
         state = ExtendedSDEState(
-            P=10000.0, D=1.0, rho_fibrin=1.0,
+            P=10000.0,
+            D=1.0,
+            rho_fibrin=1.0,
         )
         result = wound_phase_detector._is_hemostasis(state)
         assert result > 0.5
@@ -255,7 +279,10 @@ class TestIsInflammation:
     def test_high_Ne_M1_TNF(self, wound_phase_detector):
         """Ne=500, M1=200, M2=50: высокий confidence."""
         state = ExtendedSDEState(
-            Ne=500.0, M1=200.0, M2=50.0, C_TNF=5.0,
+            Ne=500.0,
+            M1=200.0,
+            M2=50.0,
+            C_TNF=5.0,
         )
         result = wound_phase_detector._is_inflammation(state)
         assert result > 0.5
@@ -269,10 +296,16 @@ class TestIsInflammation:
     def test_M2_greater_M1_moderate(self, wound_phase_detector):
         """M1=100, M2=300: умеренный confidence (M2 > M1)."""
         state_m1_dom = ExtendedSDEState(
-            Ne=500.0, M1=300.0, M2=100.0, C_TNF=5.0,
+            Ne=500.0,
+            M1=300.0,
+            M2=100.0,
+            C_TNF=5.0,
         )
         state_m2_dom = ExtendedSDEState(
-            Ne=500.0, M1=100.0, M2=300.0, C_TNF=5.0,
+            Ne=500.0,
+            M1=100.0,
+            M2=300.0,
+            C_TNF=5.0,
         )
         conf_m1 = wound_phase_detector._is_inflammation(state_m1_dom)
         conf_m2 = wound_phase_detector._is_inflammation(state_m2_dom)
@@ -297,8 +330,11 @@ class TestIsProliferation:
     def test_high_F_M2_collagen(self, wound_phase_detector):
         """F=1000, M2=300, collagen=0.5: высокий confidence."""
         state = ExtendedSDEState(
-            F=1000.0, M2=300.0, M1=50.0,
-            rho_collagen=0.5, C_VEGF=2.0,
+            F=1000.0,
+            M2=300.0,
+            M1=50.0,
+            rho_collagen=0.5,
+            C_VEGF=2.0,
         )
         result = wound_phase_detector._is_proliferation(state)
         assert result > 0.5
@@ -318,12 +354,18 @@ class TestIsProliferation:
     def test_VEGF_PDGF_boost(self, wound_phase_detector):
         """VEGF/PDGF увеличивают confidence пролиферации."""
         state_no_gf = ExtendedSDEState(
-            F=500.0, M2=200.0, M1=50.0,
-            C_VEGF=0.0, C_PDGF=0.0,
+            F=500.0,
+            M2=200.0,
+            M1=50.0,
+            C_VEGF=0.0,
+            C_PDGF=0.0,
         )
         state_with_gf = ExtendedSDEState(
-            F=500.0, M2=200.0, M1=50.0,
-            C_VEGF=5.0, C_PDGF=5.0,
+            F=500.0,
+            M2=200.0,
+            M1=50.0,
+            C_VEGF=5.0,
+            C_PDGF=5.0,
         )
         conf_no = wound_phase_detector._is_proliferation(state_no_gf)
         conf_with = wound_phase_detector._is_proliferation(state_with_gf)
@@ -341,8 +383,12 @@ class TestIsRemodeling:
     def test_high_collagen_MMP(self, wound_phase_detector):
         """collagen=0.9, MMP=0.5: высокий confidence."""
         state = ExtendedSDEState(
-            rho_collagen=0.9, C_MMP=0.5, Mf=5.0,
-            Ne=0.0, M1=0.0, rho_fibrin=0.01,
+            rho_collagen=0.9,
+            C_MMP=0.5,
+            Mf=5.0,
+            Ne=0.0,
+            M1=0.0,
+            rho_fibrin=0.01,
         )
         result = wound_phase_detector._is_remodeling(state)
         assert result > 0.5
@@ -362,10 +408,14 @@ class TestIsRemodeling:
     def test_high_fibrin_reduces(self, wound_phase_detector):
         """fibrin=1.0: снижает confidence ремоделирования."""
         state_no_fibrin = ExtendedSDEState(
-            rho_collagen=0.8, C_MMP=0.5, rho_fibrin=0.0,
+            rho_collagen=0.8,
+            C_MMP=0.5,
+            rho_fibrin=0.0,
         )
         state_high_fibrin = ExtendedSDEState(
-            rho_collagen=0.8, C_MMP=0.5, rho_fibrin=1.0,
+            rho_collagen=0.8,
+            C_MMP=0.5,
+            rho_fibrin=1.0,
         )
         conf_no = wound_phase_detector._is_remodeling(state_no_fibrin)
         conf_high = wound_phase_detector._is_remodeling(state_high_fibrin)
@@ -381,7 +431,9 @@ class TestDetectPhaseTrajectory:
     """Тесты detect_phase_trajectory: фазы для всей траектории."""
 
     def test_returns_list(
-        self, wound_phase_detector, sample_extended_trajectory,
+        self,
+        wound_phase_detector,
+        sample_extended_trajectory,
     ):
         """Возвращает список."""
         result = wound_phase_detector.detect_phase_trajectory(
@@ -390,7 +442,9 @@ class TestDetectPhaseTrajectory:
         assert isinstance(result, list)
 
     def test_length_matches(
-        self, wound_phase_detector, sample_extended_trajectory,
+        self,
+        wound_phase_detector,
+        sample_extended_trajectory,
     ):
         """Длина списка == количество состояний в траектории."""
         result = wound_phase_detector.detect_phase_trajectory(
@@ -399,7 +453,9 @@ class TestDetectPhaseTrajectory:
         assert len(result) == len(sample_extended_trajectory.states)
 
     def test_each_is_phase_indicators(
-        self, wound_phase_detector, sample_extended_trajectory,
+        self,
+        wound_phase_detector,
+        sample_extended_trajectory,
     ):
         """Каждый элемент — PhaseIndicators."""
         result = wound_phase_detector.detect_phase_trajectory(
@@ -424,7 +480,9 @@ class TestGetPhaseBoundaries:
     """Тесты get_phase_boundaries: временные границы фаз."""
 
     def test_returns_dict(
-        self, wound_phase_detector, sample_extended_trajectory,
+        self,
+        wound_phase_detector,
+        sample_extended_trajectory,
     ):
         """Возвращает dict."""
         result = wound_phase_detector.get_phase_boundaries(
@@ -433,7 +491,9 @@ class TestGetPhaseBoundaries:
         assert isinstance(result, dict)
 
     def test_keys_wound_phases(
-        self, wound_phase_detector, sample_extended_trajectory,
+        self,
+        wound_phase_detector,
+        sample_extended_trajectory,
     ):
         """Ключи — WoundPhase."""
         result = wound_phase_detector.get_phase_boundaries(
@@ -443,7 +503,9 @@ class TestGetPhaseBoundaries:
             assert isinstance(key, WoundPhase)
 
     def test_values_tuples(
-        self, wound_phase_detector, sample_extended_trajectory,
+        self,
+        wound_phase_detector,
+        sample_extended_trajectory,
     ):
         """Значения — tuple[float, float]."""
         result = wound_phase_detector.get_phase_boundaries(
@@ -454,16 +516,16 @@ class TestGetPhaseBoundaries:
             assert len(bounds) == 2
 
     def test_t_start_le_t_end(
-        self, wound_phase_detector, sample_extended_trajectory,
+        self,
+        wound_phase_detector,
+        sample_extended_trajectory,
     ):
         """t_start <= t_end для каждой фазы."""
         result = wound_phase_detector.get_phase_boundaries(
             sample_extended_trajectory,
         )
         for phase, (t_start, t_end) in result.items():
-            assert t_start <= t_end, (
-                f"Нарушение для {phase}: {t_start} > {t_end}"
-            )
+            assert t_start <= t_end, f"Нарушение для {phase}: {t_start} > {t_end}"
 
     def test_empty_trajectory(self, wound_phase_detector):
         """Пустая траектория -> пустой dict."""
@@ -488,10 +550,14 @@ class TestBiologicalPhaseProperties:
         # Гемостаз (0-6ч): P высокий, fibrin, D
         for i in range(7):
             t = float(i)
-            states.append(ExtendedSDEState(
-                P=10000.0 - i * 1000, D=1.0 - i * 0.1,
-                rho_fibrin=1.0, t=t,
-            ))
+            states.append(
+                ExtendedSDEState(
+                    P=10000.0 - i * 1000,
+                    D=1.0 - i * 0.1,
+                    rho_fibrin=1.0,
+                    t=t,
+                )
+            )
 
         # Воспаление (7-96ч): Ne, M1>M2, TNF
         for j in range(90):
@@ -499,29 +565,47 @@ class TestBiologicalPhaseProperties:
             ne = max(0.0, 500.0 - j * 5)
             m1 = max(0.0, 200.0 - j * 2)
             m2 = 50.0 + j * 2
-            states.append(ExtendedSDEState(
-                Ne=ne, M1=m1, M2=m2, C_TNF=max(0.0, 5.0 - j * 0.05),
-                C_IL8=max(0.0, 3.0 - j * 0.03), D=max(0.0, 0.3 - j * 0.003),
-                t=t,
-            ))
+            states.append(
+                ExtendedSDEState(
+                    Ne=ne,
+                    M1=m1,
+                    M2=m2,
+                    C_TNF=max(0.0, 5.0 - j * 0.05),
+                    C_IL8=max(0.0, 3.0 - j * 0.03),
+                    D=max(0.0, 0.3 - j * 0.003),
+                    t=t,
+                )
+            )
 
         # Пролиферация (97-504ч): F, M2>M1, VEGF, collagen растёт
         for k in range(408):
             t = float(97 + k)
-            states.append(ExtendedSDEState(
-                F=100.0 + k * 2, M2=300.0, M1=30.0, E=50.0 + k * 0.3,
-                rho_collagen=0.1 + k * 0.002,
-                C_VEGF=2.0, C_PDGF=3.0, t=t,
-            ))
+            states.append(
+                ExtendedSDEState(
+                    F=100.0 + k * 2,
+                    M2=300.0,
+                    M1=30.0,
+                    E=50.0 + k * 0.3,
+                    rho_collagen=0.1 + k * 0.002,
+                    C_VEGF=2.0,
+                    C_PDGF=3.0,
+                    t=t,
+                )
+            )
 
         # Ремоделирование (505-720ч): collagen стабильный, MMP, Mf↓
         for m in range(216):
             t = float(505 + m)
-            states.append(ExtendedSDEState(
-                rho_collagen=0.9, C_MMP=0.5,
-                Mf=max(0.0, 50.0 - m * 0.2), F=200.0,
-                rho_fibrin=0.01, t=t,
-            ))
+            states.append(
+                ExtendedSDEState(
+                    rho_collagen=0.9,
+                    C_MMP=0.5,
+                    Mf=max(0.0, 50.0 - m * 0.2),
+                    F=200.0,
+                    rho_fibrin=0.01,
+                    t=t,
+                )
+            )
 
         return ExtendedSDETrajectory(
             times=np.array([s.t for s in states]),
@@ -529,7 +613,9 @@ class TestBiologicalPhaseProperties:
         )
 
     def test_phase_order_H_I_P_R(
-        self, wound_phase_detector, mock_wound_trajectory,
+        self,
+        wound_phase_detector,
+        mock_wound_trajectory,
     ):
         """Нормальное заживление: фазы идут в порядке H→I→P→R."""
         boundaries = wound_phase_detector.get_phase_boundaries(
@@ -539,22 +625,16 @@ class TestBiologicalPhaseProperties:
         assert len(boundaries) >= 3
 
         # Проверяем порядок появления
-        if WoundPhase.HEMOSTASIS in boundaries and \
-                WoundPhase.INFLAMMATION in boundaries:
-            assert (
-                boundaries[WoundPhase.HEMOSTASIS][0]
-                <= boundaries[WoundPhase.INFLAMMATION][0]
-            )
+        if WoundPhase.HEMOSTASIS in boundaries and WoundPhase.INFLAMMATION in boundaries:
+            assert boundaries[WoundPhase.HEMOSTASIS][0] <= boundaries[WoundPhase.INFLAMMATION][0]
 
-        if WoundPhase.INFLAMMATION in boundaries and \
-                WoundPhase.PROLIFERATION in boundaries:
-            assert (
-                boundaries[WoundPhase.INFLAMMATION][0]
-                <= boundaries[WoundPhase.PROLIFERATION][0]
-            )
+        if WoundPhase.INFLAMMATION in boundaries and WoundPhase.PROLIFERATION in boundaries:
+            assert boundaries[WoundPhase.INFLAMMATION][0] <= boundaries[WoundPhase.PROLIFERATION][0]
 
     def test_hemostasis_before_6h(
-        self, wound_phase_detector, mock_wound_trajectory,
+        self,
+        wound_phase_detector,
+        mock_wound_trajectory,
     ):
         """Гемостаз начинается около t=0."""
         boundaries = wound_phase_detector.get_phase_boundaries(
@@ -565,7 +645,9 @@ class TestBiologicalPhaseProperties:
             assert t_start <= 1.0
 
     def test_inflammation_peak_24_48h(
-        self, wound_phase_detector, mock_wound_trajectory,
+        self,
+        wound_phase_detector,
+        mock_wound_trajectory,
     ):
         """Воспаление доминирует где-то в 24-96ч."""
         phases = wound_phase_detector.detect_phase_trajectory(
@@ -575,16 +657,16 @@ class TestBiologicalPhaseProperties:
 
         # Находим индексы где фаза = INFLAMMATION
         inflam_times = [
-            times[i]
-            for i, pi in enumerate(phases)
-            if pi.phase == WoundPhase.INFLAMMATION
+            times[i] for i, pi in enumerate(phases) if pi.phase == WoundPhase.INFLAMMATION
         ]
         if inflam_times:
             # Какие-то моменты воспаления должны быть в 12-96ч
             assert any(12.0 <= t <= 96.0 for t in inflam_times)
 
     def test_M1_M2_ratio_matches_phase(
-        self, wound_phase_detector, mock_wound_trajectory,
+        self,
+        wound_phase_detector,
+        mock_wound_trajectory,
     ):
         """M1 > M2 при воспалении, M2 > M1 при пролиферации."""
         phases = wound_phase_detector.detect_phase_trajectory(
@@ -602,7 +684,9 @@ class TestBiologicalPhaseProperties:
                 assert state.M2 > 0
 
     def test_collagen_in_proliferation(
-        self, wound_phase_detector, mock_wound_trajectory,
+        self,
+        wound_phase_detector,
+        mock_wound_trajectory,
     ):
         """Коллаген растёт в фазе пролиферации."""
         phases = wound_phase_detector.detect_phase_trajectory(
@@ -621,7 +705,9 @@ class TestBiologicalPhaseProperties:
             assert prolif_collagen[-1] > prolif_collagen[0]
 
     def test_remodeling_after_day_21(
-        self, wound_phase_detector, mock_wound_trajectory,
+        self,
+        wound_phase_detector,
+        mock_wound_trajectory,
     ):
         """Ремоделирование начинается после ~504ч (21 день)."""
         boundaries = wound_phase_detector.get_phase_boundaries(
@@ -630,6 +716,4 @@ class TestBiologicalPhaseProperties:
         if WoundPhase.REMODELING in boundaries:
             t_start = boundaries[WoundPhase.REMODELING][0]
             # Ремоделирование не раньше дня 14 (336ч)
-            assert t_start >= 336.0, (
-                f"Ремоделирование слишком рано: {t_start}ч"
-            )
+            assert t_start >= 336.0, f"Ремоделирование слишком рано: {t_start}ч"

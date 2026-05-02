@@ -31,16 +31,17 @@ export default class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="flex h-full items-center justify-center p-8">
-          <div className="max-w-md rounded-lg border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-900/20">
-            <h2 className="mb-2 text-lg font-semibold text-red-700 dark:text-red-300">
+          <div className="card max-w-md border-red-400/20 p-6 text-center">
+            <h2 className="mb-2 text-base font-semibold text-red-600 dark:text-red-400">
               Something went wrong
             </h2>
-            <p className="mb-4 text-sm text-red-600 dark:text-red-400">
+            <p className="mb-4 text-sm text-red-500/70 dark:text-red-400/60">
               {this.state.error?.message}
             </p>
             <button
               onClick={() => this.setState({ hasError: false, error: null })}
-              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="rounded-xl bg-red-500 px-4 py-2 text-sm font-medium text-white
+                         hover:bg-red-600 transition-colors"
             >
               Try again
             </button>

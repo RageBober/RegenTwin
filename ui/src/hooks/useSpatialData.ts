@@ -3,6 +3,7 @@ import { apiClient, API_VIZ } from '../lib/api';
 import type { PlotlyFigure } from '../types/api';
 
 export interface SpatialRequest {
+  simulation_id?: string;
   n_stem?: number;
   n_macro?: number;
   n_fibro?: number;
@@ -40,10 +41,7 @@ function useSpatialQuery(endpoint: string, params: SpatialRequest) {
   return useQuery({
     queryKey: ['spatial', endpoint, merged],
     queryFn: async () => {
-      const { data } = await apiClient.post<PlotlyFigure>(
-        `${API_VIZ}/spatial/${endpoint}`,
-        merged,
-      );
+      const { data } = await apiClient.post<PlotlyFigure>(`${API_VIZ}/spatial/${endpoint}`, merged);
       return data;
     },
     staleTime: Infinity,

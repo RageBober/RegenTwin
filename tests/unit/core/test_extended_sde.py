@@ -129,10 +129,26 @@ class TestExtendedSDEStateToArray:
     def test_order_matches_state_index(self):
         """Порядок элементов соответствует StateIndex."""
         state = ExtendedSDEState(
-            P=1.0, Ne=2.0, M1=3.0, M2=4.0, F=5.0, Mf=6.0, E=7.0, S=8.0,
-            C_TNF=9.0, C_IL10=10.0, C_PDGF=11.0, C_VEGF=12.0, C_TGFb=13.0,
-            C_MCP1=14.0, C_IL8=15.0, rho_collagen=16.0, C_MMP=17.0,
-            rho_fibrin=18.0, D=19.0, O2=20.0,
+            P=1.0,
+            Ne=2.0,
+            M1=3.0,
+            M2=4.0,
+            F=5.0,
+            Mf=6.0,
+            E=7.0,
+            S=8.0,
+            C_TNF=9.0,
+            C_IL10=10.0,
+            C_PDGF=11.0,
+            C_VEGF=12.0,
+            C_TGFb=13.0,
+            C_MCP1=14.0,
+            C_IL8=15.0,
+            rho_collagen=16.0,
+            C_MMP=17.0,
+            rho_fibrin=18.0,
+            D=19.0,
+            O2=20.0,
         )
         result = state.to_array()
         assert result[StateIndex.P] == 1.0
@@ -279,17 +295,13 @@ class TestExtendedSDETrajectoryGetStatistics:
         result = sample_extended_trajectory.get_statistics()
         expected_keys = {"mean", "std", "min", "max", "final"}
         for var_name, stats in result.items():
-            assert set(stats.keys()) == expected_keys, (
-                f"Неверные ключи для {var_name}"
-            )
+            assert set(stats.keys()) == expected_keys, f"Неверные ключи для {var_name}"
 
     def test_min_le_mean_le_max(self, sample_extended_trajectory):
         """Min <= mean <= max для каждой переменной."""
         result = sample_extended_trajectory.get_statistics()
         for var_name, stats in result.items():
-            assert stats["min"] <= stats["mean"] <= stats["max"], (
-                f"Нарушение для {var_name}"
-            )
+            assert stats["min"] <= stats["mean"] <= stats["max"], f"Нарушение для {var_name}"
 
     def test_final_equals_last_state(self, sample_extended_trajectory):
         """Final == значение в последнем состоянии."""
@@ -361,14 +373,16 @@ class TestExtendedSDEModelSimulate:
     def test_returns_trajectory(self, extended_sde_model, wound_initial_state):
         """simulate() возвращает ExtendedSDETrajectory."""
         result = extended_sde_model.simulate(
-            wound_initial_state, t_span=(0, 1),
+            wound_initial_state,
+            t_span=(0, 1),
         )
         assert isinstance(result, ExtendedSDETrajectory)
 
     def test_no_nan(self, extended_sde_model, wound_initial_state):
         """Траектория не содержит NaN."""
         traj = extended_sde_model.simulate(
-            wound_initial_state, t_span=(0, 1),
+            wound_initial_state,
+            t_span=(0, 1),
         )
         for state in traj.states:
             arr = state.to_array()
@@ -377,25 +391,26 @@ class TestExtendedSDEModelSimulate:
     def test_all_nonnegative(self, extended_sde_model, wound_initial_state):
         """Все переменные >= 0 на всём интервале."""
         traj = extended_sde_model.simulate(
-            wound_initial_state, t_span=(0, 1),
+            wound_initial_state,
+            t_span=(0, 1),
         )
         for state in traj.states:
             arr = state.to_array()
-            assert np.all(arr >= 0), (
-                f"Отрицательные значения: {arr[arr < 0]}"
-            )
+            assert np.all(arr >= 0), f"Отрицательные значения: {arr[arr < 0]}"
 
     def test_times_match_states(self, extended_sde_model, wound_initial_state):
         """len(times) == len(states)."""
         traj = extended_sde_model.simulate(
-            wound_initial_state, t_span=(0, 1),
+            wound_initial_state,
+            t_span=(0, 1),
         )
         assert len(traj.times) == len(traj.states)
 
     def test_custom_t_span(self, extended_sde_model, wound_initial_state):
         """t_span=(0, 10) -> times в [0, 10]."""
         traj = extended_sde_model.simulate(
-            wound_initial_state, t_span=(0, 10),
+            wound_initial_state,
+            t_span=(0, 10),
         )
         assert traj.times[0] == pytest.approx(0.0)
         assert traj.times[-1] == pytest.approx(10.0, abs=0.1)
@@ -428,7 +443,9 @@ class TestComputeDrift:
         assert np.all(np.isfinite(result))
 
     def test_components_match_individual(
-        self, extended_sde_model, wound_initial_state,
+        self,
+        extended_sde_model,
+        wound_initial_state,
     ):
         """drift[StateIndex.P] == _drift_platelets(state)."""
         drift = extended_sde_model._compute_drift(wound_initial_state)
@@ -436,7 +453,9 @@ class TestComputeDrift:
         assert drift[StateIndex.P] == pytest.approx(p_drift)
 
     def test_wound_state_finite(
-        self, extended_sde_model, wound_initial_state,
+        self,
+        extended_sde_model,
+        wound_initial_state,
     ):
         """Drift конечен для начального состояния раны."""
         result = extended_sde_model._compute_drift(wound_initial_state)
@@ -543,7 +562,10 @@ class TestDriftM1:
     def test_high_TNF_MCP1_positive(self, extended_sde_model):
         """Высокий TNF и MCP-1: рекрутирование в M1."""
         state = ExtendedSDEState(
-            C_TNF=10.0, C_MCP1=10.0, M1=0.0, M2=0.0,
+            C_TNF=10.0,
+            C_MCP1=10.0,
+            M1=0.0,
+            M2=0.0,
         )
         result = extended_sde_model._drift_M1(state)
         assert result > 0
@@ -551,10 +573,18 @@ class TestDriftM1:
     def test_high_IL10_switching(self, extended_sde_model):
         """Высокий IL-10 + M1 > 0: переключение M1->M2, drift уменьшается."""
         state_low = ExtendedSDEState(
-            M1=200.0, M2=0.0, C_IL10=0.0, C_TGFb=0.0, C_MCP1=5.0,
+            M1=200.0,
+            M2=0.0,
+            C_IL10=0.0,
+            C_TGFb=0.0,
+            C_MCP1=5.0,
         )
         state_high = ExtendedSDEState(
-            M1=200.0, M2=0.0, C_IL10=10.0, C_TGFb=5.0, C_MCP1=5.0,
+            M1=200.0,
+            M2=0.0,
+            C_IL10=10.0,
+            C_TGFb=5.0,
+            C_MCP1=5.0,
         )
         drift_low = extended_sde_model._drift_M1(state_low)
         drift_high = extended_sde_model._drift_M1(state_high)
@@ -579,7 +609,10 @@ class TestDriftM2:
     def test_switching_from_M1(self, extended_sde_model):
         """Высокий IL-10, M1 > 0: переключение M1→M2 -> положительный вклад."""
         state = ExtendedSDEState(
-            M1=200.0, M2=0.0, C_IL10=10.0, C_TGFb=5.0,
+            M1=200.0,
+            M2=0.0,
+            C_IL10=10.0,
+            C_TGFb=5.0,
         )
         result = extended_sde_model._drift_M2(state)
         assert result > 0
@@ -587,10 +620,16 @@ class TestDriftM2:
     def test_reverse_switching(self, extended_sde_model):
         """Высокий TNF, M2 > 0: обратное переключение -> отрицательный вклад."""
         state_high_tnf = ExtendedSDEState(
-            M1=0.0, M2=200.0, C_TNF=10.0, C_IL10=0.0,
+            M1=0.0,
+            M2=200.0,
+            C_TNF=10.0,
+            C_IL10=0.0,
         )
         state_low_tnf = ExtendedSDEState(
-            M1=0.0, M2=200.0, C_TNF=0.0, C_IL10=0.0,
+            M1=0.0,
+            M2=200.0,
+            C_TNF=0.0,
+            C_IL10=0.0,
         )
         drift_high = extended_sde_model._drift_M2(state_high_tnf)
         drift_low = extended_sde_model._drift_M2(state_low_tnf)
@@ -600,8 +639,12 @@ class TestDriftM2:
     def test_mirror_invariant(self, extended_sde_model):
         """Потоки переключения M1↔M2 зеркальны."""
         state = ExtendedSDEState(
-            M1=200.0, M2=100.0, C_IL10=5.0, C_TGFb=3.0,
-            C_TNF=2.0, C_MCP1=1.0,
+            M1=200.0,
+            M2=100.0,
+            C_IL10=5.0,
+            C_TGFb=3.0,
+            C_TNF=2.0,
+            C_MCP1=1.0,
         )
         drift_m1 = extended_sde_model._drift_M1(state)
         drift_m2 = extended_sde_model._drift_M2(state)
@@ -630,13 +673,19 @@ class TestDriftFibroblasts:
         """F+Mf == K_F: логистический рост = 0."""
         K_F = extended_sde_model.params.K_F
         state = ExtendedSDEState(
-            F=K_F * 0.5, Mf=K_F * 0.5, C_PDGF=5.0, C_TGFb=2.0,
+            F=K_F * 0.5,
+            Mf=K_F * 0.5,
+            C_PDGF=5.0,
+            C_TGFb=2.0,
         )
         result = extended_sde_model._drift_fibroblasts(state)
         # Логистический рост = 0 при capacity, но есть S->F и F->Mf и апоптоз
         # Проверяем что рост ограничен по сравнению с подкапасити
         state_low = ExtendedSDEState(
-            F=100.0, Mf=0.0, C_PDGF=5.0, C_TGFb=2.0,
+            F=100.0,
+            Mf=0.0,
+            C_PDGF=5.0,
+            C_TGFb=2.0,
         )
         drift_low = extended_sde_model._drift_fibroblasts(state_low)
         assert drift_low > result  # Ниже capacity -> больше роста
@@ -696,10 +745,14 @@ class TestDriftEndothelial:
         """O2=O2_blood: (1-theta) ~= 0 -> минимальный рост."""
         O2_blood = extended_sde_model.params.O2_blood
         state_normoxia = ExtendedSDEState(
-            E=100.0, C_VEGF=5.0, O2=O2_blood,
+            E=100.0,
+            C_VEGF=5.0,
+            O2=O2_blood,
         )
         state_hypoxia = ExtendedSDEState(
-            E=100.0, C_VEGF=5.0, O2=1.0,
+            E=100.0,
+            C_VEGF=5.0,
+            O2=1.0,
         )
         drift_norm = extended_sde_model._drift_endothelial(state_normoxia)
         drift_hyp = extended_sde_model._drift_endothelial(state_hypoxia)
@@ -805,10 +858,14 @@ class TestDriftCytokines:
     def test_drift_C_VEGF_hypoxia_boost(self, extended_sde_model):
         """Низкий O2: гипоксия усиливает VEGF продукцию."""
         state_norm = ExtendedSDEState(
-            M2=100.0, C_VEGF=0.0, O2=100.0,
+            M2=100.0,
+            C_VEGF=0.0,
+            O2=100.0,
         )
         state_hypo = ExtendedSDEState(
-            M2=100.0, C_VEGF=0.0, O2=1.0,
+            M2=100.0,
+            C_VEGF=0.0,
+            O2=1.0,
         )
         drift_norm = extended_sde_model._drift_C_VEGF(state_norm)
         drift_hypo = extended_sde_model._drift_C_VEGF(state_hypo)
@@ -831,7 +888,10 @@ class TestDriftCytokines:
     def test_drift_C_TGFb_degradation(self, extended_sde_model):
         """Нет источников, C_TGFb > 0: деградация."""
         state = ExtendedSDEState(
-            P=0.0, M2=0.0, Mf=0.0, C_TGFb=5.0,
+            P=0.0,
+            M2=0.0,
+            Mf=0.0,
+            C_TGFb=5.0,
         )
         result = extended_sde_model._drift_C_TGFb(state)
         assert result < 0
@@ -855,7 +915,10 @@ class TestDriftCytokines:
     def test_drift_C_IL8_autocrine(self, extended_sde_model):
         """Ne > 0: аутокринная продукция IL-8."""
         state = ExtendedSDEState(
-            Ne=200.0, D=0.5, M1=50.0, C_IL8=0.0,
+            Ne=200.0,
+            D=0.5,
+            M1=50.0,
+            C_IL8=0.0,
         )
         result = extended_sde_model._drift_C_IL8(state)
         assert result > 0
@@ -863,7 +926,10 @@ class TestDriftCytokines:
     def test_drift_C_IL8_degradation(self, extended_sde_model):
         """Все источники = 0: деградация."""
         state = ExtendedSDEState(
-            Ne=0.0, D=0.0, M1=0.0, C_IL8=5.0,
+            Ne=0.0,
+            D=0.0,
+            M1=0.0,
+            C_IL8=5.0,
         )
         result = extended_sde_model._drift_C_IL8(state)
         assert result < 0
@@ -880,7 +946,10 @@ class TestDriftECM:
     def test_collagen_production(self, extended_sde_model):
         """F > 0, Mf > 0, rho < rho_max: продукция -> drift > 0."""
         state = ExtendedSDEState(
-            F=500.0, Mf=100.0, rho_collagen=0.0, C_MMP=0.0,
+            F=500.0,
+            Mf=100.0,
+            rho_collagen=0.0,
+            C_MMP=0.0,
         )
         result = extended_sde_model._drift_collagen(state)
         assert result > 0
@@ -889,7 +958,10 @@ class TestDriftECM:
         """rho_c == rho_max: продукция = 0 (насыщение)."""
         rho_max = extended_sde_model.params.rho_c_max
         state = ExtendedSDEState(
-            F=500.0, Mf=100.0, rho_collagen=rho_max, C_MMP=0.0,
+            F=500.0,
+            Mf=100.0,
+            rho_collagen=rho_max,
+            C_MMP=0.0,
         )
         result = extended_sde_model._drift_collagen(state)
         # При насыщении продукция = 0, деградация MMP тоже 0 -> ~0
@@ -898,7 +970,10 @@ class TestDriftECM:
     def test_collagen_MMP_degradation(self, extended_sde_model):
         """Высокий MMP, rho > 0: деградация коллагена."""
         state = ExtendedSDEState(
-            F=0.0, Mf=0.0, rho_collagen=0.5, C_MMP=5.0,
+            F=0.0,
+            Mf=0.0,
+            rho_collagen=0.5,
+            C_MMP=5.0,
         )
         result = extended_sde_model._drift_collagen(state)
         assert result < 0
@@ -912,7 +987,10 @@ class TestDriftECM:
     def test_MMP_TIMP_inhibition(self, extended_sde_model):
         """Высокий TIMP, MMP > 0: ингибирование."""
         state_mmp = ExtendedSDEState(
-            M1=0.0, M2=0.0, F=0.0, C_MMP=5.0,
+            M1=0.0,
+            M2=0.0,
+            F=0.0,
+            C_MMP=5.0,
         )
         result = extended_sde_model._drift_MMP(state_mmp)
         # Без источников, с TIMP -> деградация
@@ -921,7 +999,9 @@ class TestDriftECM:
     def test_fibrin_always_nonpositive(self, extended_sde_model):
         """rho_fibrin > 0: drift фибрина <= 0 (только убыль)."""
         state = ExtendedSDEState(
-            rho_fibrin=1.0, C_MMP=0.5, F=100.0,
+            rho_fibrin=1.0,
+            C_MMP=0.5,
+            F=100.0,
         )
         result = extended_sde_model._drift_fibrin(state)
         assert result <= 0
@@ -964,7 +1044,11 @@ class TestDriftAuxiliary:
         """Клетки потребляют кислород."""
         O2_blood = extended_sde_model.params.O2_blood
         state_cells = ExtendedSDEState(
-            O2=O2_blood, Ne=500.0, M1=200.0, F=300.0, E=100.0,
+            O2=O2_blood,
+            Ne=500.0,
+            M1=200.0,
+            F=300.0,
+            E=100.0,
         )
         state_no_cells = ExtendedSDEState(O2=O2_blood)
         drift_cells = extended_sde_model._drift_oxygen(state_cells)
@@ -1159,8 +1243,14 @@ class TestBoundaryConditions:
     def test_all_negative_all_zero(self, extended_sde_model):
         """Все отрицательные -> все нули."""
         state = ExtendedSDEState(
-            P=-1.0, Ne=-2.0, M1=-3.0, M2=-4.0,
-            F=-5.0, Mf=-6.0, E=-7.0, S=-8.0,
+            P=-1.0,
+            Ne=-2.0,
+            M1=-3.0,
+            M2=-4.0,
+            F=-5.0,
+            Mf=-6.0,
+            E=-7.0,
+            S=-8.0,
         )
         result = extended_sde_model._apply_boundary_conditions(state)
         arr = result.to_array()
@@ -1248,14 +1338,13 @@ class TestBiologicalProperties:
         traj = model.simulate(state, t_span=(0, 48))
         for s in traj.states:
             arr = s.to_array()
-            assert np.all(arr >= 0), (
-                f"Отрицательные значения на t={s.t}: {arr[arr < 0]}"
-            )
+            assert np.all(arr >= 0), f"Отрицательные значения на t={s.t}: {arr[arr < 0]}"
 
     def test_macrophage_M1_M2_switch(self):
         """M1 пик на 24-48ч, M2 доминирует после 72ч."""
         model = ExtendedSDEModel(
-            params=ParameterSet(dt=0.1), rng_seed=42,
+            params=ParameterSet(dt=0.1),
+            rng_seed=42,
         )
         state = model.get_default_initial_state()
         traj = model.simulate(state, t_span=(0, 120))
@@ -1273,21 +1362,32 @@ class TestBiologicalProperties:
     def test_tgfb_mf_bistability(self):
         """TGF-β ↔ Mf бистабильность: высокий TGFb -> Mf сохраняется."""
         model = ExtendedSDEModel(
-            params=ParameterSet(dt=0.1), rng_seed=42,
+            params=ParameterSet(dt=0.1),
+            rng_seed=42,
         )
 
         # Состояние с высоким TGFb и Mf
         state_high = ExtendedSDEState(
-            P=1e4, F=500.0, Mf=200.0, C_TGFb=10.0,
-            D=1.0, O2=100.0, rho_fibrin=1.0,
+            P=1e4,
+            F=500.0,
+            Mf=200.0,
+            C_TGFb=10.0,
+            D=1.0,
+            O2=100.0,
+            rho_fibrin=1.0,
         )
         traj_high = model.simulate(state_high, t_span=(0, 48))
         mf_high_final = traj_high.get_variable("Mf")[-1]
 
         # Состояние с низким TGFb и Mf
         state_low = ExtendedSDEState(
-            P=1e4, F=500.0, Mf=200.0, C_TGFb=0.0,
-            D=1.0, O2=100.0, rho_fibrin=1.0,
+            P=1e4,
+            F=500.0,
+            Mf=200.0,
+            C_TGFb=0.0,
+            D=1.0,
+            O2=100.0,
+            rho_fibrin=1.0,
         )
         traj_low = model.simulate(state_low, t_span=(0, 48))
         mf_low_final = traj_low.get_variable("Mf")[-1]
@@ -1298,21 +1398,30 @@ class TestBiologicalProperties:
     def test_hypoxia_angiogenesis(self):
         """Низкий O2 -> рост E(t) (гипоксия-ангиогенез)."""
         model = ExtendedSDEModel(
-            params=ParameterSet(dt=0.1), rng_seed=42,
+            params=ParameterSet(dt=0.1),
+            rng_seed=42,
         )
 
         # Гипоксия
         state_hypo = ExtendedSDEState(
-            P=1e4, E=100.0, C_VEGF=5.0, O2=5.0,
-            D=1.0, rho_fibrin=1.0,
+            P=1e4,
+            E=100.0,
+            C_VEGF=5.0,
+            O2=5.0,
+            D=1.0,
+            rho_fibrin=1.0,
         )
         traj_hypo = model.simulate(state_hypo, t_span=(0, 48))
         e_hypo = traj_hypo.get_variable("E")
 
         # Нормоксия
         state_norm = ExtendedSDEState(
-            P=1e4, E=100.0, C_VEGF=5.0, O2=100.0,
-            D=1.0, rho_fibrin=1.0,
+            P=1e4,
+            E=100.0,
+            C_VEGF=5.0,
+            O2=100.0,
+            D=1.0,
+            rho_fibrin=1.0,
         )
         traj_norm = model.simulate(state_norm, t_span=(0, 48))
         e_norm = traj_norm.get_variable("E")
@@ -1323,7 +1432,8 @@ class TestBiologicalProperties:
     def test_fibrin_to_collagen(self):
         """rho_fibrin падает, rho_collagen растёт (замещение)."""
         model = ExtendedSDEModel(
-            params=ParameterSet(dt=0.1), rng_seed=42,
+            params=ParameterSet(dt=0.1),
+            rng_seed=42,
         )
         state = model.get_default_initial_state()
         traj = model.simulate(state, t_span=(0, 168))  # 7 дней
@@ -1338,7 +1448,8 @@ class TestBiologicalProperties:
     def test_neutrophil_peak_decay(self):
         """Ne пик на 12-24ч, затухание к 48ч."""
         model = ExtendedSDEModel(
-            params=ParameterSet(dt=0.1), rng_seed=42,
+            params=ParameterSet(dt=0.1),
+            rng_seed=42,
         )
         state = model.get_default_initial_state()
         traj = model.simulate(state, t_span=(0, 72))
@@ -1350,9 +1461,7 @@ class TestBiologicalProperties:
         peak_time = times[peak_idx]
 
         # Пик должен быть в районе 12-48ч
-        assert 6.0 <= peak_time <= 48.0, (
-            f"Пик нейтрофилов на {peak_time}ч, ожидалось 6-48ч"
-        )
+        assert 6.0 <= peak_time <= 48.0, f"Пик нейтрофилов на {peak_time}ч, ожидалось 6-48ч"
 
         # После 48ч Ne убывает
         idx_48h = np.searchsorted(times, 48.0)

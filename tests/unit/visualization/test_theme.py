@@ -11,7 +11,6 @@ from src.visualization.theme import (
     ECM_COLORS,
     ECM_VARS,
     PHASE_COLORS,
-    PLOTLY_LAYOUT_DEFAULTS,
     POPULATION_COLORS,
     POPULATION_VARS,
     THERAPY_COLORS,

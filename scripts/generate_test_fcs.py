@@ -1,5 +1,4 @@
-"""
-Генерация тестовых FCS 3.1 файлов для RegenTwin.
+"""Генерация тестовых FCS 3.1 файлов для RegenTwin.
 
 Запуск:
     python scripts/generate_test_fcs.py
@@ -12,7 +11,6 @@
 
 from __future__ import annotations
 
-import struct
 import sys
 from pathlib import Path
 
@@ -23,8 +21,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from tests.fixtures.mock_data import (
-    generate_normal_fcs_data,
     generate_inflamed_fcs_data,
+    generate_normal_fcs_data,
     generate_regenerating_fcs_data,
 )
 
@@ -40,7 +38,7 @@ CHANNEL_META = [
 ]
 
 
-def write_fcs(filepath: Path, df: "pd.DataFrame") -> None:
+def write_fcs(filepath: Path, df: pd.DataFrame) -> None:
     """Записать DataFrame в формате FCS 3.1 (float32, little-endian)."""
     n_events = len(df)
     n_params = len(df.columns)
@@ -145,7 +143,9 @@ def write_fcs(filepath: Path, df: "pd.DataFrame") -> None:
         f.write(text_bytes)
         f.write(data_bytes)
 
-    print(f"  {filepath.name}: {n_events} events, {n_params} channels, {filepath.stat().st_size:,} bytes")
+    print(
+        f"  {filepath.name}: {n_events} events, {n_params} channels, {filepath.stat().st_size:,} bytes"
+    )
 
 
 def main() -> None:

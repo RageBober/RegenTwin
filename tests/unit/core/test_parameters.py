@@ -224,18 +224,14 @@ class TestParameterSetToDict:
         ps = ParameterSet()
         result = ps.to_dict()
         for key, value in result.items():
-            assert isinstance(value, (float, int)), (
-                f"Значение {key}={value} не float/int"
-            )
+            assert isinstance(value, (float, int)), f"Значение {key}={value} не float/int"
 
     def test_to_dict_matches_fields(self):
         """Каждое значение в словаре совпадает с полем dataclass."""
         ps = ParameterSet()
         result = ps.to_dict()
         for f in dataclasses.fields(ps):
-            assert result[f.name] == getattr(ps, f.name), (
-                f"Несовпадение для {f.name}"
-            )
+            assert result[f.name] == getattr(ps, f.name), f"Несовпадение для {f.name}"
 
 
 # =============================================================================

@@ -1,28 +1,81 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  HomeIcon,
-  Cog6ToothIcon,
-  ClockIcon,
-  AdjustmentsHorizontalIcon,
-  BeakerIcon,
-  Bars3Icon,
-} from '@heroicons/react/24/outline';
+import type { ComponentType, ReactNode, SVGProps } from 'react';
+import { HomeIcon, ClockIcon, BeakerIcon, InformationCircleIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
 import { apiClient, API_V1 } from '../lib/api';
+import { useUIStore } from '../stores/uiStore';
+import { useSimulationsList } from '../hooks/useSimulation';
+import TopBar from './common/TopBar';
 
-const navItems = [
-  { path: '/', icon: HomeIcon, labelKey: 'nav.home' },
-  { path: '/dashboard', icon: AdjustmentsHorizontalIcon, labelKey: 'nav.dashboard' },
-  { path: '/analysis', icon: BeakerIcon, labelKey: 'nav.analysis' },
-  { path: '/history', icon: ClockIcon, labelKey: 'nav.history' },
-  { path: '/settings', icon: Cog6ToothIcon, labelKey: 'nav.settings' },
+const MicroscopeIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} {...props}>
+    <path d="M7 21h10M12 21v-4M9 3h6M12 3v4M9 7l-2 6h10l-2-6" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="12" cy="16" r="1" />
+  </svg>
+);
+
+const ThemeIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} {...props}>
+    <path
+      d="M21.75 15.5A9.75 9.75 0 0 1 18 16.25 9.75 9.75 0 0 1 8.25 6.5c0-1.33.27-2.6.75-3.75A9.75 9.75 0 0 0 3 12.5c0 5.38 4.37 9.75 9.75 9.75 4.34 0 8-2.83 9.27-6.75Z"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const BrandMark = () => (
+  <div
+    className="h-8 w-8 rounded-lg flex items-center justify-center"
+    style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-border)' }}
+  >
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="var(--accent)" strokeWidth="1.8">
+      <path
+        d="M12 3c-1.5 3-4 4.5-4 7s2.5 4 4 7c1.5-3 4-4.5 4-7s-2.5-4-4-7Z"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="10" r="1.5" fill="var(--accent)" />
+    </svg>
+  </div>
+);
+
+type NavItem = {
+  path: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  labelKey: string;
+  trailing?: ReactNode;
+};
+
+const sections: readonly { label?: string; items: readonly NavItem[] }[] = [
+  {
+    items: [
+      { path: '/', icon: HomeIcon, labelKey: 'nav.home' },
+      { path: '/dashboard', icon: MicroscopeIcon, labelKey: 'nav.dashboard' },
+    ],
+  },
+  {
+    label: 'Работа',
+    items: [
+      { path: '/history', icon: ClockIcon, labelKey: 'nav.history' },
+      { path: '/analysis', icon: BeakerIcon, labelKey: 'nav.analysis' },
+    ],
+  },
+  {
+    items: [
+      { path: '/about', icon: InformationCircleIcon, labelKey: 'nav.about' },
+      { path: '/settings', icon: Cog6ToothIcon, labelKey: 'nav.settings' },
+    ],
+  },
 ] as const;
 
 export default function Layout() {
-  const { t, i18n } = useTranslation();
-  const [collapsed, setCollapsed] = useState(false);
+  const { t } = useTranslation();
+  const theme = useUIStore((state) => state.theme);
+  const setTheme = useUIStore((state) => state.setTheme);
   const [backendOnline, setBackendOnline] = useState(false);
+  const { data: simulations } = useSimulationsList();
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -33,92 +86,82 @@ export default function Layout() {
         setBackendOnline(false);
       }
     };
-    checkHealth();
-    const interval = setInterval(checkHealth, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
-  const toggleLanguage = () => {
-    const newLang = i18n.language === 'ru' ? 'en' : 'ru';
-    i18n.changeLanguage(newLang);
-    localStorage.setItem('regentwin-language', newLang);
-  };
+    void checkHealth();
+    const interval = window.setInterval(checkHealth, backendOnline ? 30000 : 15000);
+    return () => window.clearInterval(interval);
+  }, [backendOnline]);
+
+  const navSections = useMemo(() => {
+    const historyCount = simulations?.length ?? 0;
+    return sections.map((section) => ({
+      ...section,
+      items: section.items.map((item) =>
+        item.path === '/history'
+          ? {
+              ...item,
+              trailing: (
+                <span className="ml-auto text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                  {historyCount}
+                </span>
+              ),
+            }
+          : item,
+      ),
+    }));
+  }, [simulations]);
 
   return (
-    <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900">
-      {/* Sidebar */}
+    <div className="flex h-screen w-full">
       <aside
-        className={`flex flex-col border-r border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 transition-all duration-200 ${
-          collapsed ? 'w-16' : 'w-56'
-        }`}
+        className="flex flex-col w-[220px] shrink-0 border-r"
+        style={{ background: 'var(--surface-1)', borderColor: 'var(--border-default)' }}
       >
-        {/* Header */}
-        <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-3 dark:border-slate-700">
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
-            aria-label="Toggle sidebar"
-          >
-            <Bars3Icon className="h-5 w-5" />
-          </button>
-          {!collapsed && (
-            <span className="text-lg font-bold text-primary-600 dark:text-primary-400">
-              RegenTwin
-            </span>
-          )}
+        <div className="flex items-center gap-2.5 px-4 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+          <BrandMark />
+          <span className="font-display text-base font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            RegenTwin
+          </span>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 px-2 py-3">
-          {navItems.map(({ path, icon: Icon, labelKey }) => (
-            <NavLink
-              key={path}
-              to={path}
-              end={path === '/'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
-                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'
-                }`
-              }
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
+          {navSections.map((section, index) => (
+            <div
+              key={index}
+              className={index > 0 ? 'pt-4 border-t space-y-0.5' : 'space-y-0.5'}
+              style={index > 0 ? { borderColor: 'var(--border-default)' } : undefined}
             >
-              <Icon className="h-5 w-5 flex-shrink-0" />
-              {!collapsed && <span>{t(labelKey)}</span>}
-            </NavLink>
+              {section.label ? <div className="section-label px-2 mb-2">{section.label}</div> : null}
+              {section.items.map(({ path, icon: Icon, labelKey, trailing }) => (
+                <NavLink key={path} to={path} end={path === '/'} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                  <Icon className="h-[17px] w-[17px]" />
+                  <span>{t(labelKey)}</span>
+                  {trailing}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className="border-t border-slate-200 px-3 py-3 dark:border-slate-700">
-          {/* Language toggle */}
+        <div className="p-3 border-t" style={{ borderColor: 'var(--border-default)' }}>
           <button
-            onClick={toggleLanguage}
-            className="mb-2 flex w-full items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"
+            className="btn-outline w-full justify-center"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            type="button"
           >
-            {collapsed ? (i18n.language === 'ru' ? 'RU' : 'EN') : (i18n.language === 'ru' ? 'RU / EN' : 'EN / RU')}
+            <ThemeIcon className="h-3.5 w-3.5" />
+            <span>Сменить тему</span>
           </button>
-
-          {/* Health indicator */}
-          <div className="flex items-center gap-2">
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${
-                backendOnline ? 'bg-green-500' : 'bg-red-500'
-              }`}
-            />
-            {!collapsed && (
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                {backendOnline ? t('common.backendOnline') : t('common.backendOffline')}
-              </span>
-            )}
-          </div>
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <Outlet />
-      </main>
+      <div className="flex-1 flex flex-col min-w-0">
+        <TopBar backendOnline={backendOnline} />
+
+        <main className="flex-1 overflow-auto">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

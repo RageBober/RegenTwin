@@ -35,6 +35,18 @@ from src.core.abm_model import (
     simulate_abm,
 )
 
+# ABM Extended (Phase 2.8)
+from src.core.abm_spatial import (
+    ChemotaxisEngine,
+    ContactInhibitionEngine,
+    EfferocytosisEngine,
+    KDTreeNeighborSearch,
+    MechanotransductionEngine,
+    MultiCytokineField,
+    PlateletAgent,
+    SubcyclingManager,
+)
+
 # Extended SDE
 from src.core.extended_sde import (
     VARIABLE_NAMES,
@@ -127,18 +139,6 @@ from src.core.therapy_models import (
     PRPReleaseState,
     SynergyConfig,
     SynergyModel,
-)
-
-# ABM Extended (Phase 2.8)
-from src.core.abm_spatial import (
-    ChemotaxisEngine,
-    ContactInhibitionEngine,
-    EfferocytosisEngine,
-    KDTreeNeighborSearch,
-    MechanotransductionEngine,
-    MultiCytokineField,
-    PlateletAgent,
-    SubcyclingManager,
 )
 
 # Wound Phases

@@ -274,6 +274,28 @@ def mock_phase_indicators() -> list[PhaseIndicators]:
     return indicators
 
 
+@pytest.fixture
+def mock_phase_indicators_late_transition() -> list[PhaseIndicators]:
+    """Фазовые индикаторы: поздний переход P → R только на последней точке."""
+    indicators: list[PhaseIndicators] = []
+
+    for i in range(100):
+        is_last = i == 99
+        indicators.append(
+            PhaseIndicators(
+                phase=WoundPhase.REMODELING if is_last else WoundPhase.PROLIFERATION,
+                confidence=0.75 if is_last else 0.8,
+                dominant_cells=["F", "Mf", "E"] if is_last else ["F", "M2", "E"],
+                dominant_cytokines=["TGFb", "IL10", "VEGF"]
+                if is_last
+                else ["VEGF", "IL10", "PDGF"],
+                phase_progress=i / 99,
+            )
+        )
+
+    return indicators
+
+
 # ── Фикстуры для analysis_plots ──────────────────────────────────
 
 

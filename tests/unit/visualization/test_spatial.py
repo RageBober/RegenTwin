@@ -62,6 +62,16 @@ class TestScatterAgents:
         assert isinstance(fig, go.Figure)
         assert len(fig.data) == 1
 
+    def test_color_by_type_hovertemplate_has_context(
+        self,
+        mock_abm_snapshot: ABMSnapshot,
+    ) -> None:
+        fig = scatter_agents(mock_abm_snapshot, color_by="type")
+        hovertemplate = fig.data[0].hovertemplate or ""
+        assert "Энергия" in hovertemplate
+        assert "Возраст" in hovertemplate
+        assert "X:" in hovertemplate
+
 
 class TestInflammationMap:
     """Тесты inflammation_map — карта воспаления."""
@@ -100,6 +110,16 @@ class TestFieldHeatmap:
     def test_invalid_field_raises(self, mock_abm_snapshot: ABMSnapshot) -> None:
         with pytest.raises(ValueError, match="Неизвестное поле"):
             field_heatmap(mock_abm_snapshot, field="invalid")
+
+    def test_hovertemplate_includes_coordinates_and_units(
+        self,
+        mock_abm_snapshot: ABMSnapshot,
+    ) -> None:
+        fig = field_heatmap(mock_abm_snapshot, field="cytokine")
+        hovertemplate = fig.data[0].hovertemplate or ""
+        assert "X:" in hovertemplate
+        assert "Y:" in hovertemplate
+        assert "нг/мл" in hovertemplate
 
 
 class TestAnimateEvolution:

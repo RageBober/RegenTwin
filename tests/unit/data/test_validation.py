@@ -1,5 +1,4 @@
-"""
-TDD тесты для модуля validation.py
+"""TDD тесты для модуля validation.py
 
 Тестирует:
 - ValidationLevel enum
@@ -17,28 +16,28 @@ TDD тесты для модуля validation.py
 - LENIENT: только критические проверки
 """
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
+from src.data.gating import GateResult, GatingResults
+from src.data.parameter_extraction import ExtendedModelParameters, ModelParameters
 from src.data.validation import (
-    ValidationLevel,
-    ValidationResult,
+    CYTOKINE_TIMESERIES_SCHEMA,
+    FCS_DATA_SCHEMA,
+    TIME_SERIES_SCHEMA,
     ColumnSchema,
     DataSchema,
     DataValidator,
-    FCS_DATA_SCHEMA,
-    TIME_SERIES_SCHEMA,
-    CYTOKINE_TIMESERIES_SCHEMA,
+    ValidationLevel,
+    ValidationResult,
     validate_data,
 )
-from src.data.parameter_extraction import ModelParameters, ExtendedModelParameters
-from src.data.gating import GatingResults, GateResult
-
 
 # =============================================================================
 # Тесты для ValidationLevel
 # =============================================================================
+
 
 class TestValidationLevel:
     """Тесты для enum ValidationLevel."""
@@ -61,6 +60,7 @@ class TestValidationLevel:
 # =============================================================================
 # Тесты для ValidationResult
 # =============================================================================
+
 
 class TestValidationResult:
     """Тесты для dataclass ValidationResult."""
@@ -125,6 +125,7 @@ class TestValidationResult:
 # Тесты для ColumnSchema
 # =============================================================================
 
+
 class TestColumnSchema:
     """Тесты для dataclass ColumnSchema."""
 
@@ -160,6 +161,7 @@ class TestColumnSchema:
 # =============================================================================
 # Тесты для DataSchema
 # =============================================================================
+
 
 class TestDataSchema:
     """Тесты для dataclass DataSchema."""
@@ -210,6 +212,7 @@ class TestDataSchema:
 # Тесты для предопределённых схем
 # =============================================================================
 
+
 class TestPredefinedSchemas:
     """Тесты для предопределённых схем данных."""
 
@@ -244,6 +247,7 @@ class TestPredefinedSchemas:
 # Тесты для DataValidator.__init__
 # =============================================================================
 
+
 class TestDataValidatorInit:
     """Тесты для конструктора DataValidator."""
 
@@ -271,6 +275,7 @@ class TestDataValidatorInit:
 # =============================================================================
 # Тесты для DataValidator.validate_dataframe
 # =============================================================================
+
 
 class TestValidateDataframe:
     """Тесты для DataValidator.validate_dataframe."""
@@ -384,6 +389,7 @@ class TestValidateDataframe:
 # Тесты для DataValidator.validate_fcs_data
 # =============================================================================
 
+
 class TestValidateFcsData:
     """Тесты для DataValidator.validate_fcs_data."""
 
@@ -391,13 +397,15 @@ class TestValidateFcsData:
         """Тест что валидные FCS данные проходят валидацию."""
         rng = np.random.default_rng(50)
         n = 200
-        df = pd.DataFrame({
-            "FSC-A": rng.uniform(10000, 200000, n),
-            "FSC-H": rng.uniform(10000, 200000, n),
-            "SSC-A": rng.uniform(5000, 100000, n),
-            "CD34": rng.uniform(0, 50000, n),
-            "Annexin-V": rng.uniform(0, 30000, n),
-        })
+        df = pd.DataFrame(
+            {
+                "FSC-A": rng.uniform(10000, 200000, n),
+                "FSC-H": rng.uniform(10000, 200000, n),
+                "SSC-A": rng.uniform(5000, 100000, n),
+                "CD34": rng.uniform(0, 50000, n),
+                "Annexin-V": rng.uniform(0, 30000, n),
+            }
+        )
         validator = DataValidator()
         result = validator.validate_fcs_data(df)
         assert result.is_valid is True
@@ -406,12 +414,14 @@ class TestValidateFcsData:
         """Тест что отсутствие FSC-A → ошибка."""
         rng = np.random.default_rng(51)
         n = 200
-        df = pd.DataFrame({
-            "FSC-H": rng.uniform(10000, 200000, n),
-            "SSC-A": rng.uniform(5000, 100000, n),
-            "CD34": rng.uniform(0, 50000, n),
-            "Annexin-V": rng.uniform(0, 30000, n),
-        })
+        df = pd.DataFrame(
+            {
+                "FSC-H": rng.uniform(10000, 200000, n),
+                "SSC-A": rng.uniform(5000, 100000, n),
+                "CD34": rng.uniform(0, 50000, n),
+                "Annexin-V": rng.uniform(0, 30000, n),
+            }
+        )
         validator = DataValidator()
         result = validator.validate_fcs_data(df)
         assert result.is_valid is False
@@ -420,14 +430,16 @@ class TestValidateFcsData:
         """Тест что отсутствие опционального CD66b не вызывает ошибку."""
         rng = np.random.default_rng(52)
         n = 200
-        df = pd.DataFrame({
-            "FSC-A": rng.uniform(10000, 200000, n),
-            "FSC-H": rng.uniform(10000, 200000, n),
-            "SSC-A": rng.uniform(5000, 100000, n),
-            "CD34": rng.uniform(0, 50000, n),
-            "Annexin-V": rng.uniform(0, 30000, n),
-            # CD66b отсутствует — это ОК
-        })
+        df = pd.DataFrame(
+            {
+                "FSC-A": rng.uniform(10000, 200000, n),
+                "FSC-H": rng.uniform(10000, 200000, n),
+                "SSC-A": rng.uniform(5000, 100000, n),
+                "CD34": rng.uniform(0, 50000, n),
+                "Annexin-V": rng.uniform(0, 30000, n),
+                # CD66b отсутствует — это ОК
+            }
+        )
         validator = DataValidator()
         result = validator.validate_fcs_data(df)
         assert result.is_valid is True
@@ -436,13 +448,15 @@ class TestValidateFcsData:
         """Тест что менее 100 событий → ошибка."""
         rng = np.random.default_rng(53)
         n = 50  # Меньше минимума 100
-        df = pd.DataFrame({
-            "FSC-A": rng.uniform(10000, 200000, n),
-            "FSC-H": rng.uniform(10000, 200000, n),
-            "SSC-A": rng.uniform(5000, 100000, n),
-            "CD34": rng.uniform(0, 50000, n),
-            "Annexin-V": rng.uniform(0, 30000, n),
-        })
+        df = pd.DataFrame(
+            {
+                "FSC-A": rng.uniform(10000, 200000, n),
+                "FSC-H": rng.uniform(10000, 200000, n),
+                "SSC-A": rng.uniform(5000, 100000, n),
+                "CD34": rng.uniform(0, 50000, n),
+                "Annexin-V": rng.uniform(0, 30000, n),
+            }
+        )
         validator = DataValidator()
         result = validator.validate_fcs_data(df)
         assert result.is_valid is False
@@ -452,25 +466,30 @@ class TestValidateFcsData:
 # Тесты для DataValidator.validate_time_series
 # =============================================================================
 
+
 class TestValidateTimeSeries:
     """Тесты для DataValidator.validate_time_series."""
 
     def test_monotonic_time_is_valid(self):
         """Тест что монотонно возрастающее время проходит валидацию."""
-        df = pd.DataFrame({
-            "time": [0.0, 6.0, 24.0, 48.0],
-            "cell_count": [1000.0, 2000.0, 3000.0, 2500.0],
-        })
+        df = pd.DataFrame(
+            {
+                "time": [0.0, 6.0, 24.0, 48.0],
+                "cell_count": [1000.0, 2000.0, 3000.0, 2500.0],
+            }
+        )
         validator = DataValidator()
         result = validator.validate_time_series(df)
         assert result.is_valid is True
 
     def test_non_monotonic_time_is_error(self):
         """Тест что немонотонное время → ошибка с 'monoton' в тексте."""
-        df = pd.DataFrame({
-            "time": [0.0, 6.0, 3.0, 48.0],  # 3.0 < 6.0 — нарушение
-            "cell_count": [1000.0, 2000.0, 3000.0, 2500.0],
-        })
+        df = pd.DataFrame(
+            {
+                "time": [0.0, 6.0, 3.0, 48.0],  # 3.0 < 6.0 — нарушение
+                "cell_count": [1000.0, 2000.0, 3000.0, 2500.0],
+            }
+        )
         validator = DataValidator()
         result = validator.validate_time_series(df)
         assert result.is_valid is False
@@ -479,20 +498,24 @@ class TestValidateTimeSeries:
 
     def test_single_time_point_too_few_rows(self):
         """Тест что одна временная точка < min_rows=2 → ошибка."""
-        df = pd.DataFrame({
-            "time": [0.0],
-            "cell_count": [1000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "time": [0.0],
+                "cell_count": [1000.0],
+            }
+        )
         validator = DataValidator()
         result = validator.validate_time_series(df)
         assert result.is_valid is False
 
     def test_negative_values_warning_or_error(self):
         """Тест что отрицательные значения вызывают предупреждение или ошибку."""
-        df = pd.DataFrame({
-            "time": [0.0, 6.0, 24.0],
-            "cell_count": [1000.0, -5.0, 3000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "time": [0.0, 6.0, 24.0],
+                "cell_count": [1000.0, -5.0, 3000.0],
+            }
+        )
         validator = DataValidator()
         result = validator.validate_time_series(df)
         assert len(result.warnings) > 0 or len(result.errors) > 0
@@ -501,6 +524,7 @@ class TestValidateTimeSeries:
 # =============================================================================
 # Тесты для DataValidator.validate_model_parameters
 # =============================================================================
+
 
 class TestValidateModelParameters:
     """Тесты для DataValidator.validate_model_parameters."""
@@ -542,12 +566,26 @@ class TestValidateModelParameters:
     def test_invalid_extended_O2_over_1(self):
         """Тест что O2=1.5 → is_valid=False."""
         params = ExtendedModelParameters(
-            P0=250000.0, Ne0=500.0, M1_0=105.0, M2_0=45.0,
-            F0=500.0, Mf0=0.0, E0=300.0, S0=250.0,
-            C_TNF=0.1, C_IL10=0.05, C_PDGF=5.0, C_VEGF=0.5,
-            C_TGFb=1.0, C_MCP1=0.2, C_IL8=0.1,
-            rho_collagen=0.1, C_MMP=0.5, rho_fibrin=0.8,
-            D=1.0, O2=1.5,  # Невалидно: > 1
+            P0=250000.0,
+            Ne0=500.0,
+            M1_0=105.0,
+            M2_0=45.0,
+            F0=500.0,
+            Mf0=0.0,
+            E0=300.0,
+            S0=250.0,
+            C_TNF=0.1,
+            C_IL10=0.05,
+            C_PDGF=5.0,
+            C_VEGF=0.5,
+            C_TGFb=1.0,
+            C_MCP1=0.2,
+            C_IL8=0.1,
+            rho_collagen=0.1,
+            C_MMP=0.5,
+            rho_fibrin=0.8,
+            D=1.0,
+            O2=1.5,  # Невалидно: > 1
         )
         validator = DataValidator()
         result = validator.validate_model_parameters(params)
@@ -557,6 +595,7 @@ class TestValidateModelParameters:
 # =============================================================================
 # Тесты для DataValidator.validate_gating_results
 # =============================================================================
+
 
 class TestValidateGatingResults:
     """Тесты для DataValidator.validate_gating_results."""
@@ -632,6 +671,7 @@ class TestValidateGatingResults:
 # Тесты для validate_data() функции
 # =============================================================================
 
+
 class TestValidateDataFunction:
     """Тесты для удобной функции validate_data."""
 
@@ -649,31 +689,37 @@ class TestValidateDataFunction:
         """Тест автодетекции FCS схемы по столбцу 'FSC-A'."""
         rng = np.random.default_rng(60)
         n = 200
-        df = pd.DataFrame({
-            "FSC-A": rng.uniform(10000, 200000, n),
-            "FSC-H": rng.uniform(10000, 200000, n),
-            "SSC-A": rng.uniform(5000, 100000, n),
-            "CD34": rng.uniform(0, 50000, n),
-            "Annexin-V": rng.uniform(0, 30000, n),
-        })
+        df = pd.DataFrame(
+            {
+                "FSC-A": rng.uniform(10000, 200000, n),
+                "FSC-H": rng.uniform(10000, 200000, n),
+                "SSC-A": rng.uniform(5000, 100000, n),
+                "CD34": rng.uniform(0, 50000, n),
+                "Annexin-V": rng.uniform(0, 30000, n),
+            }
+        )
         result = validate_data(df, schema=None)
         assert isinstance(result, ValidationResult)
 
     def test_auto_detect_time_series_by_time(self):
         """Тест автодетекции TimeSeries схемы по столбцу 'time'."""
-        df = pd.DataFrame({
-            "time": [0.0, 6.0, 24.0],
-            "cell_count": [1000.0, 2000.0, 3000.0],
-        })
+        df = pd.DataFrame(
+            {
+                "time": [0.0, 6.0, 24.0],
+                "cell_count": [1000.0, 2000.0, 3000.0],
+            }
+        )
         result = validate_data(df, schema=None)
         assert isinstance(result, ValidationResult)
 
     def test_auto_detect_cytokine_by_time_and_tnf(self):
         """Тест автодетекции Cytokine схемы по столбцам time + TNF_alpha."""
-        df = pd.DataFrame({
-            "time": [0.0, 6.0, 24.0],
-            "TNF_alpha": [0.1, 0.5, 0.3],
-            "IL_10": [0.05, 0.1, 0.08],
-        })
+        df = pd.DataFrame(
+            {
+                "time": [0.0, 6.0, 24.0],
+                "TNF_alpha": [0.1, 0.5, 0.3],
+                "IL_10": [0.05, 0.1, 0.08],
+            }
+        )
         result = validate_data(df, schema=None)
         assert isinstance(result, ValidationResult)

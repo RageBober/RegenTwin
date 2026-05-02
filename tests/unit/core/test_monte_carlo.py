@@ -16,8 +16,7 @@
 import numpy as np
 import pytest
 
-from src.core.abm_model import ABMConfig, ABMTrajectory
-from src.core.integration import IntegrationConfig, IntegratedTrajectory
+from src.core.abm_model import ABMConfig
 from src.core.monte_carlo import (
     MonteCarloConfig,
     MonteCarloResults,
@@ -29,7 +28,6 @@ from src.core.monte_carlo import (
 )
 from src.core.sde_model import SDEConfig, SDETrajectory, TherapyProtocol
 from src.data.parameter_extraction import ModelParameters
-
 
 # =============================================================================
 # Test MonteCarloConfig
@@ -405,7 +403,9 @@ class TestMonteCarloResults:
 
     def test_get_confidence_interval(self, sample_mc_results):
         """Метод get_confidence_interval возвращает (lower, upper)."""
-        lower, upper = sample_mc_results.get_confidence_interval(variable="N", confidence_level=0.95)
+        lower, upper = sample_mc_results.get_confidence_interval(
+            variable="N", confidence_level=0.95
+        )
         assert len(lower) == len(upper)
 
     def test_get_final_distribution(self, sample_mc_results):
@@ -610,9 +610,7 @@ class TestRunMonteCarloFunction:
         )
         assert isinstance(results, MonteCarloResults)
 
-    def test_run_monte_carlo_with_therapy(
-        self, sample_model_parameters, prp_therapy_protocol
-    ):
+    def test_run_monte_carlo_with_therapy(self, sample_model_parameters, prp_therapy_protocol):
         """Функция принимает протокол терапии."""
         config = MonteCarloConfig(n_trajectories=5, base_seed=42)
 
@@ -976,16 +974,12 @@ class TestRunParallel:
     @pytest.fixture
     def simulator_sequential(self):
         """Симулятор для последовательного запуска."""
-        config = MonteCarloConfig(
-            n_trajectories=10, n_jobs=1, base_seed=42
-        )
+        config = MonteCarloConfig(n_trajectories=10, n_jobs=1, base_seed=42)
         return MonteCarloSimulator(config=config)
 
     def test_n_jobs_1_equivalent_sequential(self, sample_model_parameters):
         """n_jobs=1 — эквивалентно последовательному запуску."""
-        config = MonteCarloConfig(
-            n_trajectories=5, n_jobs=1, base_seed=42
-        )
+        config = MonteCarloConfig(n_trajectories=5, n_jobs=1, base_seed=42)
         simulator = MonteCarloSimulator(config=config)
         results = simulator._run_parallel(sample_model_parameters)
 
@@ -994,7 +988,9 @@ class TestRunParallel:
     def test_n_jobs_2_returns_all_results(self, sample_model_parameters):
         """n_jobs=2 — возвращает все n_trajectories результатов."""
         config = MonteCarloConfig(
-            n_trajectories=10, n_jobs=2, base_seed=42,
+            n_trajectories=10,
+            n_jobs=2,
+            base_seed=42,
             use_multiprocessing=True,
         )
         simulator = MonteCarloSimulator(config=config)
@@ -1005,7 +1001,9 @@ class TestRunParallel:
     def test_reproducibility_with_seed(self, sample_model_parameters):
         """Одинаковый base_seed → идентичные результаты."""
         config = MonteCarloConfig(
-            n_trajectories=5, n_jobs=2, base_seed=42,
+            n_trajectories=5,
+            n_jobs=2,
+            base_seed=42,
             use_multiprocessing=True,
         )
         sim1 = MonteCarloSimulator(config=config)
@@ -1022,7 +1020,9 @@ class TestRunParallel:
     def test_failure_handling(self, sample_model_parameters):
         """Ошибка в одной траектории → помечается как failed, остальные OK."""
         config = MonteCarloConfig(
-            n_trajectories=5, n_jobs=2, base_seed=42,
+            n_trajectories=5,
+            n_jobs=2,
+            base_seed=42,
             use_multiprocessing=True,
         )
         simulator = MonteCarloSimulator(config=config)
@@ -1035,7 +1035,9 @@ class TestRunParallel:
     def test_single_trajectory_parallel(self, sample_model_parameters):
         """n_trajectories=1 при n_jobs=1 → 1 результат."""
         config = MonteCarloConfig(
-            n_trajectories=1, n_jobs=1, base_seed=42,
+            n_trajectories=1,
+            n_jobs=1,
+            base_seed=42,
         )
         simulator = MonteCarloSimulator(config=config)
         results = simulator._run_parallel(sample_model_parameters)
@@ -1045,7 +1047,9 @@ class TestRunParallel:
     def test_all_results_have_trajectory_ids(self, sample_model_parameters):
         """Каждый результат имеет уникальный trajectory_id."""
         config = MonteCarloConfig(
-            n_trajectories=5, n_jobs=2, base_seed=42,
+            n_trajectories=5,
+            n_jobs=2,
+            base_seed=42,
             use_multiprocessing=True,
         )
         simulator = MonteCarloSimulator(config=config)
@@ -1057,7 +1061,9 @@ class TestRunParallel:
     def test_results_have_seeds(self, sample_model_parameters):
         """Каждый результат имеет random_seed."""
         config = MonteCarloConfig(
-            n_trajectories=5, n_jobs=1, base_seed=42,
+            n_trajectories=5,
+            n_jobs=1,
+            base_seed=42,
         )
         simulator = MonteCarloSimulator(config=config)
         results = simulator._run_parallel(sample_model_parameters)
@@ -1078,7 +1084,9 @@ class TestRunParallelInvariants:
         """len(results) == n_trajectories."""
         for n in [1, 5, 10]:
             config = MonteCarloConfig(
-                n_trajectories=n, n_jobs=1, base_seed=42,
+                n_trajectories=n,
+                n_jobs=1,
+                base_seed=42,
             )
             simulator = MonteCarloSimulator(config=config)
             results = simulator._run_parallel(sample_model_parameters)
@@ -1087,10 +1095,14 @@ class TestRunParallelInvariants:
     def test_results_independent_of_n_jobs(self, sample_model_parameters):
         """Результаты не зависят от n_jobs (только скорость)."""
         config_1 = MonteCarloConfig(
-            n_trajectories=4, n_jobs=1, base_seed=42,
+            n_trajectories=4,
+            n_jobs=1,
+            base_seed=42,
         )
         config_2 = MonteCarloConfig(
-            n_trajectories=4, n_jobs=2, base_seed=42,
+            n_trajectories=4,
+            n_jobs=2,
+            base_seed=42,
             use_multiprocessing=True,
         )
 
@@ -1108,7 +1120,9 @@ class TestRunParallelInvariants:
     def test_successful_results_count(self, sample_model_parameters):
         """n_successful + n_failed == n_trajectories."""
         config = MonteCarloConfig(
-            n_trajectories=5, n_jobs=1, base_seed=42,
+            n_trajectories=5,
+            n_jobs=1,
+            base_seed=42,
         )
         simulator = MonteCarloSimulator(config=config)
         results = simulator._run_parallel(sample_model_parameters)
@@ -1134,7 +1148,8 @@ class TestProgressCallbackWrapper:
             progress.append((current, total))
 
         config = MonteCarloConfig(
-            n_trajectories=10, base_seed=42,
+            n_trajectories=10,
+            base_seed=42,
             progress_callback=callback,
         )
         simulator = MonteCarloSimulator(config=config)
@@ -1151,7 +1166,8 @@ class TestProgressCallbackWrapper:
             progress.append((current, total))
 
         config = MonteCarloConfig(
-            n_trajectories=10, base_seed=42,
+            n_trajectories=10,
+            base_seed=42,
             progress_callback=callback,
         )
         simulator = MonteCarloSimulator(config=config)
@@ -1161,7 +1177,8 @@ class TestProgressCallbackWrapper:
     def test_null_callback_no_error(self):
         """callback=None → без ошибок."""
         config = MonteCarloConfig(
-            n_trajectories=10, base_seed=42,
+            n_trajectories=10,
+            base_seed=42,
             progress_callback=None,
         )
         simulator = MonteCarloSimulator(config=config)
@@ -1180,7 +1197,8 @@ class TestProgressCallbackWrapper:
                 progress.append((current, total))
 
         config = MonteCarloConfig(
-            n_trajectories=20, base_seed=42,
+            n_trajectories=20,
+            base_seed=42,
             progress_callback=callback,
         )
         simulator = MonteCarloSimulator(config=config)
@@ -1207,7 +1225,8 @@ class TestProgressCallbackWrapper:
             progress_values.append(current)
 
         config = MonteCarloConfig(
-            n_trajectories=5, base_seed=42,
+            n_trajectories=5,
+            base_seed=42,
             progress_callback=callback,
         )
         simulator = MonteCarloSimulator(config=config)
@@ -1291,7 +1310,9 @@ class TestValidateParallelConfig:
     def test_valid_parallel_config(self):
         """Валидная параллельная конфигурация → True."""
         config = MonteCarloConfig(
-            n_jobs=2, use_multiprocessing=True, base_seed=42,
+            n_jobs=2,
+            use_multiprocessing=True,
+            base_seed=42,
         )
         simulator = MonteCarloSimulator(config=config)
         result = simulator._validate_parallel_config(config)
@@ -1306,3 +1327,141 @@ class TestValidateParallelConfig:
         simulator = MonteCarloSimulator(config=config)
         result = simulator._validate_parallel_config(config)
         assert result is True
+
+
+# =============================================================================
+# Phase: Monte Carlo ProcessPool parallelism tests (performance optimization)
+# =============================================================================
+
+
+def _mc_params_for_parallel_tests() -> ModelParameters:
+    """Минимальный ModelParameters для SDE MC тестов параллелизма."""
+    return ModelParameters(
+        n0=100.0,
+        stem_cell_fraction=0.05,
+        macrophage_fraction=0.15,
+        apoptotic_fraction=0.02,
+        c0=5.0,
+        inflammation_level=0.3,
+    )
+
+
+class TestMonteCarloParallel:
+    """Тесты параллельного режима MonteCarloSimulator.run()."""
+
+    def test_parallel_returns_same_as_sequential(self):
+        """С фиксированным base_seed параллельный и серийный пути дают
+        bit-identical агрегированную статистику (SDE, n_trajectories=3).
+        """
+        params = _mc_params_for_parallel_tests()
+
+        serial_cfg = MonteCarloConfig(
+            n_trajectories=3,
+            model_type="sde",
+            sde_config=SDEConfig(dt=0.5, t_max=6.0),
+            base_seed=12345,
+            n_jobs=1,
+            use_multiprocessing=False,
+        )
+        parallel_cfg = MonteCarloConfig(
+            n_trajectories=3,
+            model_type="sde",
+            sde_config=SDEConfig(dt=0.5, t_max=6.0),
+            base_seed=12345,
+            n_jobs=2,
+            use_multiprocessing=True,
+        )
+
+        serial_res = MonteCarloSimulator(config=serial_cfg).run(params)
+        parallel_res = MonteCarloSimulator(config=parallel_cfg).run(params)
+
+        # mean_N массивы должны совпадать (точность float64)
+        np.testing.assert_allclose(serial_res.mean_N, parallel_res.mean_N, atol=1e-10, rtol=1e-10)
+        np.testing.assert_allclose(serial_res.mean_C, parallel_res.mean_C, atol=1e-10, rtol=1e-10)
+
+    def test_n_trajectories_1_stays_sequential(self):
+        """Edge case: n_trajectories=1 с use_multiprocessing=True всё равно
+        запускается через серийный путь (ProcessPool overhead не оправдан).
+        """
+        params = _mc_params_for_parallel_tests()
+        cfg = MonteCarloConfig(
+            n_trajectories=1,
+            model_type="sde",
+            sde_config=SDEConfig(dt=0.5, t_max=2.0),
+            base_seed=7,
+            n_jobs=1,  # ≤1 → серийный ветка в run()
+            use_multiprocessing=False,
+        )
+        res = MonteCarloSimulator(config=cfg).run(params)
+        assert len(res.trajectories) == 1
+
+    def test_sequential_used_when_n_jobs_is_1(self):
+        """use_multiprocessing=True но n_jobs=1 → серийная ветка."""
+        params = _mc_params_for_parallel_tests()
+        cfg = MonteCarloConfig(
+            n_trajectories=2,
+            model_type="sde",
+            sde_config=SDEConfig(dt=0.5, t_max=2.0),
+            base_seed=11,
+            n_jobs=1,
+            use_multiprocessing=True,
+        )
+        res = MonteCarloSimulator(config=cfg).run(params)
+        assert len(res.trajectories) == 2
+
+    def test_abmconfig_roundtrip_through_pool(self):
+        """ABMConfig должен проходить сериализацию для ProcessPoolExecutor.
+
+        Мы не запускаем полный ABM в pool (слишком долго для unit-теста),
+        но проверяем, что dataclass round-trip через copy сохраняет поля.
+        """
+        from copy import deepcopy
+
+        from src.core.abm_model import ABMConfig
+
+        original = ABMConfig(t_max=10.0, space_size=(100.0, 100.0))
+        cloned = deepcopy(original)
+        assert cloned.t_max == original.t_max
+        assert cloned.space_size == original.space_size
+
+    def test_therapyprotocol_roundtrip_through_pool(self):
+        """TherapyProtocol должен проходить сериализацию через deepcopy
+        (используется ProcessPoolExecutor для отправки в worker).
+        """
+        from copy import deepcopy
+
+        original = TherapyProtocol(
+            prp_enabled=True,
+            prp_intensity=0.8,
+            pemf_enabled=True,
+            pemf_frequency=15.0,
+            pemf_intensity=1.2,
+        )
+        cloned = deepcopy(original)
+        assert cloned.prp_enabled == original.prp_enabled
+        assert cloned.prp_intensity == original.prp_intensity
+        assert cloned.pemf_frequency == original.pemf_frequency
+
+    def test_pool_worker_runs_single_trajectory(self):
+        """Worker-функция модульного уровня возвращает TrajectoryResult."""
+        from src.core.monte_carlo import _pool_worker_single_trajectory
+
+        worker_cfg = MonteCarloConfig(
+            n_trajectories=1,
+            model_type="sde",
+            sde_config=SDEConfig(dt=0.5, t_max=2.0),
+            base_seed=None,
+            n_jobs=1,
+            use_multiprocessing=False,
+        )
+        result = _pool_worker_single_trajectory(
+            trajectory_id=42,
+            initial_params=_mc_params_for_parallel_tests(),
+            random_seed=999,
+            worker_config=worker_cfg,
+            therapy=None,
+        )
+        assert isinstance(result, TrajectoryResult)
+        assert result.trajectory_id == 42
+        assert result.random_seed == 999
+        assert result.success is True

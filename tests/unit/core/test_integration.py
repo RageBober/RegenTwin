@@ -17,16 +17,14 @@ import pytest
 
 from src.core.abm_model import ABMConfig, ABMSnapshot, ABMTrajectory, AgentState
 from src.core.integration import (
-    IntegrationConfig,
     IntegratedModel,
     IntegratedState,
     IntegratedTrajectory,
+    IntegrationConfig,
     create_default_integration_config,
     simulate_integrated,
 )
 from src.core.sde_model import SDEConfig, SDETrajectory, TherapyProtocol
-from src.data.parameter_extraction import ModelParameters
-
 
 # =============================================================================
 # Test IntegrationConfig
@@ -289,9 +287,7 @@ class TestIntegratedTrajectory:
 
     def test_trajectory_has_times(self, sample_trajectory):
         """Траектория содержит временные точки."""
-        np.testing.assert_array_equal(
-            sample_trajectory.times, [0.0, 24.0, 48.0]
-        )
+        np.testing.assert_array_equal(sample_trajectory.times, [0.0, 24.0, 48.0])
 
     def test_trajectory_has_states(self, sample_trajectory):
         """Траектория содержит состояния."""
@@ -559,9 +555,7 @@ class TestCorrectionApplication:
         model = IntegratedModel(config=config, random_seed=42)
 
         # sde_N=1000, abm_count=900, discrepancy=0.1
-        corrected = model._apply_correction(
-            sde_N=1000.0, abm_count=900, discrepancy=0.1
-        )
+        corrected = model._apply_correction(sde_N=1000.0, abm_count=900, discrepancy=0.1)
         # Коррекция должна сдвинуть sde_N к 900
         assert 900 <= corrected <= 1000
 
@@ -628,9 +622,7 @@ class TestSimulateIntegratedFunction:
         )
         assert isinstance(result, IntegratedTrajectory)
 
-    def test_simulate_integrated_with_therapy(
-        self, sample_model_parameters, prp_therapy_protocol
-    ):
+    def test_simulate_integrated_with_therapy(self, sample_model_parameters, prp_therapy_protocol):
         """Функция принимает протокол терапии."""
         config = create_default_integration_config(t_max_days=1.0)
 
@@ -816,10 +808,7 @@ class TestSynchronizeCytokines:
     @pytest.fixture
     def uniform_snapshot(self):
         """ABM snapshot с однородным цитокиновым полем."""
-        agents = [
-            AgentState(i, "stem", 10.0 * i, 10.0 * i, 0, 0, 1.0)
-            for i in range(10)
-        ]
+        agents = [AgentState(i, "stem", 10.0 * i, 10.0 * i, 0, 0, 1.0) for i in range(10)]
         return ABMSnapshot(
             t=1.0,
             agents=agents,
@@ -1033,14 +1022,10 @@ class TestSpatialScaling:
         abm_field = np.zeros((10, 10))
 
         # SDE → ABM
-        field_result = model._spatial_scaling(
-            C_original, abm_field, direction="sde_to_abm"
-        )
+        field_result = model._spatial_scaling(C_original, abm_field, direction="sde_to_abm")
 
         # ABM → SDE
-        C_recovered = model._spatial_scaling(
-            0.0, field_result, direction="abm_to_sde"
-        )
+        C_recovered = model._spatial_scaling(0.0, field_result, direction="abm_to_sde")
 
         # Должно быть приблизительно равно оригиналу
         assert C_recovered == pytest.approx(C_original, rel=0.1)
@@ -1128,10 +1113,7 @@ class TestRestricting:
 
     def test_restricting_100_agents(self, model):
         """100 агентов → result['N'] пропорционально 100."""
-        agents = [
-            AgentState(i, "stem", float(i * 5), float(i * 5), 0, 0, 1.0)
-            for i in range(100)
-        ]
+        agents = [AgentState(i, "stem", float(i * 5), float(i * 5), 0, 0, 1.0) for i in range(100)]
         snapshot = ABMSnapshot(
             t=1.0,
             agents=agents,
@@ -1158,10 +1140,7 @@ class TestRestricting:
 
     def test_restricting_cytokine_field_to_c(self, model):
         """Uniform cytokine_field=1.0 → result['C'] ≈ 1.0."""
-        agents = [
-            AgentState(i, "stem", float(i * 5), float(i * 5), 0, 0, 1.0)
-            for i in range(10)
-        ]
+        agents = [AgentState(i, "stem", float(i * 5), float(i * 5), 0, 0, 1.0) for i in range(10)]
         snapshot = ABMSnapshot(
             t=1.0,
             agents=agents,
@@ -1190,10 +1169,7 @@ class TestRestricting:
 
     def test_restricting_keys_present(self, model):
         """Результат содержит ключи N, C."""
-        agents = [
-            AgentState(i, "stem", float(i * 5), float(i * 5), 0, 0, 1.0)
-            for i in range(5)
-        ]
+        agents = [AgentState(i, "stem", float(i * 5), float(i * 5), 0, 0, 1.0) for i in range(5)]
         snapshot = ABMSnapshot(
             t=1.0,
             agents=agents,
@@ -1207,10 +1183,7 @@ class TestRestricting:
 
     def test_restricting_non_negative_values(self, model):
         """N ≥ 0, C ≥ 0 в результате."""
-        agents = [
-            AgentState(i, "stem", float(i * 5), float(i * 5), 0, 0, 1.0)
-            for i in range(20)
-        ]
+        agents = [AgentState(i, "stem", float(i * 5), float(i * 5), 0, 0, 1.0) for i in range(20)]
         snapshot = ABMSnapshot(
             t=1.0,
             agents=agents,

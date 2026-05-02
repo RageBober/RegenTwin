@@ -1,5 +1,4 @@
-"""
-TDD тесты для модуля dataset_loader.py
+"""TDD тесты для модуля dataset_loader.py
 
 Тестирует:
 - DatasetSource enum
@@ -19,26 +18,27 @@ TDD тесты для модуля dataset_loader.py
 """
 
 import json
-import pytest
+from pathlib import Path
+from unittest.mock import patch
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+import pytest
 
 from src.data.dataset_loader import (
-    DatasetSource,
+    AVAILABLE_DATASETS,
+    DatasetLoader,
     DatasetMetadata,
+    DatasetSource,
     TimeSeriesData,
     ValidationDataset,
-    DatasetLoader,
-    AVAILABLE_DATASETS,
     load_dataset,
 )
-
 
 # =============================================================================
 # Тесты для DatasetSource
 # =============================================================================
+
 
 class TestDatasetSource:
     """Тесты для enum DatasetSource."""
@@ -61,6 +61,7 @@ class TestDatasetSource:
 # =============================================================================
 # Тесты для DatasetMetadata
 # =============================================================================
+
 
 class TestDatasetMetadata:
     """Тесты для dataclass DatasetMetadata."""
@@ -94,6 +95,7 @@ class TestDatasetMetadata:
 # =============================================================================
 # Тесты для TimeSeriesData.to_dataframe
 # =============================================================================
+
 
 class TestTimeSeriesDataToDataframe:
     """Тесты для TimeSeriesData.to_dataframe."""
@@ -138,6 +140,7 @@ class TestTimeSeriesDataToDataframe:
 # Тесты для TimeSeriesData.get_variable
 # =============================================================================
 
+
 class TestTimeSeriesDataGetVariable:
     """Тесты для TimeSeriesData.get_variable."""
 
@@ -156,6 +159,7 @@ class TestTimeSeriesDataGetVariable:
 # =============================================================================
 # Тесты для TimeSeriesData.interpolate
 # =============================================================================
+
 
 class TestTimeSeriesDataInterpolate:
     """Тесты для TimeSeriesData.interpolate."""
@@ -196,6 +200,7 @@ class TestTimeSeriesDataInterpolate:
 # =============================================================================
 # Тесты для ValidationDataset.get_initial_conditions
 # =============================================================================
+
 
 class TestValidationDatasetGetInitialConditions:
     """Тесты для ValidationDataset.get_initial_conditions."""
@@ -244,6 +249,7 @@ class TestValidationDatasetGetInitialConditions:
 # Тесты для ValidationDataset.get_validation_targets
 # =============================================================================
 
+
 class TestValidationDatasetGetValidationTargets:
     """Тесты для ValidationDataset.get_validation_targets."""
 
@@ -280,6 +286,7 @@ class TestValidationDatasetGetValidationTargets:
 # Тесты для AVAILABLE_DATASETS
 # =============================================================================
 
+
 class TestAvailableDatasets:
     """Тесты для реестра AVAILABLE_DATASETS."""
 
@@ -302,6 +309,7 @@ class TestAvailableDatasets:
 # =============================================================================
 # Тесты для DatasetLoader.__init__
 # =============================================================================
+
 
 class TestDatasetLoaderInit:
     """Тесты для конструктора DatasetLoader."""
@@ -326,6 +334,7 @@ class TestDatasetLoaderInit:
 # Тесты для DatasetLoader.list_available
 # =============================================================================
 
+
 class TestDatasetLoaderListAvailable:
     """Тесты для DatasetLoader.list_available."""
 
@@ -346,6 +355,7 @@ class TestDatasetLoaderListAvailable:
 # =============================================================================
 # Тесты для DatasetLoader.load
 # =============================================================================
+
 
 class TestDatasetLoaderLoad:
     """Тесты для DatasetLoader.load."""
@@ -382,6 +392,7 @@ class TestDatasetLoaderLoad:
 # Тесты для DatasetLoader.download
 # =============================================================================
 
+
 class TestDatasetLoaderDownload:
     """Тесты для DatasetLoader.download."""
 
@@ -403,6 +414,7 @@ class TestDatasetLoaderDownload:
 # =============================================================================
 # Тесты для DatasetLoader.validate_dataset
 # =============================================================================
+
 
 class TestDatasetLoaderValidateDataset:
     """Тесты для DatasetLoader.validate_dataset."""
@@ -460,6 +472,7 @@ class TestDatasetLoaderValidateDataset:
 # Тесты для DatasetLoader._load_local
 # =============================================================================
 
+
 class TestDatasetLoaderLoadLocal:
     """Тесты для DatasetLoader._load_local."""
 
@@ -503,6 +516,7 @@ class TestDatasetLoaderLoadLocal:
 # Тесты для DatasetLoader._load_fcs_files
 # =============================================================================
 
+
 class TestDatasetLoaderLoadFcsFiles:
     """Тесты для DatasetLoader._load_fcs_files."""
 
@@ -532,6 +546,7 @@ class TestDatasetLoaderLoadFcsFiles:
 # =============================================================================
 # Тесты для DatasetLoader._load_time_series
 # =============================================================================
+
 
 class TestDatasetLoaderLoadTimeSeries:
     """Тесты для DatasetLoader._load_time_series."""
@@ -581,6 +596,7 @@ class TestDatasetLoaderLoadTimeSeries:
 # =============================================================================
 # Тесты для load_dataset() функции
 # =============================================================================
+
 
 class TestLoadDatasetFunction:
     """Тесты для удобной функции load_dataset."""

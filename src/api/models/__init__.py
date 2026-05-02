@@ -1,5 +1,4 @@
-"""
-Pydantic модели для API.
+"""Pydantic модели для API.
 
 Содержит Request/Response схемы для всех эндпоинтов.
 

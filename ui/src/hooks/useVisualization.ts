@@ -103,10 +103,23 @@ export function useComparison(
   params: SimulationParams | null,
   variable?: string,
   showAll?: boolean,
+  simulationId?: string,
 ) {
-  // Comparison always runs live (4 scenarios, no single cached result)
-  return useVizQuery('comparison', params, {
-    ...(variable ? { variable } : {}),
-    ...(showAll ? { show_all_populations: true } : {}),
-  });
+  const cached = useCachedVizQuery(
+    'comparison',
+    simulationId,
+    {
+      ...(variable ? { variable } : {}),
+      ...(showAll ? { show_all_populations: 'true' } : {}),
+    },
+  );
+  const live = useVizQuery(
+    'comparison',
+    simulationId ? null : params,
+    {
+      ...(variable ? { variable } : {}),
+      ...(showAll ? { show_all_populations: true } : {}),
+    },
+  );
+  return simulationId ? cached : live;
 }

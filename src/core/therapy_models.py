@@ -52,22 +52,22 @@ class PRPConfig:
     dose: float = 4.0  # Fold concentration (3-5x от цельной крови)
 
     # ===== Начальные концентрации факторов роста (нг/мл) =====
-    pdgf_c0: float = 20.0   # PDGF-AB (Marx 2004: 15-30)
-    vegf_c0: float = 1.0    # VEGF (Everts 2006: 0.5-1.5)
-    tgfb_c0: float = 30.0   # TGF-β1 (Eppley 2006: 20-40)
-    egf_c0: float = 0.2     # EGF (Anitua 2004: 0.1-0.3)
+    pdgf_c0: float = 20.0  # PDGF-AB (Marx 2004: 15-30)
+    vegf_c0: float = 1.0  # VEGF (Everts 2006: 0.5-1.5)
+    tgfb_c0: float = 30.0  # TGF-β1 (Eppley 2006: 20-40)
+    egf_c0: float = 0.2  # EGF (Anitua 2004: 0.1-0.3)
 
     # ===== Burst-фаза: быстрое высвобождение из α-гранул (ч) =====
-    tau_burst_pdgf: float = 1.0   # PDGF τ_burst
-    tau_burst_vegf: float = 1.0   # VEGF τ_burst
-    tau_burst_tgfb: float = 2.0   # TGF-β τ_burst
-    tau_burst_egf: float = 0.5    # EGF τ_burst
+    tau_burst_pdgf: float = 1.0  # PDGF τ_burst
+    tau_burst_vegf: float = 1.0  # VEGF τ_burst
+    tau_burst_tgfb: float = 2.0  # TGF-β τ_burst
+    tau_burst_egf: float = 0.5  # EGF τ_burst
 
     # ===== Sustained-фаза: медленное высвобождение из фибриновой сети (ч) =====
-    tau_sustained_pdgf: float = 48.0   # PDGF τ_sustained
-    tau_sustained_vegf: float = 24.0   # VEGF τ_sustained
-    tau_sustained_tgfb: float = 72.0   # TGF-β τ_sustained
-    tau_sustained_egf: float = 12.0    # EGF τ_sustained
+    tau_sustained_pdgf: float = 48.0  # PDGF τ_sustained
+    tau_sustained_vegf: float = 24.0  # VEGF τ_sustained
+    tau_sustained_tgfb: float = 72.0  # TGF-β τ_sustained
+    tau_sustained_egf: float = 12.0  # EGF τ_sustained
 
     # ===== Стволовые клетки =====
     alpha_PRP_S: float = 0.5  # Коэффициент PRP-рекрутирования (SDF-1/CXCR4)
@@ -88,21 +88,21 @@ class PEMFConfig:
     """
 
     # ===== Физические параметры поля =====
-    B_amplitude: float = 1.0    # Амплитуда магнитного поля (мТ)
-    frequency: float = 50.0     # Частота (Гц)
-    B0_threshold: float = 0.5   # Пороговая амплитуда (мТ)
-    n_B: float = 2.0            # Коэффициент Hill для B-поля
+    B_amplitude: float = 1.0  # Амплитуда магнитного поля (мТ)
+    frequency: float = 50.0  # Частота (Гц)
+    B0_threshold: float = 0.5  # Пороговая амплитуда (мТ)
+    n_B: float = 2.0  # Коэффициент Hill для B-поля
 
     # ===== Механизм 1: Аденозиновый A₂A/A₃ → противовоспалительный =====
-    f_opt_anti_inflam: float = 27.12       # Оптимальная частота (Гц)
-    sigma_f_anti_inflam: float = 10.0      # Ширина частотного окна (Гц)
-    epsilon_max_anti_inflam: float = 0.4   # Макс. снижение TNF-α (30-50%)
+    f_opt_anti_inflam: float = 27.12  # Оптимальная частота (Гц)
+    sigma_f_anti_inflam: float = 10.0  # Ширина частотного окна (Гц)
+    epsilon_max_anti_inflam: float = 0.4  # Макс. снижение TNF-α (30-50%)
 
     # ===== Механизм 2: Ca²⁺-CaM/NO → пролиферация =====
-    f_center_prolif: float = 75.0       # Центр частотного окна (Гц)
-    sigma_window_prolif: float = 25.0   # Ширина окна (Гц)
-    epsilon_prolif_max: float = 0.3     # Макс. усиление пролиферации
-    B_half_prolif: float = 0.5          # Полунасыщение B² Hill (мТ)
+    f_center_prolif: float = 75.0  # Центр частотного окна (Гц)
+    sigma_window_prolif: float = 25.0  # Ширина окна (Гц)
+    epsilon_prolif_max: float = 0.3  # Макс. усиление пролиферации
+    B_half_prolif: float = 0.5  # Полунасыщение B² Hill (мТ)
 
     # ===== Механизм 3: MAPK/ERK → миграция =====
     epsilon_migration_max: float = 0.25  # Макс. усиление миграции (ABM)
@@ -141,10 +141,10 @@ class PRPReleaseState:
         Description/Phase2/description_therapy_models.md#PRPReleaseState
     """
 
-    theta_pdgf: float = 0.0   # Θ_PRP_PDGF(t) — концентрация PDGF (нг/мл)
-    theta_vegf: float = 0.0   # Θ_PRP_VEGF(t) — концентрация VEGF (нг/мл)
-    theta_tgfb: float = 0.0   # Θ_PRP_TGF(t) — концентрация TGF-β (нг/мл)
-    theta_egf: float = 0.0    # Θ_PRP_EGF(t) — концентрация EGF (нг/мл)
+    theta_pdgf: float = 0.0  # Θ_PRP_PDGF(t) — концентрация PDGF (нг/мл)
+    theta_vegf: float = 0.0  # Θ_PRP_VEGF(t) — концентрация VEGF (нг/мл)
+    theta_tgfb: float = 0.0  # Θ_PRP_TGF(t) — концентрация TGF-β (нг/мл)
+    theta_egf: float = 0.0  # Θ_PRP_EGF(t) — концентрация EGF (нг/мл)
     theta_total: float = 0.0  # Суммарный нормализованный показатель
 
 
@@ -160,8 +160,8 @@ class PEMFEffects:
     """
 
     anti_inflammatory: float = 0.0  # ε для снижения s_TNF_M1
-    proliferation: float = 0.0      # ε для усиления r_F, r_E
-    migration: float = 0.0          # ε для усиления D_cell (ABM)
+    proliferation: float = 0.0  # ε для усиления r_F, r_E
+    migration: float = 0.0  # ε для усиления D_cell (ABM)
 
 
 # ============================================================================
@@ -229,10 +229,7 @@ class PRPModel:
         # обеспечивая пик вблизи τ_burst (Marx 2004, Anitua 2004).
         decay = math.exp(-2.0 * t / tau_sustained)
         if abs(tau_burst - tau_sustained) < 1e-12:
-            result = (
-                dose * c0 * (t / tau_burst**2)
-                * math.exp(-t / tau_burst) * decay
-            )
+            result = dose * c0 * (t / tau_burst**2) * math.exp(-t / tau_burst) * decay
         else:
             result = (
                 dose
@@ -412,8 +409,7 @@ class PEMFModel:
         ratio = B / max(cfg.B0_threshold, 1e-30)
         hill = ratio**cfg.n_B / (1.0 + ratio**cfg.n_B)
         gauss = math.exp(
-            -(cfg.frequency - cfg.f_opt_anti_inflam) ** 2
-            / (2.0 * cfg.sigma_f_anti_inflam**2)
+            -((cfg.frequency - cfg.f_opt_anti_inflam) ** 2) / (2.0 * cfg.sigma_f_anti_inflam**2)
         )
         return cfg.epsilon_max_anti_inflam * hill * gauss
 
@@ -443,8 +439,7 @@ class PEMFModel:
         B_half_sq = cfg.B_half_prolif**2
         hill = B_sq / (B_half_sq + B_sq)
         gauss = math.exp(
-            -(cfg.frequency - cfg.f_center_prolif) ** 2
-            / (2.0 * cfg.sigma_window_prolif**2)
+            -((cfg.frequency - cfg.f_center_prolif) ** 2) / (2.0 * cfg.sigma_window_prolif**2)
         )
         return cfg.epsilon_prolif_max * hill * gauss
 

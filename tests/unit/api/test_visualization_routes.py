@@ -6,11 +6,10 @@
 
 from __future__ import annotations
 
-import json
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -31,29 +30,31 @@ def _mock_trajectory() -> ExtendedSDETrajectory:
     states = []
     for i, t in enumerate(times):
         frac = i / (n_steps - 1)
-        states.append(ExtendedSDEState(
-            P=500 * (1 - frac),
-            Ne=200 * np.exp(-frac * 3),
-            M1=100 * np.exp(-frac * 2),
-            M2=150 * frac,
-            F=300 * frac,
-            Mf=50 * frac * np.exp(-frac),
-            E=80 * frac,
-            S=40 * np.exp(-frac),
-            C_TNF=10 * np.exp(-frac * 3),
-            C_IL10=5 * frac,
-            C_PDGF=3 * np.exp(-frac),
-            C_VEGF=4 * frac,
-            C_TGFb=2 * (1 + frac),
-            C_MCP1=6 * np.exp(-frac * 2),
-            C_IL8=8 * np.exp(-frac * 3),
-            rho_collagen=min(1.0, 0.1 + 0.9 * frac),
-            C_MMP=2 * np.exp(-frac),
-            rho_fibrin=max(0, 0.8 * (1 - frac)),
-            D=5 * np.exp(-frac * 4),
-            O2=80 + 20 * frac,
-            t=t,
-        ))
+        states.append(
+            ExtendedSDEState(
+                P=500 * (1 - frac),
+                Ne=200 * np.exp(-frac * 3),
+                M1=100 * np.exp(-frac * 2),
+                M2=150 * frac,
+                F=300 * frac,
+                Mf=50 * frac * np.exp(-frac),
+                E=80 * frac,
+                S=40 * np.exp(-frac),
+                C_TNF=10 * np.exp(-frac * 3),
+                C_IL10=5 * frac,
+                C_PDGF=3 * np.exp(-frac),
+                C_VEGF=4 * frac,
+                C_TGFb=2 * (1 + frac),
+                C_MCP1=6 * np.exp(-frac * 2),
+                C_IL8=8 * np.exp(-frac * 3),
+                rho_collagen=min(1.0, 0.1 + 0.9 * frac),
+                C_MMP=2 * np.exp(-frac),
+                rho_fibrin=max(0, 0.8 * (1 - frac)),
+                D=5 * np.exp(-frac * 4),
+                O2=80 + 20 * frac,
+                t=t,
+            )
+        )
     return ExtendedSDETrajectory(times=times, states=states, params=ParameterSet())
 
 
@@ -73,6 +74,12 @@ def _patched_run_comparison(*args, **kwargs) -> dict[str, ExtendedSDETrajectory]
     }
 
 
+def _write_dummy_file(path: Path, payload: bytes) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(payload)
+    return path
+
+
 class TestPopulationsEndpoint:
     """Тесты POST /api/viz/populations."""
 
@@ -90,9 +97,13 @@ class TestPopulationsEndpoint:
 
     @patch("src.api.routes.visualization._run_simulation", _patched_run_simulation)
     def test_with_variables(self) -> None:
-        resp = client.post("/api/viz/populations", json={
-            "simulation": {}, "variables": ["P", "F"],
-        })
+        resp = client.post(
+            "/api/viz/populations",
+            json={
+                "simulation": {},
+                "variables": ["P", "F"],
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["data"]) == 2
@@ -179,14 +190,28 @@ class TestExportPNG:
     """Тесты POST /api/viz/export/png."""
 
     @patch("src.api.routes.visualization._run_simulation", _patched_run_simulation)
-    def test_returns_png(self) -> None:
-        resp = client.post("/api/viz/export/png", json={})
+    def test_returns_png(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        payload = b"\x89PNG\r\n\x1a\n" + (b"0" * 256)
+
+        def fake_to_png(self) -> list[Path]:  # type: ignore[no-untyped-def]
+            return [_write_dummy_file(tmp_path / "populations.png", payload)]
+
+        with patch("src.api.routes.visualization.ReportExporter.to_png", fake_to_png):
+            resp = client.post("/api/viz/export/png", json={})
+
         assert resp.status_code == 200
         assert "image/png" in resp.headers["content-type"]
 
     @patch("src.api.routes.visualization._run_simulation", _patched_run_simulation)
-    def test_png_not_empty(self) -> None:
-        resp = client.post("/api/viz/export/png", json={})
+    def test_png_not_empty(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        payload = b"\x89PNG\r\n\x1a\n" + (b"1" * 256)
+
+        def fake_to_png(self) -> list[Path]:  # type: ignore[no-untyped-def]
+            return [_write_dummy_file(tmp_path / "populations.png", payload)]
+
+        with patch("src.api.routes.visualization.ReportExporter.to_png", fake_to_png):
+            resp = client.post("/api/viz/export/png", json={})
+
         assert len(resp.content) > 100
 
 
@@ -194,12 +219,26 @@ class TestExportPDF:
     """Тесты POST /api/viz/export/pdf."""
 
     @patch("src.api.routes.visualization._run_simulation", _patched_run_simulation)
-    def test_returns_pdf(self) -> None:
-        resp = client.post("/api/viz/export/pdf", json={})
+    def test_returns_pdf(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        payload = b"%PDF-1.4\n" + (b"2" * 256)
+
+        def fake_to_pdf(self) -> Path:  # type: ignore[no-untyped-def]
+            return _write_dummy_file(tmp_path / "report.pdf", payload)
+
+        with patch("src.api.routes.visualization.ReportExporter.to_pdf", fake_to_pdf):
+            resp = client.post("/api/viz/export/pdf", json={})
+
         assert resp.status_code == 200
         assert "application/pdf" in resp.headers["content-type"]
 
     @patch("src.api.routes.visualization._run_simulation", _patched_run_simulation)
-    def test_pdf_not_empty(self) -> None:
-        resp = client.post("/api/viz/export/pdf", json={})
+    def test_pdf_not_empty(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        payload = b"%PDF-1.4\n" + (b"3" * 256)
+
+        def fake_to_pdf(self) -> Path:  # type: ignore[no-untyped-def]
+            return _write_dummy_file(tmp_path / "report.pdf", payload)
+
+        with patch("src.api.routes.visualization.ReportExporter.to_pdf", fake_to_pdf):
+            resp = client.post("/api/viz/export/pdf", json={})
+
         assert len(resp.content) > 100

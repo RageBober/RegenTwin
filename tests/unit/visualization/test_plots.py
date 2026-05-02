@@ -1,7 +1,6 @@
 """TDD тесты для src/visualization/plots.py — графики временных рядов."""
 
 import plotly.graph_objects as go
-import pytest
 
 from src.core.extended_sde import ExtendedSDETrajectory
 from src.core.monte_carlo import MonteCarloResults
@@ -13,7 +12,6 @@ from src.visualization.plots import (
     plot_phases,
     plot_populations,
 )
-from src.visualization.theme import POPULATION_VARS, CYTOKINE_VARS
 
 
 class TestPlotPopulations:
@@ -71,6 +69,28 @@ class TestPlotPopulations:
         names = [t.name for t in fig.data]
         assert all(n is not None and len(n) > 0 for n in names)
 
+    def test_hovertemplate_has_time_and_units(
+        self,
+        mock_extended_trajectory: ExtendedSDETrajectory,
+    ) -> None:
+        fig = plot_populations(mock_extended_trajectory, variables=["F"])
+        hovertemplate = fig.data[0].hovertemplate or ""
+        assert "Время" in hovertemplate
+        assert "кл/мкл" in hovertemplate
+
+    def test_ci_band_label_clarifies_variable(
+        self,
+        mock_extended_trajectory: ExtendedSDETrajectory,
+        mock_mc_results: MonteCarloResults,
+    ) -> None:
+        fig = plot_populations(
+            mock_extended_trajectory,
+            show_ci=True,
+            mc_results=mock_mc_results,
+        )
+        trace_names = [trace.name for trace in fig.data]
+        assert "95% CI (N, Monte Carlo)" in trace_names
+
 
 class TestPlotCytokines:
     """Тесты plot_cytokines — динамика 7 цитокинов."""
@@ -97,6 +117,19 @@ class TestPlotCytokines:
         yaxis_text = fig.layout.yaxis.title.text or ""
         assert "нг/мл" in yaxis_text or "Концентрация" in yaxis_text
 
+    def test_subplots_has_title(self, mock_extended_trajectory: ExtendedSDETrajectory) -> None:
+        fig = plot_cytokines(mock_extended_trajectory, layout="subplots")
+        assert fig.layout.title.text == "Динамика цитокинов"
+
+    def test_overlay_hovertemplate_has_time_and_units(
+        self,
+        mock_extended_trajectory: ExtendedSDETrajectory,
+    ) -> None:
+        fig = plot_cytokines(mock_extended_trajectory, variables=["C_TNF"], layout="overlay")
+        hovertemplate = fig.data[0].hovertemplate or ""
+        assert "Время" in hovertemplate
+        assert "нг/мл" in hovertemplate
+
 
 class TestPlotECM:
     """Тесты plot_ecm — динамика ECM (коллаген, MMP, фибрин)."""
@@ -113,6 +146,13 @@ class TestPlotECM:
         fig = plot_ecm(mock_extended_trajectory)
         # MMP на вторичной оси
         assert fig.layout.yaxis2 is not None
+
+    def test_hovertemplates_include_units(
+        self, mock_extended_trajectory: ExtendedSDETrajectory
+    ) -> None:
+        fig = plot_ecm(mock_extended_trajectory)
+        assert "отн. ед." in (fig.data[0].hovertemplate or "")
+        assert "нг/мл" in (fig.data[2].hovertemplate or "")
 
 
 class TestPlotPhases:
@@ -140,8 +180,40 @@ class TestPlotPhases:
         fig = plot_phases(mock_extended_trajectory, phase_indicators=mock_phase_indicators)
         trace_names = [t.name for t in fig.data if t.name]
         # Должны быть популяции Ne, M1, M2, F, E
-        population_traces = [n for n in trace_names if any(p in n for p in ["Нейтрофилы", "M1", "M2", "Фибробласты", "Эндотелиальные"])]
+        population_traces = [
+            n
+            for n in trace_names
+            if any(p in n for p in ["Нейтрофилы", "M1", "M2", "Фибробласты", "Эндотелиальные"])
+        ]
         assert len(population_traces) >= 3
+
+    def test_late_transition_keeps_last_phase_segment(
+        self,
+        mock_extended_trajectory: ExtendedSDETrajectory,
+        mock_phase_indicators_late_transition: list[PhaseIndicators],
+    ) -> None:
+        fig = plot_phases(
+            mock_extended_trajectory,
+            phase_indicators=mock_phase_indicators_late_transition,
+        )
+        phase_traces = [trace for trace in fig.data if getattr(trace, "fill", None) == "toself"]
+        phase_names = [trace.name for trace in phase_traces]
+        remodeling_trace = next(trace for trace in phase_traces if trace.name == "Remodeling")
+        assert len(phase_traces) == 2
+        assert "Proliferation" in phase_names
+        assert "Remodeling" in phase_names
+        assert max(remodeling_trace.x) > min(remodeling_trace.x)
+
+    def test_population_hovertemplate_has_time_and_units(
+        self,
+        mock_extended_trajectory: ExtendedSDETrajectory,
+        mock_phase_indicators: list[PhaseIndicators],
+    ) -> None:
+        fig = plot_phases(mock_extended_trajectory, phase_indicators=mock_phase_indicators)
+        population_trace = next(trace for trace in fig.data if trace.name == "Фибробласты (F)")
+        hovertemplate = population_trace.hovertemplate or ""
+        assert "Время" in hovertemplate
+        assert "кл/мкл" in hovertemplate
 
 
 class TestPlotComparison:
@@ -174,9 +246,28 @@ class TestPlotComparison:
         # 8 популяций × 2 сценария = 16 traces
         assert len(fig.data) == 16
 
-    def test_scenario_names_in_legend(self, mock_extended_trajectory: ExtendedSDETrajectory) -> None:
+    def test_scenario_names_in_legend(
+        self, mock_extended_trajectory: ExtendedSDETrajectory
+    ) -> None:
         results = {"Control": mock_extended_trajectory, "PRP": mock_extended_trajectory}
         fig = plot_comparison(results)
         names = [t.name for t in fig.data]
         assert "Control" in names
         assert "PRP" in names
+
+    def test_yaxis_title_includes_units(
+        self, mock_extended_trajectory: ExtendedSDETrajectory
+    ) -> None:
+        results = {"Control": mock_extended_trajectory, "PRP": mock_extended_trajectory}
+        fig = plot_comparison(results, variable="F")
+        assert "кл/мкл" in (fig.layout.yaxis.title.text or "")
+
+    def test_hovertemplate_has_time_and_units(
+        self,
+        mock_extended_trajectory: ExtendedSDETrajectory,
+    ) -> None:
+        results = {"Control": mock_extended_trajectory, "PRP": mock_extended_trajectory}
+        fig = plot_comparison(results, variable="F")
+        hovertemplate = fig.data[0].hovertemplate or ""
+        assert "Время" in hovertemplate
+        assert "кл/мкл" in hovertemplate

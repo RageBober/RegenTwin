@@ -6,6 +6,7 @@ interface NumberInputProps {
   max?: number;
   step?: number;
   disabled?: boolean;
+  testId?: string;
 }
 
 export default function NumberInput({
@@ -16,10 +17,11 @@ export default function NumberInput({
   max,
   step = 1,
   disabled = false,
+  testId,
 }: NumberInputProps) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <label className="text-xs text-slate-600 dark:text-slate-300 truncate flex-1">
+      <label className="text-xs text-primary-900/50 dark:text-primary-100/40 truncate flex-1">
         {label}
       </label>
       <input
@@ -30,7 +32,12 @@ export default function NumberInput({
         max={max}
         step={step}
         disabled={disabled}
-        className="w-24 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-right dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 disabled:opacity-50"
+        data-testid={testId}
+        className="w-24 rounded-lg border border-border bg-surface-1 px-2.5 py-1.5
+                   text-xs font-mono text-right
+                   text-primary-800 dark:text-primary-200
+                   focus:outline-none focus:ring-1 focus:ring-primary-500/30
+                   disabled:opacity-40 transition-colors"
       />
     </div>
   );

@@ -642,6 +642,52 @@ class TestConservationCheckerReportReset:
         assert checker.report() == []
 
 
+class TestConservationCheckerECMBalance:
+    """Тесты check_ecm_balance() для баланса ECM компонент."""
+
+    def test_check_ecm_balance_method_exists(self):
+        """ConservationChecker должен иметь метод check_ecm_balance."""
+        checker = ConservationChecker()
+        assert hasattr(checker, "check_ecm_balance")
+
+    def test_ecm_balance_exact_zero_error(self):
+        """Точный баланс (synthesis==degradation) → ecm_error=0."""
+        checker = ConservationChecker()
+        synthesis = np.full(5, 3.0)
+        degradation = np.full(5, 3.0)
+        ecm_prev = np.full(5, 100.0)
+        dt = 0.01
+        ecm_curr = ecm_prev + (synthesis - degradation) * dt  # no change
+
+        report = checker.check_ecm_balance(synthesis, degradation, ecm_curr, ecm_prev, dt)
+
+        assert report.ecm_error == pytest.approx(0.0, abs=1e-10)
+
+    def test_ecm_balance_violation_detected(self):
+        """Необъяснённое изменение ECM → ecm_error > 0, is_conserved=False."""
+        checker = ConservationChecker()
+        synthesis = np.zeros(5)
+        degradation = np.zeros(5)
+        ecm_prev = np.full(5, 100.0)
+        ecm_curr = ecm_prev + np.full(5, 10.0)  # unexplained jump
+
+        report = checker.check_ecm_balance(synthesis, degradation, ecm_curr, ecm_prev, dt=0.01)
+
+        assert report.ecm_error > 0.0
+        assert not report.is_conserved
+
+    def test_ecm_balance_returns_conservation_report(self):
+        """Метод возвращает ConservationReport с полем ecm_error >= 0."""
+        checker = ConservationChecker()
+        rates = np.full(5, 2.0)
+        ecm = np.full(5, 50.0)
+
+        result = checker.check_ecm_balance(rates, rates, ecm, ecm, dt=0.1)
+
+        assert isinstance(result, ConservationReport)
+        assert result.ecm_error >= 0.0
+
+
 # =============================================================================
 # Test ConvergenceVerifier
 # =============================================================================
@@ -726,12 +772,31 @@ class TestConvergenceVerifierManufacturedSolution:
 class TestConvergenceVerifierVerifySolver:
     """Тесты полной верификации солвера."""
 
-    def test_verify_solver_raises_not_implemented(self):
-        """verify_solver() вызывает NotImplementedError для stub."""
-        verifier = ConvergenceVerifier()
+    def test_verify_em_order_approx_05(self):
+        """EM солвер имеет strong order ≈ 0.5."""
+        from src.core.sde_numerics import EulerMaruyamaSolver
 
-        with pytest.raises(NotImplementedError):
-            verifier.verify_solver(solver=None, reference_order=0.5)
+        verifier = ConvergenceVerifier(n_realizations=200)
+        solver = EulerMaruyamaSolver()
+
+        result = verifier.verify_solver(solver, reference_order=0.5)
+
+        assert len(result.errors) == 4
+        assert len(result.dt_sequence) == 4
+        assert result.estimated_order == pytest.approx(0.5, abs=0.25)
+
+    def test_verify_solver_returns_convergence_result(self):
+        """verify_solver() возвращает ConvergenceResult с корректными полями."""
+        from src.core.sde_numerics import EulerMaruyamaSolver
+
+        verifier = ConvergenceVerifier(n_realizations=50)
+        solver = EulerMaruyamaSolver()
+
+        result = verifier.verify_solver(solver, reference_order=0.5)
+
+        assert result.reference_order == 0.5
+        assert isinstance(result.is_valid, bool)
+        assert result.estimated_order > 0
 
 
 # =============================================================================

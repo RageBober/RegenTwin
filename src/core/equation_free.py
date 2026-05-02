@@ -177,11 +177,11 @@ class Lifter:
                 if state_field == "M1":
                     for a in agents:
                         if hasattr(a, "polarization_state"):
-                            a.polarization_state = 1.0
+                            a.polarization_state = 1.0  # type: ignore[attr-defined]
                 elif state_field == "M2":
                     for a in agents:
                         if hasattr(a, "polarization_state"):
-                            a.polarization_state = 0.0
+                            a.polarization_state = 0.0  # type: ignore[attr-defined]
                 all_agents.extend(agents)
 
         # Назначить цитокиновое окружение

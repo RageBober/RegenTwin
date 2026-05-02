@@ -1,5 +1,4 @@
-"""
-Backend API на FastAPI.
+"""Backend API на FastAPI.
 
 Содержит:
 - routes/ — эндпоинты API

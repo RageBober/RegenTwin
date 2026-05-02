@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from loguru import logger
 from sqlalchemy.orm import Session
 
-from src.api.models.schemas import EstimationRequest, SensitivityRequest, SimulationMode
+from src.api.models.schemas import EstimationRequest, SensitivityRequest
 from src.db.models import AnalysisRecord
 
 
@@ -18,6 +18,7 @@ class AnalysisTaskManager:
 
     def __init__(self) -> None:
         self._tasks: dict[str, asyncio.Task] = {}  # type: ignore[type-arg]
+        self._celery_task_ids: dict[str, str] = {}
         self._progress: dict[str, float] = {}
         self._lock = threading.Lock()
 
@@ -45,7 +46,31 @@ class AnalysisTaskManager:
     def cleanup(self, analysis_id: str) -> None:
         with self._lock:
             self._tasks.pop(analysis_id, None)
+            self._celery_task_ids.pop(analysis_id, None)
             self._progress.pop(analysis_id, None)
+
+    # ── Celery-specific methods ──────────────────────────────────────
+
+    def register_celery(self, analysis_id: str, celery_task_id: str) -> None:
+        with self._lock:
+            self._celery_task_ids[analysis_id] = celery_task_id
+            self._progress[analysis_id] = 0.0
+
+    def is_celery_task(self, analysis_id: str) -> bool:
+        with self._lock:
+            return analysis_id in self._celery_task_ids
+
+    def cancel_celery(self, analysis_id: str) -> bool:
+        with self._lock:
+            celery_id = self._celery_task_ids.get(analysis_id)
+        if celery_id is None:
+            return False
+        from celery.contrib.abortable import AbortableAsyncResult
+
+        from src.tasks.celery_app import celery_app
+
+        AbortableAsyncResult(celery_id, app=celery_app).abort()
+        return True
 
 
 analysis_task_manager = AnalysisTaskManager()
@@ -59,6 +84,8 @@ class AnalysisService:
 
     async def run_sensitivity(self, request: SensitivityRequest) -> AnalysisRecord:
         """Запуск анализа чувствительности в фоне."""
+        from src.api.config import settings
+
         record = AnalysisRecord(
             analysis_type="sensitivity",
             params_json=request.model_dump(),
@@ -67,16 +94,20 @@ class AnalysisService:
         self._db.commit()
         self._db.refresh(record)
 
-        task = asyncio.create_task(
-            self._sensitivity_background(record.id, request)
-        )
-        analysis_task_manager.register(record.id, task)
+        if settings.use_celery:
+            from src.tasks.simulation_tasks import run_sensitivity_task
+
+            celery_result = run_sensitivity_task.delay(record.id, request.model_dump())  # type: ignore[attr-defined]
+            analysis_task_manager.register_celery(record.id, celery_result.id)
+        else:
+            task = asyncio.create_task(self._sensitivity_background(record.id, request))
+            analysis_task_manager.register(record.id, task)
 
         return record
 
     async def _sensitivity_background(self, analysis_id: str, request: SensitivityRequest) -> None:
         """Фоновое выполнение анализа чувствительности."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             self._update_db_status(analysis_id, "running")
 
@@ -89,6 +120,10 @@ class AnalysisService:
 
             self._update_db_result(analysis_id, "completed", result)
             logger.info(f"Sensitivity analysis {analysis_id} completed")
+        except asyncio.CancelledError:
+            self._update_db_status(analysis_id, "cancelled")
+            logger.info(f"Sensitivity analysis {analysis_id} cancelled")
+            raise
         except Exception as exc:
             self._update_db_status(analysis_id, "failed", error=str(exc))
             logger.error(f"Sensitivity analysis {analysis_id} failed: {exc}")
@@ -96,119 +131,107 @@ class AnalysisService:
             analysis_task_manager.cleanup(analysis_id)
 
     def _execute_sensitivity(self, analysis_id: str, request: SensitivityRequest) -> dict:
-        """Синхронное выполнение Sobol/Morris анализа."""
-        import numpy as np
-
-        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        """Синхронное выполнение Sobol/Morris анализа через SensitivityAnalyzer."""
+        from src.core.extended_sde import ExtendedSDEModel
         from src.core.parameters import ParameterSet
         from src.core.sde_model import TherapyProtocol
 
-        params = request.simulation_params
-        n_samples = request.n_samples
-        param_names = request.parameters
-
-        # Определить границы параметров
-        bounds = self._get_parameter_bounds(param_names)
-
         try:
-            from SALib.sample import saltelli as saltelli_sample
-            from SALib.analyze import sobol as sobol_analyze
-
-            problem = {
-                "num_vars": len(param_names),
-                "names": param_names,
-                "bounds": bounds,
-            }
-
-            # Генерация сэмплов
-            param_values = saltelli_sample.sample(problem, n_samples)
-            n_runs = len(param_values)
-            outputs = []
-
-            for i, sample in enumerate(param_values):
-                analysis_task_manager.update_progress(analysis_id, i, n_runs)
-
-                # Создать ParameterSet с изменёнными параметрами
-                ps = ParameterSet()
-                for j, name in enumerate(param_names):
-                    if hasattr(ps, name):
-                        setattr(ps, name, sample[j])
-
-                therapy = TherapyProtocol(
-                    prp_enabled=params.prp_enabled,
-                    pemf_enabled=params.pemf_enabled,
-                )
-
-                model = ExtendedSDEModel(params=ps, therapy=therapy, rng_seed=42)
-
-                initial_state = ExtendedSDEState(
-                    P=params.P0, Ne=params.Ne0, M1=params.M1_0, M2=params.M2_0,
-                    F=params.F0, Mf=params.Mf0, E=params.E0, S=params.S0,
-                    C_TNF=params.C_TNF0, C_IL10=params.C_IL10_0,
-                    D=params.D0, O2=params.O2_0,
-                )
-
-                ps.dt = params.dt
-                ps.t_max = params.t_max_hours
-
-                try:
-                    traj = model.simulate(initial_state=initial_state)
-                    # Берём финальное значение фибробластов как целевой выход
-                    final_F = float(traj.states[-1].F)
-                    if not np.isfinite(final_F):
-                        final_F = 0.0
-                except Exception:
-                    final_F = 0.0
-                outputs.append(final_F)
-
-            Y = np.array(outputs, dtype=np.float64)
-
-            # Проверка: если все значения одинаковы, Sobol анализ невозможен
-            if Y.std() == 0:
-                return {
-                    "method": request.method,
-                    "parameters": param_names,
-                    "S1": [0.0] * len(param_names),
-                    "ST": [0.0] * len(param_names),
-                    "S1_conf": [0.0] * len(param_names),
-                    "ST_conf": [0.0] * len(param_names),
-                    "n_samples": n_samples,
-                    "n_runs": n_runs,
-                    "warning": "All outputs identical — sensitivity indices undefined",
-                }
-
-            # Sobol анализ
-            si = sobol_analyze.analyze(problem, Y)
-
-            def _safe_list(arr):
-                """Конвертировать numpy array в list, заменяя NaN на 0."""
-                result = np.asarray(arr, dtype=np.float64)
-                result = np.where(np.isfinite(result), result, 0.0)
-                return result.tolist()
-
-            return {
-                "method": request.method,
-                "parameters": param_names,
-                "S1": _safe_list(si["S1"]),
-                "ST": _safe_list(si["ST"]),
-                "S1_conf": _safe_list(si["S1_conf"]),
-                "ST_conf": _safe_list(si["ST_conf"]),
-                "n_samples": n_samples,
-                "n_runs": n_runs,
-            }
-
+            from src.core.sensitivity_analysis import (
+                SensitivityAnalyzer,
+                SensitivityConfig,
+                SensitivityMethod,
+            )
         except ImportError:
-            # SALib не установлен — вернуть заглушку
             logger.warning("SALib not installed, returning stub sensitivity result")
             return {
                 "method": request.method,
-                "parameters": param_names,
+                "parameters": request.parameters,
                 "error": "SALib not installed",
-                "n_samples": n_samples,
+                "n_samples": request.n_samples,
+            }
+
+        sim = request.simulation_params
+        ps = ParameterSet()
+        ps.dt = sim.dt
+        ps.t_max = sim.t_max_hours
+
+        # Bounds из единого источника
+        bounds = ParameterSet.get_bounds(request.parameters)
+        if not bounds:
+            raise ValueError(
+                f"None of the requested parameters {request.parameters} "
+                "are valid sensitivity analysis parameters."
+            )
+
+        therapy = TherapyProtocol(
+            prp_enabled=sim.prp_enabled,
+            pemf_enabled=sim.pemf_enabled,
+        )
+        model = ExtendedSDEModel(
+            params=ps,
+            therapy=therapy,
+            rng_seed=sim.random_seed or 42,
+        )
+
+        method = SensitivityMethod(request.method)
+        config = SensitivityConfig(
+            method=method,
+            parameter_bounds=bounds,
+            output_variables=["F"],
+            t_span=(0.0, sim.t_max_hours),
+            dt=sim.dt,
+            rng_seed=sim.random_seed or 42,
+        )
+        analyzer = SensitivityAnalyzer(model=model, params=ps, config=config)
+
+        def progress_cb(current: int, total: int) -> None:
+            analysis_task_manager.update_progress(analysis_id, current, total)
+
+        try:
+            if method == SensitivityMethod.SOBOL:
+                result = analyzer.run_sobol(
+                    n_samples=request.n_samples,
+                    progress_callback=progress_cb,
+                )
+                return {
+                    "method": request.method,
+                    "parameters": result.parameter_names,
+                    "S1": result.S1.tolist(),
+                    "ST": result.ST.tolist(),
+                    "S1_conf": result.S1_conf.tolist(),
+                    "ST_conf": result.ST_conf.tolist(),
+                    "n_samples": result.n_samples,
+                    "n_runs": result.n_model_runs,
+                }
+            else:  # MORRIS
+                n_traj = max(10, request.n_samples // 32)
+                result = analyzer.run_morris(
+                    n_trajectories=n_traj,
+                    progress_callback=progress_cb,
+                )
+                return {
+                    "method": request.method,
+                    "parameters": result.parameter_names,
+                    "mu_star": result.mu_star.tolist(),
+                    "sigma": result.sigma.tolist(),
+                    "mu_star_conf": result.mu_star_conf.tolist(),
+                    "n_samples": request.n_samples,
+                    "n_runs": result.n_model_runs,
+                }
+        except ImportError:
+            logger.warning("SALib not installed, returning stub sensitivity result")
+            return {
+                "method": request.method,
+                "parameters": request.parameters,
+                "error": "SALib not installed",
+                "n_samples": request.n_samples,
             }
 
     async def run_estimation(self, request: EstimationRequest) -> AnalysisRecord:
         """Запуск параметрической идентификации в фоне."""
+        from src.api.config import settings
+
         record = AnalysisRecord(
             analysis_type="estimation",
             params_json=request.model_dump(),
@@ -217,16 +240,20 @@ class AnalysisService:
         self._db.commit()
         self._db.refresh(record)
 
-        task = asyncio.create_task(
-            self._estimation_background(record.id, request)
-        )
-        analysis_task_manager.register(record.id, task)
+        if settings.use_celery:
+            from src.tasks.simulation_tasks import run_estimation_task
+
+            celery_result = run_estimation_task.delay(record.id, request.model_dump())  # type: ignore[attr-defined]
+            analysis_task_manager.register_celery(record.id, celery_result.id)
+        else:
+            task = asyncio.create_task(self._estimation_background(record.id, request))
+            analysis_task_manager.register(record.id, task)
 
         return record
 
     async def _estimation_background(self, analysis_id: str, request: EstimationRequest) -> None:
         """Фоновое выполнение параметрической идентификации."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             self._update_db_status(analysis_id, "running")
 
@@ -239,6 +266,10 @@ class AnalysisService:
 
             self._update_db_result(analysis_id, "completed", result)
             logger.info(f"Estimation {analysis_id} completed")
+        except asyncio.CancelledError:
+            self._update_db_status(analysis_id, "cancelled")
+            logger.info(f"Estimation {analysis_id} cancelled")
+            raise
         except Exception as exc:
             self._update_db_status(analysis_id, "failed", error=str(exc))
             logger.error(f"Estimation {analysis_id} failed: {exc}")
@@ -246,39 +277,84 @@ class AnalysisService:
             analysis_task_manager.cleanup(analysis_id)
 
     def _execute_estimation(self, analysis_id: str, request: EstimationRequest) -> dict:
-        """Синхронное выполнение MCMC/optimization."""
-        # Загрузить FCS-данные из upload
+        """Синхронное выполнение MCMC/optimization через parameter_estimation ядро."""
+        from src.core.parameter_estimation import EstimationConfig, estimate_parameters
         from src.db.models import UploadRecord
         from src.db.session import SessionLocal
 
+        # 1. Загрузить upload record
         db = SessionLocal()
         try:
             upload = db.get(UploadRecord, request.upload_id)
             if upload is None:
                 raise ValueError(f"Upload {request.upload_id} not found")
+            file_path = upload.file_path
+            upload_filename = upload.filename
         finally:
             db.close()
 
-        try:
-            import emcee
-            import numpy as np
+        # 2. Прочитать наблюдения (CSV с колонкой time; FCS — snapshot, не поддерживается)
+        target = request.target_variable
+        observed_data = _load_observed_timeseries(file_path, upload_filename, target)
 
-            # Заглушка для MCMC — реальная реализация требует Phase 3
-            logger.info(f"Running estimation with method={request.method}, n_samples={request.n_samples}")
-            return {
-                "method": request.method,
-                "target_variable": request.target_variable,
-                "upload_id": request.upload_id,
-                "status": "stub",
-                "message": "Full MCMC estimation requires Phase 3 (Analysis & Validation) completion",
-                "n_samples": request.n_samples,
+        # 3. Маппинг API method → core method
+        method_map = {"mcmc": "mcmc", "optimization": "mle"}
+        core_method = method_map.get(request.method, "mcmc")
+
+        # 4. Конфигурация
+        config = EstimationConfig(
+            observed_variables=[target],
+            n_samples=request.n_samples,
+            n_tune=min(request.n_samples // 2, 500),
+        )
+
+        # 5. Запуск
+        logger.info(
+            f"Estimation {analysis_id}: method={core_method}, "
+            f"target={target}, n_samples={request.n_samples}"
+        )
+        result = estimate_parameters(
+            observed_data=observed_data,
+            method=core_method,
+            estimated_param_names=None,
+            config=config,
+        )
+
+        # 6. Сериализация EstimationResult → dict
+        serialized: dict = {
+            "method": result.method,
+            "target_variable": target,
+            "upload_id": request.upload_id,
+            "point_estimates": result.point_estimates,
+            "ci_lower": result.ci_lower,
+            "ci_upper": result.ci_upper,
+            "log_likelihood": result.log_likelihood,
+            "aic": result.aic,
+            "bic": result.bic,
+            "n_observations": result.n_observations,
+            "n_estimated_params": result.n_estimated_params,
+            "elapsed_seconds": result.elapsed_seconds,
+            "n_samples": request.n_samples,
+            "diagnostics": {
+                "converged": result.diagnostics.converged,
+                "rhat": result.diagnostics.rhat,
+                "ess_bulk": result.diagnostics.ess_bulk,
+                "ess_tail": result.diagnostics.ess_tail,
+                "warnings": result.diagnostics.warnings,
             }
-        except ImportError:
-            return {
-                "method": request.method,
-                "error": "emcee not installed",
-                "n_samples": request.n_samples,
+            if result.diagnostics
+            else None,
+            "n_chains": result.config.n_chains if result.config else 1,
+        }
+
+        # Posterior samples для визуализации (plot_posterior / plot_convergence)
+        if result.posterior_samples is not None:
+            serialized["posterior_samples"] = {
+                k: v.tolist() if hasattr(v, "tolist") else list(v)
+                for k, v in result.posterior_samples.items()
             }
+
+        return serialized
 
     def get_analysis(self, analysis_id: str) -> AnalysisRecord | None:
         """Получить запись анализа."""
@@ -289,26 +365,27 @@ class AnalysisService:
                 record.progress = progress
         return record
 
-    @staticmethod
-    def _get_parameter_bounds(param_names: list[str]) -> list[list[float]]:
-        """Получить границы параметров для sensitivity analysis."""
-        # Типичные границы для параметров ParameterSet
-        default_bounds: dict[str, list[float]] = {
-            "r_F": [0.01, 0.1],
-            "r_E": [0.005, 0.05],
-            "r_S": [0.005, 0.03],
-            "K_F": [1e5, 1e6],
-            "K_E": [5e4, 5e5],
-            "K_S": [5e3, 5e4],
-            "delta_F": [0.001, 0.01],
-            "delta_Ne": [0.01, 0.1],
-            "delta_M": [0.005, 0.05],
-            "k_switch": [0.005, 0.05],
-            "sigma_F": [0.005, 0.05],
-            "sigma_P": [0.01, 0.1],
-            "sigma_TNF": [0.01, 0.1],
-        }
-        return [default_bounds.get(name, [0.1, 10.0]) for name in param_names]
+    def cancel_analysis(self, analysis_id: str) -> AnalysisRecord | None:
+        """Cancel an active analysis and mark it as cancelled."""
+        record = self._db.get(AnalysisRecord, analysis_id)
+        if record is None:
+            return None
+        if record.status in {"completed", "failed", "cancelled"}:
+            return record
+
+        cancelled = analysis_task_manager.cancel(analysis_id)
+        if not cancelled and analysis_task_manager.is_celery_task(analysis_id):
+            cancelled = analysis_task_manager.cancel_celery(analysis_id)
+
+        if cancelled:
+            record.status = "cancelled"
+            record.progress = record.progress or analysis_task_manager.get_progress(analysis_id)
+            record.completed_at = datetime.now(UTC)
+            self._db.commit()
+            self._db.refresh(record)
+            analysis_task_manager.cleanup(analysis_id)
+
+        return record
 
     def _update_db_status(self, analysis_id: str, status: str, error: str | None = None) -> None:
         from src.db.session import SessionLocal
@@ -321,7 +398,7 @@ class AnalysisService:
                 if error:
                     record.result_json = {"error": error}
                 if status in ("completed", "failed"):
-                    record.completed_at = datetime.now(timezone.utc)
+                    record.completed_at = datetime.now(UTC)
                 db.commit()
         finally:
             db.close()
@@ -336,7 +413,50 @@ class AnalysisService:
                 record.status = status
                 record.progress = 100.0
                 record.result_json = result
-                record.completed_at = datetime.now(timezone.utc)
+                record.completed_at = datetime.now(UTC)
                 db.commit()
         finally:
             db.close()
+
+
+def _load_observed_timeseries(
+    file_path: str,
+    upload_filename: str,
+    target: str,
+) -> TimeSeriesData:
+    """Load observed time-series from an uploaded CSV.
+
+    Parameter estimation needs a time-series. FCS files contain a single
+    cytometry snapshot and are rejected here with a clear message.
+    """
+    from pathlib import Path
+
+    import numpy as np
+    import pandas as pd
+
+    from src.data.dataset_loader import TimeSeriesData
+
+    suffix = Path(upload_filename).suffix.lower()
+    if suffix == ".fcs":
+        raise ValueError(
+            "Parameter estimation requires a time-series CSV "
+            "(columns: time, <target>). FCS files contain a single snapshot "
+            "and are only usable as initial conditions for simulation."
+        )
+    if suffix != ".csv":
+        raise ValueError(
+            f"Unsupported upload format '{suffix}'. Upload a CSV with a 'time' column."
+        )
+
+    df = pd.read_csv(file_path)
+    if "time" not in df.columns:
+        raise ValueError("Uploaded CSV must contain a 'time' column.")
+    if target not in df.columns:
+        raise ValueError(f"Target variable '{target}' not found in CSV columns: {list(df.columns)}")
+
+    variable_columns = [c for c in df.columns if c != "time"]
+    time_points = df["time"].to_numpy(dtype=np.float64)
+    values = {col: df[col].to_numpy(dtype=np.float64) for col in variable_columns}
+    units = {col: "cells/mm2" for col in variable_columns}
+
+    return TimeSeriesData(time_points=time_points, values=values, units=units)

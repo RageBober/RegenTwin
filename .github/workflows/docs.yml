@@ -1,0 +1,53 @@
+name: Docs (MkDocs → gh-pages)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "src/**.py"          # API ref → mkdocstrings
+      - "scripts/sync_benchmarks_to_docs.py"
+      - "output/benchmarks/report.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # gh-deploy нужен полный history
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.5.11"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Sync deps (main + dev + docs)
+        run: uv sync --frozen --group dev --group docs
+
+      - name: Sync benchmarks → docs
+        run: uv run python scripts/sync_benchmarks_to_docs.py
+
+      - name: Configure git for gh-deploy
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: MkDocs build & deploy
+        run: uv run mkdocs gh-deploy --force --clean

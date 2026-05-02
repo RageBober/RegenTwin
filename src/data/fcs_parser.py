@@ -136,7 +136,7 @@ class FCSLoader:
         meta = self._sample.get_metadata()
 
         return FCSMetadata(
-            filename=self._file_path.name,
+            filename=self._file_path.name if self._file_path else "",
             n_events=self._sample.event_count,
             n_channels=len(self._sample.pnn_labels),
             channels=list(self._sample.pnn_labels),
@@ -165,6 +165,9 @@ class FCSLoader:
             raise RuntimeError("No file loaded. Call load() first.")
 
         df = self._sample.as_dataframe(source=source)
+
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
 
         if channels is not None:
             df = df[channels]
@@ -209,9 +212,7 @@ class FCSLoader:
 
         for req in required:
             # Exact match or substring match (case-insensitive for substring)
-            found = any(
-                req == ch or req.lower() in ch.lower() for ch in available
-            )
+            found = any(req == ch or req.lower() in ch.lower() for ch in available)
             if not found:
                 missing.append(req)
 

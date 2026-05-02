@@ -12,13 +12,24 @@
 Подробное описание: Description/description_monte_carlo.md
 """
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from dataclasses import replace as _dataclass_replace
+from typing import Any
 
 import numpy as np
 
 from src.core.abm_model import ABMConfig, ABMTrajectory
+from src.core.extended_sde import (
+    VARIABLE_NAMES as EXTENDED_VARIABLE_NAMES,
+)
+from src.core.extended_sde import (
+    ExtendedSDEState,
+    ExtendedSDETrajectory,
+)
 from src.core.integration import IntegratedTrajectory, IntegrationConfig
+from src.core.parameters import ParameterSet
 from src.core.sde_model import SDEConfig, SDETrajectory, TherapyProtocol
 from src.data.parameter_extraction import ModelParameters
 
@@ -38,6 +49,10 @@ class MonteCarloConfig:
     abm_config: ABMConfig | None = None
     integration_config: IntegrationConfig | None = None
 
+    # Extended SDE (20-переменная модель)
+    extended_params: ParameterSet | None = None
+    extended_initial_state: ExtendedSDEState | None = None
+
     # Параллелизация
     n_jobs: int = 1  # Количество параллельных процессов (1 = последовательно)
     use_multiprocessing: bool = False  # Использовать multiprocessing
@@ -48,8 +63,13 @@ class MonteCarloConfig:
     # Квантили для расчёта
     quantiles: list[float] = field(default_factory=lambda: [0.05, 0.25, 0.5, 0.75, 0.95])
 
-    # Callback для прогресса
+    # Callback для прогресса (фикс, когда траектория завершается)
     progress_callback: Callable[[int, int], None] | None = None
+    # Callback для внутри-траекторного прогресса (current_step, total_steps)
+    # Вызывается во время каждой отдельной траектории, чтобы UI не застревал.
+    step_progress_callback: Callable[[int, int, int, int], None] | None = None
+    # Cooperative cancellation hook for the currently running trajectory.
+    cancel_callback: Callable[[], None] | None = None
 
     def validate(self) -> bool:
         """Валидация параметров конфигурации.
@@ -64,8 +84,8 @@ class MonteCarloConfig:
         """
         if self.n_trajectories <= 0:
             raise ValueError("n_trajectories должен быть положительным")
-        if self.model_type not in ["sde", "abm", "integrated"]:
-            raise ValueError("model_type должен быть 'sde', 'abm' или 'integrated'")
+        if self.model_type not in ["sde", "abm", "integrated", "extended"]:
+            raise ValueError("model_type должен быть 'sde', 'abm', 'integrated' или 'extended'")
 
         # Проверка наличия необходимой конфигурации
         if self.model_type == "sde" and self.sde_config is None:
@@ -74,6 +94,11 @@ class MonteCarloConfig:
             self.abm_config = ABMConfig()
         if self.model_type == "integrated" and self.integration_config is None:
             raise ValueError("integration_config обязателен для model_type='integrated'")
+        if self.model_type == "extended":
+            if self.extended_params is None:
+                self.extended_params = ParameterSet()
+            if self.extended_initial_state is None:
+                raise ValueError("extended_initial_state обязателен для model_type='extended'")
 
         if self.n_jobs < 1:
             raise ValueError("n_jobs должен быть >= 1")
@@ -100,6 +125,7 @@ class TrajectoryResult:
     sde_trajectory: SDETrajectory | None = None
     abm_trajectory: ABMTrajectory | None = None
     integrated_trajectory: IntegratedTrajectory | None = None
+    extended_trajectory: ExtendedSDETrajectory | None = None
 
     # Краткая статистика для быстрого анализа
     final_N: float = 0.0  # Финальная плотность/количество клеток
@@ -140,7 +166,12 @@ class TrajectoryResult:
 
         Подробное описание: Description/description_monte_carlo.md#TrajectoryResult.get_timeseries
         """
-        if self.sde_trajectory is not None:
+        if self.extended_trajectory is not None:
+            times = self.extended_trajectory.times
+            values = self.extended_trajectory.get_variable(variable)
+            return (times, values)
+
+        elif self.sde_trajectory is not None:
             times = self.sde_trajectory.times
             if variable == "N":
                 values = self.sde_trajectory.N_values
@@ -190,6 +221,11 @@ class MonteCarloResults:
     # Квантили
     quantiles_N: dict[float, np.ndarray] = field(default_factory=dict)  # {0.05: [...], 0.95: [...]}
     quantiles_C: dict[float, np.ndarray] = field(default_factory=dict)
+
+    # Extended MC: статистика для всех 20 переменных
+    variable_means: dict[str, np.ndarray] = field(default_factory=dict)
+    variable_stds: dict[str, np.ndarray] = field(default_factory=dict)
+    variable_quantiles: dict[str, dict[float, np.ndarray]] = field(default_factory=dict)
 
     # Метаданные
     n_successful: int = 0
@@ -349,6 +385,10 @@ class MonteCarloSimulator:
     ) -> MonteCarloResults:
         """Запуск Monte Carlo симуляций.
 
+        При `use_multiprocessing=True` и `n_jobs>1` делегирует в `_run_parallel`,
+        который запускает траектории через ProcessPoolExecutor (обход Python GIL
+        для CPU-bound ABM/SDE). Иначе — последовательный режим.
+
         Args:
             initial_params: Начальные параметры из parameter_extraction
 
@@ -359,9 +399,27 @@ class MonteCarloSimulator:
         """
         import time
 
-        results: list[TrajectoryResult] = []
         start_time = time.time()
 
+        if self._config.use_multiprocessing and self._config.n_jobs > 1:
+            results = self._run_parallel(initial_params)
+        else:
+            results = self._run_sequential(initial_params)
+
+        total_time = time.time() - start_time
+
+        # Агрегация результатов
+        mc_results = self._aggregate_trajectories(results)
+        mc_results.total_computation_time = total_time
+
+        return mc_results
+
+    def _run_sequential(
+        self,
+        initial_params: ModelParameters,
+    ) -> list[TrajectoryResult]:
+        """Последовательный запуск всех траекторий (в одном процессе)."""
+        results: list[TrajectoryResult] = []
         for i, seed in enumerate(self._seeds):
             try:
                 result = self._run_single_trajectory(i, initial_params, seed)
@@ -376,17 +434,10 @@ class MonteCarloSimulator:
                     )
                 )
 
-            # Callback прогресса
             if self._config.progress_callback:
                 self._config.progress_callback(i + 1, self._config.n_trajectories)
 
-        total_time = time.time() - start_time
-
-        # Агрегация результатов
-        mc_results = self._aggregate_trajectories(results)
-        mc_results.total_computation_time = total_time
-
-        return mc_results
+        return results
 
     def _run_single_trajectory(
         self,
@@ -415,9 +466,19 @@ class MonteCarloSimulator:
             random_seed=random_seed,
         )
 
+        step_hook: Callable[[int, int], None] | None = None
+        if self._config.step_progress_callback is not None:
+            total_traj = self._config.n_trajectories
+            cb = self._config.step_progress_callback
+
+            def _step_hook(current: int, total_steps: int) -> None:
+                cb(trajectory_id, total_traj, current, total_steps)
+
+            step_hook = _step_hook
+
         try:
             if self._config.model_type == "sde":
-                trajectory = self._run_sde_trajectory(initial_params, random_seed)
+                trajectory = self._run_sde_trajectory(initial_params, random_seed, step_hook)
                 result.sde_trajectory = trajectory
                 stats = trajectory.get_statistics()
                 result.final_N = stats["final_N"]
@@ -426,7 +487,7 @@ class MonteCarloSimulator:
                 result.growth_rate = stats["growth_rate"]
 
             elif self._config.model_type == "abm":
-                trajectory = self._run_abm_trajectory(initial_params, random_seed)
+                trajectory = self._run_abm_trajectory(initial_params, random_seed, step_hook)
                 result.abm_trajectory = trajectory
                 stats = trajectory.get_statistics()
                 result.final_N = stats.get("final_total", 0.0)
@@ -443,6 +504,15 @@ class MonteCarloSimulator:
                 result.max_N = result.final_N
                 result.growth_rate = 0.0
 
+            elif self._config.model_type == "extended":
+                ext_traj = self._run_extended_trajectory(random_seed, step_hook)
+                result.extended_trajectory = ext_traj
+                ext_stats = ext_traj.get_statistics()
+                result.final_N = ext_stats["F"]["final"]
+                result.final_C = ext_stats["C_TNF"]["final"]
+                result.max_N = ext_stats["F"]["max"]
+                result.growth_rate = 0.0
+
             result.success = True
 
         except Exception as e:
@@ -456,28 +526,51 @@ class MonteCarloSimulator:
         self,
         initial_params: ModelParameters,
         random_seed: int | None,
+        step_progress: Callable[[int, int], None] | None = None,
     ) -> SDETrajectory:
-        """Запуск SDE траектории.
-
-        Args:
-            initial_params: Начальные параметры
-            random_seed: Seed
-
-        Returns:
-            SDETrajectory
-
-        Подробное описание: Description/description_monte_carlo.md#MonteCarloSimulator._run_sde_trajectory
-        """
+        """Запуск SDE траектории."""
         from src.core.sde_model import SDEModel
 
         config = self._config.sde_config or SDEConfig()
         model = SDEModel(config=config, therapy=self._therapy, random_seed=random_seed)
-        return model.simulate(initial_params)
+        kwargs: dict[str, Any] = {}
+        if step_progress is not None:
+            kwargs["progress_callback"] = step_progress
+        if self._config.cancel_callback is not None:
+            kwargs["cancel_callback"] = self._config.cancel_callback
+        try:
+            return model.simulate(initial_params, **kwargs)
+        except TypeError:
+            return model.simulate(initial_params)
+
+    def _run_extended_trajectory(
+        self,
+        random_seed: int | None,
+        step_progress: Callable[[int, int], None] | None = None,
+    ) -> ExtendedSDETrajectory:
+        """Запуск Extended SDE (20-переменная модель) траектории."""
+        from src.core.extended_sde import ExtendedSDEModel
+
+        params = self._config.extended_params or ParameterSet()
+        initial_state = self._config.extended_initial_state
+        if initial_state is None:
+            initial_state = ExtendedSDEState()
+        model = ExtendedSDEModel(params=params, therapy=self._therapy, rng_seed=random_seed)
+        kwargs: dict[str, Any] = {"initial_state": initial_state}
+        if step_progress is not None:
+            kwargs["progress_callback"] = step_progress
+        if self._config.cancel_callback is not None:
+            kwargs["cancel_callback"] = self._config.cancel_callback
+        try:
+            return model.simulate(**kwargs)
+        except TypeError:
+            return model.simulate(initial_state=initial_state)
 
     def _run_abm_trajectory(
         self,
         initial_params: ModelParameters,
         random_seed: int | None,
+        step_progress: Callable[[int, int], None] | None = None,
     ) -> ABMTrajectory:
         """Запуск ABM траектории.
 
@@ -493,8 +586,16 @@ class MonteCarloSimulator:
         from src.core.abm_model import ABMModel
 
         config = self._config.abm_config or ABMConfig()
-        model = ABMModel(config=config, random_seed=random_seed)
-        return model.simulate(initial_params)
+        model = ABMModel(config=config, random_seed=random_seed, therapy=self._therapy)
+        kwargs: dict[str, Any] = {}
+        if step_progress is not None:
+            kwargs["progress_callback"] = step_progress
+        if self._config.cancel_callback is not None:
+            kwargs["cancel_callback"] = self._config.cancel_callback
+        try:
+            return model.simulate(initial_params, **kwargs)
+        except TypeError:
+            return model.simulate(initial_params)
 
     def _run_integrated_trajectory(
         self,
@@ -560,19 +661,39 @@ class MonteCarloSimulator:
                 n_failed=n_failed,
             )
 
-        # Извлечение массивов траекторий
-        times, trajectories_N = self._extract_trajectories_array(successful_results, "N")
-        _, trajectories_C = self._extract_trajectories_array(successful_results, "C")
+        # Extended MC: агрегация всех 20 переменных
+        variable_means: dict[str, np.ndarray] = {}
+        variable_stds: dict[str, np.ndarray] = {}
+        variable_quantiles: dict[str, dict[float, np.ndarray]] = {}
 
-        # Вычисление статистики
-        mean_N = np.mean(trajectories_N, axis=0)
-        std_N = np.std(trajectories_N, axis=0)
-        mean_C = np.mean(trajectories_C, axis=0)
-        std_C = np.std(trajectories_C, axis=0)
-
-        # Вычисление квантилей
-        quantiles_N = self._calculate_quantiles(trajectories_N, self._config.quantiles)
-        quantiles_C = self._calculate_quantiles(trajectories_C, self._config.quantiles)
+        if self._config.model_type == "extended":
+            first_var = EXTENDED_VARIABLE_NAMES[0]
+            times, _ = self._extract_trajectories_array(successful_results, first_var)
+            for var_name in EXTENDED_VARIABLE_NAMES:
+                _, traj_2d = self._extract_trajectories_array(successful_results, var_name)
+                variable_means[var_name] = np.mean(traj_2d, axis=0)
+                variable_stds[var_name] = np.std(traj_2d, axis=0)
+                variable_quantiles[var_name] = self._calculate_quantiles(
+                    traj_2d,
+                    self._config.quantiles,
+                )
+            # Legacy-поля для обратной совместимости
+            mean_N = variable_means.get("F", np.zeros(len(times)))
+            std_N = variable_stds.get("F", np.zeros(len(times)))
+            mean_C = variable_means.get("C_TNF", np.zeros(len(times)))
+            std_C = variable_stds.get("C_TNF", np.zeros(len(times)))
+            quantiles_N = variable_quantiles.get("F", {})
+            quantiles_C = variable_quantiles.get("C_TNF", {})
+        else:
+            # MVP MC: агрегация только N и C
+            times, trajectories_N = self._extract_trajectories_array(successful_results, "N")
+            _, trajectories_C = self._extract_trajectories_array(successful_results, "C")
+            mean_N = np.mean(trajectories_N, axis=0)
+            std_N = np.std(trajectories_N, axis=0)
+            mean_C = np.mean(trajectories_C, axis=0)
+            std_C = np.std(trajectories_C, axis=0)
+            quantiles_N = self._calculate_quantiles(trajectories_N, self._config.quantiles)
+            quantiles_C = self._calculate_quantiles(trajectories_C, self._config.quantiles)
 
         return MonteCarloResults(
             trajectories=results,
@@ -584,6 +705,9 @@ class MonteCarloSimulator:
             std_C=std_C,
             quantiles_N=quantiles_N,
             quantiles_C=quantiles_C,
+            variable_means=variable_means,
+            variable_stds=variable_stds,
+            variable_quantiles=variable_quantiles,
             n_successful=n_successful,
             n_failed=n_failed,
         )
@@ -622,7 +746,21 @@ class MonteCarloSimulator:
 
         # Интерполировать на общую временную сетку
         # Найти минимальную и максимальную длину
-        min_len = min(len(ts) for ts in timeseries_list)
+        lengths = [len(ts) for ts in timeseries_list]
+        min_len = min(lengths)
+        max_len = max(lengths)
+
+        if min_len < max_len:
+            _logger = logging.getLogger(__name__)
+            _logger.warning(
+                "Monte Carlo: траектории имеют разную длину (%d..%d шагов), "
+                "все обрезаны до %d. Возможна нестабильность в %d из %d траекторий.",
+                min_len,
+                max_len,
+                min_len,
+                sum(1 for ln in lengths if ln < max_len),
+                len(lengths),
+            )
 
         # Обрезать все траектории до минимальной длины
         trajectories_2d = np.array([ts[:min_len] for ts in timeseries_list])
@@ -673,60 +811,151 @@ class MonteCarloSimulator:
     ) -> list[TrajectoryResult]:
         """Параллельный запуск траекторий через ProcessPoolExecutor.
 
-        Разделяет n_trajectories на n_jobs процессов. Каждый процесс
-        получает свой seed (base_seed + offset) для воспроизводимости.
-        Собирает результаты и объединяет в единый список.
+        CPU-bound ABM/SDE не масштабируется через threading из-за Python GIL,
+        поэтому используется отдельный процесс на каждый job. Каждый worker
+        реконструирует минимальный MonteCarloSimulator (без callable callbacks,
+        которые не сериализуются), запускает одну траекторию и возвращает
+        результат в родительский процесс через as_completed.
 
-        При n_jobs=1 делегирует в последовательный запуск (fallback).
-        При ошибке в процессе — траектория помечается как failed.
+        Step-прогресс из воркеров пробрасывается через manager-очередь в
+        отдельный thread-дрейнер, который зовёт `step_progress_callback`
+        в родителе — иначе UI видит только скачки на завершении траекторий
+        и визуально «замирает» между ними.
+
+        Воркеры инициализируются с OMP_NUM_THREADS=1 и аналогами — чтобы
+        BLAS/OpenMP из numpy/scipy не боролись за ядра между процессами
+        (известный источник зависаний на Windows).
 
         Args:
             initial_params: Начальные параметры модели
 
         Returns:
-            Список TrajectoryResult со всех процессов
+            Список TrajectoryResult в исходном порядке (по trajectory_id)
 
         Подробное описание: Description/Phase2/description_monte_carlo.md#MonteCarloSimulator._run_parallel
         """
-        if self._config.n_jobs <= 1 or not self._config.use_multiprocessing:
-            # Последовательный fallback
-            results: list[TrajectoryResult] = []
-            for i, seed in enumerate(self._seeds):
-                try:
-                    result = self._run_single_trajectory(i, initial_params, seed)
-                    results.append(result)
-                except Exception as e:
-                    results.append(TrajectoryResult(
-                        trajectory_id=i,
-                        random_seed=seed,
-                        success=False,
-                        error_message=str(e),
-                    ))
-            return results
+        import threading
+        from concurrent.futures import ProcessPoolExecutor, as_completed
+        from concurrent.futures import TimeoutError as FutTimeout
+        from multiprocessing import Manager
 
-        # Параллельное выполнение через ThreadPoolExecutor
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        # Удаляем non-serializable callables перед отправкой в worker.
+        worker_config = _dataclass_replace(
+            self._config,
+            progress_callback=None,
+            step_progress_callback=None,
+            cancel_callback=None,
+            # Seeds вычислены в __init__; воркеру передаём seed явно,
+            # поэтому base_seed зануляем, чтобы worker не пересчитывал их.
+            base_seed=None,
+        )
+        therapy = self._therapy
 
         results_arr: list[TrajectoryResult | None] = [None] * self._config.n_trajectories
-        with ThreadPoolExecutor(max_workers=self._config.n_jobs) as executor:
-            futures = {}
-            for i, seed in enumerate(self._seeds):
-                future = executor.submit(
-                    self._run_single_trajectory, i, initial_params, seed
-                )
-                futures[future] = i
 
-            for future in as_completed(futures):
-                idx = futures[future]
-                try:
-                    results_arr[idx] = future.result()
-                except Exception as e:
-                    results_arr[idx] = TrajectoryResult(
-                        trajectory_id=idx,
-                        random_seed=self._seeds[idx],
-                        success=False,
-                        error_message=str(e),
+        step_cb = self._config.step_progress_callback
+        n_traj = self._config.n_trajectories
+
+        manager: Any | None = None
+        progress_queue: Any | None = None
+        drain_thread: threading.Thread | None = None
+        stop_event = threading.Event()
+
+        if step_cb is not None:
+            manager = Manager()
+            progress_queue = manager.Queue()
+
+            def _drain_progress() -> None:
+                while not stop_event.is_set():
+                    try:
+                        item = progress_queue.get(timeout=0.5)
+                    except Exception:
+                        continue
+                    if item is None:
+                        return
+                    try:
+                        traj_id, step, total_steps = item
+                    except Exception:
+                        continue
+                    try:
+                        step_cb(traj_id, n_traj, step, total_steps)
+                    except Exception:
+                        logging.exception("step_progress_callback failed in drain thread")
+
+            drain_thread = threading.Thread(
+                target=_drain_progress,
+                name="mc-progress-drain",
+                daemon=True,
+            )
+            drain_thread.start()
+
+        # 2h per trajectory — безопасная сетка против реальных зависаний.
+        overall_timeout_s = max(1, self._config.n_trajectories) * 2 * 60 * 60
+
+        try:
+            with ProcessPoolExecutor(
+                max_workers=self._config.n_jobs,
+                initializer=_worker_init,
+            ) as executor:
+                future_to_idx: dict[Any, int] = {}
+                for i, seed in enumerate(self._seeds):
+                    future = executor.submit(
+                        _pool_worker_with_progress,
+                        i,
+                        initial_params,
+                        seed,
+                        worker_config,
+                        therapy,
+                        progress_queue,
                     )
+                    future_to_idx[future] = i
+
+                completed = 0
+                try:
+                    for future in as_completed(future_to_idx, timeout=overall_timeout_s):
+                        idx = future_to_idx[future]
+                        try:
+                            results_arr[idx] = future.result()
+                        except Exception as e:
+                            results_arr[idx] = TrajectoryResult(
+                                trajectory_id=idx,
+                                random_seed=self._seeds[idx],
+                                success=False,
+                                error_message=str(e),
+                            )
+
+                        completed += 1
+                        if self._config.progress_callback is not None:
+                            self._config.progress_callback(completed, self._config.n_trajectories)
+                except FutTimeout:
+                    logging.error(
+                        "Parallel MC exceeded overall timeout %ds; marking unfinished trajectories as failed",
+                        overall_timeout_s,
+                    )
+                    for idx in range(self._config.n_trajectories):
+                        if results_arr[idx] is None:
+                            results_arr[idx] = TrajectoryResult(
+                                trajectory_id=idx,
+                                random_seed=self._seeds[idx],
+                                success=False,
+                                error_message=(
+                                    f"parallel MC overall timeout ({overall_timeout_s}s) exceeded"
+                                ),
+                            )
+        finally:
+            stop_event.set()
+            if progress_queue is not None:
+                try:
+                    progress_queue.put(None, timeout=0.1)
+                except Exception:
+                    pass
+            if drain_thread is not None:
+                drain_thread.join(timeout=5.0)
+            if manager is not None:
+                try:
+                    manager.shutdown()
+                except Exception:
+                    pass
 
         return [r for r in results_arr if r is not None]
 
@@ -749,6 +978,7 @@ class MonteCarloSimulator:
         """
         if not hasattr(self, "_progress_lock"):
             import threading
+
             self._progress_lock = threading.Lock()
 
         with self._progress_lock:
@@ -782,9 +1012,7 @@ class MonteCarloSimulator:
 
         cpu_count = os.cpu_count() or 1
         if config.n_jobs > cpu_count:
-            raise ValueError(
-                f"n_jobs ({config.n_jobs}) exceeds cpu_count ({cpu_count})"
-            )
+            raise ValueError(f"n_jobs ({config.n_jobs}) exceeds cpu_count ({cpu_count})")
 
         return True
 
@@ -870,3 +1098,85 @@ def compare_therapies(
         results[name] = simulator.run(initial_params)
 
     return results
+
+
+def _worker_init() -> None:
+    """ProcessPoolExecutor initializer, выполняется однажды в каждом воркере.
+
+    Ставит лимиты на потоки BLAS/OpenMP в child-процессе ДО того, как numpy/scipy
+    их импортируют и инициализируют свои thread-пулы. Нужно чтобы N параллельных
+    воркеров × K BLAS-потоков не превращались в oversubscription и не вызывали
+    deadlock-и на Windows (класс багов ProcessPoolExecutor + MKL/OpenBLAS).
+
+    Используем setdefault, чтобы не затирать явные настройки пользователя из env.
+    """
+    import os
+
+    for var in (
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+    ):
+        os.environ.setdefault(var, "1")
+
+
+def _pool_worker_single_trajectory(
+    trajectory_id: int,
+    initial_params: ModelParameters,
+    random_seed: int | None,
+    worker_config: MonteCarloConfig,
+    therapy: TherapyProtocol | None,
+) -> TrajectoryResult:
+    """Top-level worker для ProcessPoolExecutor.
+
+    Выполняется в отдельном процессе. Реконструирует MonteCarloSimulator из
+    переданной конфигурации (уже без callable-полей) и запускает ОДНУ траекторию.
+    Возвращает TrajectoryResult, который сериализуется обратно к родителю.
+
+    Top-level, т.к. ProcessPoolExecutor требует функцию, импортируемую по
+    полному пути модуля; замыкания и bound methods не отправляются в процесс.
+    """
+    sim = MonteCarloSimulator(config=worker_config, therapy=therapy)
+    # Принудительно ставим одиночный seed, чтобы _run_single_trajectory
+    # имел правильную запись в self._seeds (на случай, если путь его читает).
+    sim._seeds = [random_seed]
+    return sim._run_single_trajectory(trajectory_id, initial_params, random_seed)
+
+
+def _pool_worker_with_progress(
+    trajectory_id: int,
+    initial_params: ModelParameters,
+    random_seed: int | None,
+    worker_config: MonteCarloConfig,
+    therapy: TherapyProtocol | None,
+    progress_queue: Any | None,
+) -> TrajectoryResult:
+    """Воркер с пробросом step-прогресса в manager-очередь.
+
+    Если `progress_queue is None` — поведение идентично `_pool_worker_single_trajectory`.
+    Иначе устанавливает step_progress_callback, который складывает
+    `(trajectory_id, step, total_steps)` в очередь; родитель читает и
+    переизлучает в свой `step_progress_callback`.
+    """
+    if progress_queue is None:
+        return _pool_worker_single_trajectory(
+            trajectory_id,
+            initial_params,
+            random_seed,
+            worker_config,
+            therapy,
+        )
+
+    def _queue_cb(tid: int, total_traj: int, step: int, total_steps: int) -> None:
+        try:
+            progress_queue.put((tid, step, total_steps), timeout=0.1)
+        except Exception:
+            # Очередь закрыта/переполнена — не роняем симуляцию из-за телеметрии.
+            pass
+
+    cfg = _dataclass_replace(worker_config, step_progress_callback=_queue_cb)
+    sim = MonteCarloSimulator(config=cfg, therapy=therapy)
+    sim._seeds = [random_seed]
+    return sim._run_single_trajectory(trajectory_id, initial_params, random_seed)

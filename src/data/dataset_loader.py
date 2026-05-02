@@ -105,8 +105,7 @@ class TimeSeriesData:
         """
         if name not in self.values:
             raise KeyError(
-                f"Variable '{name}' not found. "
-                f"Available: {list(self.values.keys())}"
+                f"Variable '{name}' not found. " f"Available: {list(self.values.keys())}"
             )
         return self.values[name]
 
@@ -130,9 +129,7 @@ class TimeSeriesData:
         """
         new_values = {}
         for name, vals in self.values.items():
-            new_values[name] = np.interp(
-                new_time_points, self.time_points, vals
-            )
+            new_values[name] = np.interp(new_time_points, self.time_points, vals)
         return TimeSeriesData(
             time_points=new_time_points,
             values=new_values,
@@ -226,6 +223,68 @@ AVAILABLE_DATASETS: dict[str, DatasetMetadata] = {
         description="Локальные мок-данные для тестирования пайплайна",
         file_paths=["data/mock/"],
     ),
+    "literature-xue2009": DatasetMetadata(
+        source=DatasetSource.LOCAL,
+        dataset_id="literature-xue2009",
+        description="Reference curves нормальной раны (Xue et al. 2009 PNAS)",
+        species="human",
+        tissue_type="skin",
+        time_points=[
+            0,
+            6,
+            12,
+            24,
+            48,
+            72,
+            96,
+            120,
+            168,
+            216,
+            264,
+            312,
+            360,
+            408,
+            456,
+            504,
+            552,
+            600,
+            648,
+            696,
+            720,
+        ],
+        url="https://doi.org/10.1073/pnas.0909115106",
+        citation=(
+            "Xue C, Friedman A, Sen CK (2009) "
+            "A mathematical model of ischemic cutaneous wounds. "
+            "PNAS 106(39):16782-16787"
+        ),
+    ),
+    "HPA-skin-baseline": DatasetMetadata(
+        source=DatasetSource.LOCAL,
+        dataset_id="HPA-skin-baseline",
+        description="Baseline protein expression in skin (Human Protein Atlas v25.0)",
+        species="human",
+        tissue_type="skin",
+        url="https://www.proteinatlas.org",
+        citation=(
+            "Uhlén M et al. (2015) "
+            "Tissue-based map of the human proteome. "
+            "Science 347:1260419"
+        ),
+    ),
+    "literature-flegg2010": DatasetMetadata(
+        source=DatasetSource.LOCAL,
+        dataset_id="literature-flegg2010",
+        description="Wound area curves для HBOT сценариев (Flegg et al. 2010)",
+        species="human",
+        tissue_type="skin",
+        url="https://doi.org/10.1007/s11538-009-9479-9",
+        citation=(
+            "Flegg JA, Byrne HM, McElwain DLS (2010) "
+            "Mathematical Model of Hyperbaric Oxygen Therapy "
+            "Applied to Chronic Diabetic Wounds. Bull. Math. Biol."
+        ),
+    ),
 }
 
 
@@ -298,6 +357,13 @@ class DatasetLoader:
 
         metadata = AVAILABLE_DATASETS[dataset_id]
 
+        # Специализированные датасеты (литература, HPA, GEO reference)
+        _special_ids = {"HPA-skin-baseline", "GSE28914"}
+        if dataset_id.startswith("literature-") or dataset_id in _special_ids:
+            dataset = self._load_literature(dataset_id, metadata)
+            self._loaded_datasets[dataset_id] = dataset
+            return dataset
+
         # Попытка загрузки из локальных файлов
         try:
             dataset = self._load_local(metadata)
@@ -306,9 +372,7 @@ class DatasetLoader:
         except Exception:
             pass
 
-        raise FileNotFoundError(
-            f"Dataset '{dataset_id}' not available locally"
-        )
+        raise FileNotFoundError(f"Dataset '{dataset_id}' not available locally")
 
     def download(
         self,
@@ -333,9 +397,7 @@ class DatasetLoader:
         if dataset_id not in AVAILABLE_DATASETS:
             raise KeyError(f"Dataset '{dataset_id}' not found in registry")
 
-        raise ConnectionError(
-            f"Download not implemented for dataset '{dataset_id}'"
-        )
+        raise ConnectionError(f"Download not implemented for dataset '{dataset_id}'")
 
     def validate_dataset(
         self,
@@ -370,18 +432,92 @@ class DatasetLoader:
                 if len(source.time_points) >= 2:
                     if not np.all(np.diff(source.time_points) > 0):
                         raise ValueError(
-                            f"{source_name}: time_points are not "
-                            "monotonically increasing"
+                            f"{source_name}: time_points are not " "monotonically increasing"
                         )
                 # Неотрицательность значений
                 for var_name, values in source.values.items():
                     if np.any(values < 0):
-                        raise ValueError(
-                            f"{source_name}.{var_name}: "
-                            "contains negative values"
-                        )
+                        raise ValueError(f"{source_name}.{var_name}: " "contains negative values")
 
         return True
+
+    def _load_literature(
+        self,
+        dataset_id: str,
+        metadata: DatasetMetadata,
+    ) -> ValidationDataset:
+        """Загружает литературный датасет из src.data.literature_data.
+
+        Args:
+            dataset_id: Идентификатор ("literature-xue2009" или "literature-flegg2010")
+            metadata: Метаданные датасета
+
+        Returns:
+            ValidationDataset с литературными reference curves
+        """
+        from src.data.literature_data import (
+            get_flegg2010_reference,
+            get_xue2009_reference,
+        )
+
+        if dataset_id == "literature-xue2009":
+            ts = get_xue2009_reference()
+            # Разделяем на cell_counts и cytokine_levels
+            cell_vars = {"P", "Ne", "M1", "M2", "M_total", "F", "Mf", "E", "S"}
+            cytokine_vars = {
+                "C_TNF",
+                "C_IL10",
+                "C_PDGF",
+                "C_VEGF",
+                "C_TGFb",
+                "C_MCP1",
+                "C_IL8",
+            }
+            cell_values = {k: v for k, v in ts.values.items() if k in cell_vars}
+            cell_units = {k: v for k, v in ts.units.items() if k in cell_vars}
+            cyt_values = {k: v for k, v in ts.values.items() if k in cytokine_vars}
+            cyt_units = {k: v for k, v in ts.units.items() if k in cytokine_vars}
+
+            cell_counts = TimeSeriesData(
+                time_points=ts.time_points,
+                values=cell_values,
+                units=cell_units,
+                metadata=metadata,
+            )
+            cytokine_levels = TimeSeriesData(
+                time_points=ts.time_points,
+                values=cyt_values,
+                units=cyt_units,
+                metadata=metadata,
+            )
+            return ValidationDataset(
+                metadata=metadata,
+                cell_counts=cell_counts,
+                cytokine_levels=cytokine_levels,
+            )
+
+        elif dataset_id == "literature-flegg2010":
+            ts = get_flegg2010_reference()
+            return ValidationDataset(
+                metadata=metadata,
+                wound_closure=ts,
+            )
+
+        elif dataset_id == "HPA-skin-baseline":
+            from src.data.hpa_client import get_hpa_validation_dataset
+
+            return get_hpa_validation_dataset()
+
+        elif dataset_id == "GSE28914":
+            from src.data.gene_mapping import get_gse28914_reference
+
+            ts = get_gse28914_reference()
+            return ValidationDataset(
+                metadata=metadata,
+                cytokine_levels=ts,
+            )
+
+        raise KeyError(f"Unknown literature dataset: {dataset_id}")
 
     def _load_local(
         self,
@@ -407,9 +543,7 @@ class DatasetLoader:
             base_dir = self._cache_dir / metadata.dataset_id
 
         if not base_dir.exists():
-            raise FileNotFoundError(
-                f"Data directory not found: {base_dir}"
-            )
+            raise FileNotFoundError(f"Data directory not found: {base_dir}")
 
         # Загрузка FCS файлов
         fcs_dir = base_dir / "fcs"
@@ -459,6 +593,7 @@ class DatasetLoader:
         for fcs_file in fcs_files:
             try:
                 from src.data.fcs_parser import FCSLoader
+
                 loader = FCSLoader()
                 loader.load(str(fcs_file))
                 df = loader.to_dataframe()
@@ -498,12 +633,12 @@ class DatasetLoader:
                 df = pd.read_csv(file_path)
                 if "time" not in df.columns:
                     return None
-                time_points = df["time"].values.astype(float)
+                time_points = np.array(df["time"].to_list(), dtype=np.float64)
                 values = {}
                 units = {}
                 for col in df.columns:
                     if col != "time":
-                        values[col] = df[col].values.astype(float)
+                        values[col] = np.array(df[col].to_list(), dtype=np.float64)
                         units[col] = "unknown"
                 return TimeSeriesData(
                     time_points=time_points,
@@ -515,17 +650,13 @@ class DatasetLoader:
 
         elif suffix == ".json":
             import json
+
             try:
                 with open(file_path) as f:
                     data = json.load(f)
                 time_points = np.array(data["time_points"], dtype=float)
-                values = {
-                    k: np.array(v, dtype=float)
-                    for k, v in data["values"].items()
-                }
-                units = data.get(
-                    "units", {k: "unknown" for k in values}
-                )
+                values = {k: np.array(v, dtype=float) for k, v in data["values"].items()}
+                units = data.get("units", {k: "unknown" for k in values})
                 return TimeSeriesData(
                     time_points=time_points,
                     values=values,

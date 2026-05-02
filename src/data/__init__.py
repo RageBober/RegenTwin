@@ -4,7 +4,6 @@
 - fcs_parser — парсинг .fcs файлов
 - gating — автоматический gating
 - parameter_extraction — извлечение параметров для модели
-- image_loader — загрузка и анализ изображений scatter plots
 - validation — валидация данных по схемам
 - dataset_loader — загрузка публичных датасетов
 
@@ -22,17 +21,24 @@ from src.data.dataset_loader import (
 )
 from src.data.fcs_parser import FCSLoader, FCSMetadata, load_fcs
 from src.data.gating import GateResult, GatingResults, GatingStrategy
-from src.data.image_loader import (
-    ImageAnalysisResult,
-    ImageAnalyzer,
-    ImageConfig,
-    ImageLoader,
-    ImageMetadata,
-    ScatterPlotData,
-    ScatterPlotExtractor,
-    analyze_image,
-    extract_scatter_plot,
-    load_image,
+from src.data.gene_mapping import (
+    GENE_TO_VARIABLE,
+    get_gse28914_reference,
+    map_expression_to_model,
+)
+from src.data.hpa_client import (
+    HPASkinExpression,
+    get_baseline_concentrations,
+    get_hpa_validation_dataset,
+    get_skin_baseline,
+)
+from src.data.literature_data import (
+    LiteratureCitation,
+    ReferenceSource,
+    get_flegg2010_reference,
+    get_variable_mapping,
+    get_xue2009_phase_breakpoints,
+    get_xue2009_reference,
 )
 from src.data.parameter_extraction import (
     ExtendedModelParameters,
@@ -67,17 +73,6 @@ __all__ = [
     "ExtractionConfig",
     "extract_model_parameters",
     "extract_extended_parameters",
-    # image_loader
-    "ImageConfig",
-    "ImageMetadata",
-    "ImageLoader",
-    "ScatterPlotData",
-    "ScatterPlotExtractor",
-    "ImageAnalysisResult",
-    "ImageAnalyzer",
-    "load_image",
-    "extract_scatter_plot",
-    "analyze_image",
     # validation
     "ValidationLevel",
     "ValidationResult",
@@ -93,4 +88,20 @@ __all__ = [
     "DatasetLoader",
     "AVAILABLE_DATASETS",
     "load_dataset",
+    # literature_data
+    "ReferenceSource",
+    "LiteratureCitation",
+    "get_xue2009_reference",
+    "get_flegg2010_reference",
+    "get_xue2009_phase_breakpoints",
+    "get_variable_mapping",
+    # gene_mapping
+    "GENE_TO_VARIABLE",
+    "get_gse28914_reference",
+    "map_expression_to_model",
+    # hpa_client
+    "HPASkinExpression",
+    "get_skin_baseline",
+    "get_baseline_concentrations",
+    "get_hpa_validation_dataset",
 ]

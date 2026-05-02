@@ -65,19 +65,19 @@ class TestPlateletAgentConstants:
         assert PlateletAgent.DIVISION_PROBABILITY == 0.0
 
     def test_death_probability(self):
-        assert PlateletAgent.DEATH_PROBABILITY == pytest.approx(0.014)
+        assert pytest.approx(0.014) == PlateletAgent.DEATH_PROBABILITY
 
     def test_degranulation_rate(self):
-        assert PlateletAgent.DEGRANULATION_RATE == pytest.approx(0.05)
+        assert pytest.approx(0.05) == PlateletAgent.DEGRANULATION_RATE
 
     def test_pdgf_release_rate(self):
-        assert PlateletAgent.PDGF_RELEASE_RATE == pytest.approx(0.02)
+        assert pytest.approx(0.02) == PlateletAgent.PDGF_RELEASE_RATE
 
     def test_tgfb_release_rate(self):
-        assert PlateletAgent.TGFB_RELEASE_RATE == pytest.approx(0.015)
+        assert pytest.approx(0.015) == PlateletAgent.TGFB_RELEASE_RATE
 
     def test_vegf_release_rate(self):
-        assert PlateletAgent.VEGF_RELEASE_RATE == pytest.approx(0.01)
+        assert pytest.approx(0.01) == PlateletAgent.VEGF_RELEASE_RATE
 
 
 class TestPlateletAgentInit:
@@ -303,7 +303,7 @@ class TestMultiCytokineFieldInit:
 
     def test_cytokine_names_class_constant(self):
         expected = ["TNF", "IL10", "PDGF", "VEGF", "TGFb", "MCP1", "IL8"]
-        assert MultiCytokineField.CYTOKINE_NAMES == expected
+        assert expected == MultiCytokineField.CYTOKINE_NAMES
 
 
 # =============================================================================
@@ -833,7 +833,7 @@ class TestContactInhibitionModifierBehaviorImplemented:
         assert engine.compute_modifier(0) == pytest.approx(1.0)
 
     def test_threshold_neighbors_returns_zero(self):
-        """threshold соседей → modifier = 0.0 (полное ингибирование)."""
+        """Threshold соседей → modifier = 0.0 (полное ингибирование)."""
         engine = ContactInhibitionEngine(threshold=5, radius=3.0)
         assert engine.compute_modifier(5) == pytest.approx(0.0)
 
@@ -1066,7 +1066,7 @@ class TestMechanotransductionActivationBehaviorImplemented:
         assert isinstance(result, bool)
 
     def test_at_threshold_boundary(self):
-        """stress == threshold → False (строгое неравенство > threshold)."""
+        """Stress == threshold → False (строгое неравенство > threshold)."""
         engine = MechanotransductionEngine(stress_threshold=0.5)
         fibro = Fibroblast(agent_id=1, x=0.0, y=0.0)
         assert engine.should_activate(fibro, stress=0.5) is False
@@ -1104,7 +1104,7 @@ class TestMultiCytokineFieldUpdateBehaviorImplemented:
             assert np.all(field >= 0.0), f"{name} has negative values"
 
     def test_update_with_empty_agents(self):
-        """update с пустым списком агентов не вызывает ошибок."""
+        """Update с пустым списком агентов не вызывает ошибок."""
         mcf = MultiCytokineField(grid_shape=(10, 10))
         config = ABMConfig()
         mcf.update(dt=0.1, agents=[], config=config)
@@ -1332,7 +1332,7 @@ class TestKDTreeQueryNearestBehaviorImplemented:
         assert len(result) == 3
 
     def test_exclude_parameter(self):
-        """exclude убирает ближайшего, возвращает следующего."""
+        """Exclude убирает ближайшего, возвращает следующего."""
         search = KDTreeNeighborSearch(space_size=(100.0, 100.0))
         agent_a = StemCell(agent_id=1, x=50.0, y=50.0)
         agent_b = StemCell(agent_id=2, x=50.0, y=60.0)
@@ -1353,7 +1353,7 @@ class TestKDTreeQueryNearestBehaviorImplemented:
         assert result == []
 
     def test_k_greater_than_agents(self):
-        """k больше числа агентов → возвращает все."""
+        """K больше числа агентов → возвращает все."""
         search = KDTreeNeighborSearch(space_size=(100.0, 100.0))
         agents = [
             StemCell(agent_id=1, x=50.0, y=50.0),
@@ -1634,7 +1634,7 @@ class TestMyofibroblastECMProductionBehavior:
     def test_ecm_production_rate(self):
         """ECM_PRODUCTION_RATE = 1.0 (2× fibroblast)."""
         myofibro = MyofibroblastAgent(agent_id=1, x=0.0, y=0.0)
-        assert MyofibroblastAgent.ECM_PRODUCTION_RATE == pytest.approx(1.0)
+        assert pytest.approx(1.0) == MyofibroblastAgent.ECM_PRODUCTION_RATE
         assert MyofibroblastAgent.ECM_PRODUCTION_RATE == 2.0 * Fibroblast.ECM_PRODUCTION_RATE
 
     def test_produce_ecm_returns_positive(self):
@@ -1764,7 +1764,7 @@ class TestEndothelialSproutingBehavior:
 
     def test_vegf_sensitivity_constant(self):
         """VEGF_SENSITIVITY = 0.6."""
-        assert EndothelialAgent.VEGF_SENSITIVITY == pytest.approx(0.6)
+        assert pytest.approx(0.6) == EndothelialAgent.VEGF_SENSITIVITY
 
     def test_high_vegf_increases_division_probability(self):
         """Высокий VEGF → повышенная вероятность деления."""

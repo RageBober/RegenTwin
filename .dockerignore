@@ -1,0 +1,56 @@
+# Version control & meta
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Virtual environments / package caches
+.venv/
+.uv/
+.python-version
+venv/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Frontend (Tauri-only, не собирается в API-image)
+ui/
+
+# Документация и архивы
+Doks/
+docs/
+site/
+
+# Outputs (бенчмарки, профайлы) и runtime data
+output/
+data/
+logs/
+
+# Tests (image — production runtime, тесты не нужны)
+tests/
+
+# Profiler targets
+scripts/_scalene_targets/
+
+# Markdown / IDE / OS / временные файлы
+*.md
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+tmp/
+temp/
+
+# Secrets
+.env
+.env.*
+secrets/
+credentials.json

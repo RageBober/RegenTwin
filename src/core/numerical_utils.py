@@ -13,6 +13,7 @@
 import math
 import warnings
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
@@ -91,9 +92,7 @@ def clip_negative_concentrations(
             result[var] = min_value
 
     if clipped_vars:
-        logger.warning(
-            f"Клиппинг {len(clipped_vars)} переменных: {clipped_vars}"
-        )
+        logger.warning(f"Клиппинг {len(clipped_vars)} переменных: {clipped_vars}")
 
     return result
 
@@ -321,7 +320,7 @@ class NumericalGuard:
         self._clip_on_overflow = clip_on_overflow
         self._log_warnings = log_warnings
         self._warnings_list: list[str] = []
-        self._old_settings: dict[str, str] | None = None
+        self._old_settings: Any = None
         self._warning_catcher: warnings.catch_warnings | None = None
         self._caught_warnings: list[warnings.WarningMessage] | None = None
 
@@ -354,7 +353,7 @@ class NumericalGuard:
 
         # Восстановить numpy settings
         if self._old_settings is not None:
-            np.seterr(**self._old_settings)
+            np.seterr(**self._old_settings)  # type: ignore[arg-type]
 
         # Логирование
         if self._log_warnings and self._warnings_list:

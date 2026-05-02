@@ -1,21 +1,27 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PlayIcon, PauseIcon } from '@heroicons/react/24/solid';
+import { PauseIcon, PlayIcon } from '@heroicons/react/24/solid';
 import { useSpatialScatter } from '../../hooks/useSpatialData';
 import PlotlyChart from './PlotlyChart';
 
-const TOTAL_STEPS = 48;
+interface Props {
+  simulationId?: string;
+  timepoints?: number[];
+}
 
-export default function AnimationPlayer() {
+export default function AnimationPlayer({ simulationId, timepoints }: Props) {
   const { t } = useTranslation();
+  const maxSteps = Math.max(timepoints?.length ?? 48, 1);
   const [currentStep, setCurrentStep] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(500); // ms per frame
+  const [speed, setSpeed] = useState(500);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const clampedStep = Math.min(currentStep, maxSteps - 1);
   const { data, isLoading, error } = useSpatialScatter({
-    timestep: currentStep,
-    t_max_hours: TOTAL_STEPS,
+    simulation_id: simulationId,
+    timestep: clampedStep,
+    t_max_hours: maxSteps,
   });
 
   const togglePlay = useCallback(() => {
@@ -25,12 +31,12 @@ export default function AnimationPlayer() {
   useEffect(() => {
     if (playing) {
       intervalRef.current = setInterval(() => {
-        setCurrentStep((s) => {
-          if (s >= TOTAL_STEPS - 1) {
+        setCurrentStep((step) => {
+          if (step >= maxSteps - 1) {
             setPlaying(false);
             return 0;
           }
-          return s + 1;
+          return step + 1;
         });
       }, speed);
     } else if (intervalRef.current) {
@@ -40,13 +46,17 @@ export default function AnimationPlayer() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [playing, speed]);
+  }, [maxSteps, playing, speed]);
+
+  const displayedTime = timepoints?.[clampedStep] ?? clampedStep;
+  const displayedMaxTime = timepoints?.[maxSteps - 1] ?? maxSteps;
 
   return (
-    <div>
+    <div data-testid="animation-player">
       <div className="mb-3 flex items-center gap-4">
         <button
           onClick={togglePlay}
+          data-testid={playing ? 'animation-pause' : 'animation-play'}
           className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
         >
           {playing ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="h-4 w-4" />}
@@ -56,17 +66,18 @@ export default function AnimationPlayer() {
         <input
           type="range"
           min={0}
-          max={TOTAL_STEPS - 1}
-          value={currentStep}
+          max={maxSteps - 1}
+          value={clampedStep}
           onChange={(e) => setCurrentStep(Number(e.target.value))}
+          data-testid="animation-timestep"
           className="flex-1"
         />
         <span className="text-xs text-slate-500 dark:text-slate-400">
-          t = {currentStep}h / {TOTAL_STEPS}h
+          t = {displayedTime}h / {displayedMaxTime}h
         </span>
 
         <div className="flex items-center gap-1">
-          <label className="text-xs text-slate-500 dark:text-slate-400">Speed:</label>
+          <label className="text-xs text-slate-500 dark:text-slate-400">{t('viz.speed')}</label>
           <select
             value={speed}
             onChange={(e) => setSpeed(Number(e.target.value))}
@@ -80,11 +91,7 @@ export default function AnimationPlayer() {
         </div>
       </div>
 
-      <PlotlyChart
-        figure={data}
-        loading={isLoading}
-        error={error ? String(error) : null}
-      />
+      <PlotlyChart figure={data} loading={isLoading} error={error ? String(error) : null} />
     </div>
   );
 }

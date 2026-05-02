@@ -1,5 +1,4 @@
-"""
-Генератор мок-данных для разработки RegenTwin.
+"""Генератор мок-данных для разработки RegenTwin.
 
 Создаёт синтетические данные, имитирующие .fcs файлы flow cytometry.
 
@@ -15,8 +14,7 @@ import pandas as pd
 
 @dataclass
 class MockFCSMetadata:
-    """
-    Метаданные мок .fcs файла.
+    """Метаданные мок .fcs файла.
 
     Подробное описание: Description/description_generate_mock_data.md#MockFCSMetadata
     """
@@ -40,8 +38,7 @@ class MockFCSMetadata:
 
 
 class MockFCSGenerator:
-    """
-    Генератор синтетических flow cytometry данных.
+    """Генератор синтетических flow cytometry данных.
 
     Создаёт реалистичные популяции клеток для тестирования
     без необходимости использования реальных .fcs файлов.
@@ -50,8 +47,7 @@ class MockFCSGenerator:
     """
 
     def __init__(self, seed: int | None = 42) -> None:
-        """
-        Инициализация генератора.
+        """Инициализация генератора.
 
         Args:
             seed: Seed для воспроизводимости результатов
@@ -68,8 +64,7 @@ class MockFCSGenerator:
         macrophage_fraction: float = 0.03,
         apoptotic_fraction: float = 0.02,
     ) -> pd.DataFrame:
-        """
-        Генерация синтетического образца.
+        """Генерация синтетического образца.
 
         Args:
             n_events: Количество событий (клеток)
@@ -87,56 +82,49 @@ class MockFCSGenerator:
         raise NotImplementedError("Stub: требуется реализация")
 
     def _generate_live_cells(self, n: int) -> np.ndarray:
-        """
-        Генерация живых клеток.
+        """Генерация живых клеток.
 
         Подробное описание: Description/description_generate_mock_data.md#_generate_live_cells
         """
         raise NotImplementedError("Stub: требуется реализация")
 
     def _generate_debris(self, n: int) -> np.ndarray:
-        """
-        Генерация debris (мусора).
+        """Генерация debris (мусора).
 
         Подробное описание: Description/description_generate_mock_data.md#_generate_debris
         """
         raise NotImplementedError("Stub: требуется реализация")
 
     def _generate_stem_cells(self, n: int) -> np.ndarray:
-        """
-        Генерация CD34+ стволовых клеток.
+        """Генерация CD34+ стволовых клеток.
 
         Подробное описание: Description/description_generate_mock_data.md#_generate_stem_cells
         """
         raise NotImplementedError("Stub: требуется реализация")
 
     def _generate_macrophages(self, n: int) -> np.ndarray:
-        """
-        Генерация макрофагов (CD14+/CD68+).
+        """Генерация макрофагов (CD14+/CD68+).
 
         Подробное описание: Description/description_generate_mock_data.md#_generate_macrophages
         """
         raise NotImplementedError("Stub: требуется реализация")
 
     def _generate_apoptotic(self, n: int) -> np.ndarray:
-        """
-        Генерация апоптотических клеток (Annexin-V+).
+        """Генерация апоптотических клеток (Annexin-V+).
 
         Подробное описание: Description/description_generate_mock_data.md#_generate_apoptotic
         """
         raise NotImplementedError("Stub: требуется реализация")
 
     def to_dict(self, df: pd.DataFrame) -> dict[str, Any]:
-        """
-        Конвертация DataFrame в словарь для JSON-сериализации.
+        """Конвертация DataFrame в словарь для JSON-сериализации.
 
         Подробное описание: Description/description_generate_mock_data.md#to_dict
         """
         raise NotImplementedError("Stub: требуется реализация")
 
     def save_json(self, df: pd.DataFrame, filepath: str) -> None:
-        """
-        Сохранение данных в JSON файл.
+        """Сохранение данных в JSON файл.
 
         Подробное описание: Description/description_generate_mock_data.md#save_json
         """
@@ -144,8 +132,7 @@ class MockFCSGenerator:
 
 
 def create_mock_dataset(output_dir: str = "data/mock") -> None:
-    """
-    Создание набора мок-данных для разработки.
+    """Создание набора мок-данных для разработки.
 
     Подробное описание: Description/description_generate_mock_data.md#create_mock_dataset
     """

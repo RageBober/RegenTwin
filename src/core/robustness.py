@@ -414,6 +414,43 @@ class ConservationChecker:
         self._reports.append(report)
         return report
 
+    def check_ecm_balance(
+        self,
+        synthesis: np.ndarray,
+        degradation: np.ndarray,
+        ecm_current: np.ndarray,
+        ecm_previous: np.ndarray,
+        dt: float,
+    ) -> ConservationReport:
+        """Проверка баланса ECM компонент (коллаген, MMP, фибрин и др.).
+
+        Δρ ≈ (synthesis - degradation) · dt
+        error = |Δρ_actual - Δρ_expected| / max(|ρ|, ε)
+
+        Args:
+            synthesis: Скорости синтеза ECM, shape (N,)
+            degradation: Скорости деградации ECM, shape (N,)
+            ecm_current: Текущие значения ECM, shape (N,)
+            ecm_previous: Предыдущие значения ECM, shape (N,)
+            dt: Шаг времени
+
+        Returns:
+            ConservationReport с ecm_error
+        """
+        delta_expected = (synthesis - degradation) * dt
+        delta_actual = ecm_current - ecm_previous
+        denominator = np.maximum(np.abs(ecm_previous), 1e-10)
+        error = float(np.linalg.norm((delta_actual - delta_expected) / denominator))
+
+        is_conserved = error <= self._tolerance
+        report = ConservationReport(
+            ecm_error=error,
+            is_conserved=is_conserved,
+            tolerance=self._tolerance,
+        )
+        self._reports.append(report)
+        return report
+
     def report(self) -> list[ConservationReport]:
         """Получить все накопленные отчёты.
 
@@ -511,7 +548,53 @@ class ConvergenceVerifier:
         Подробное описание:
             Description/Phase2/description_robustness.md#verify_solver
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        from src.core.sde_numerics import StepResult  # noqa: F811
+
+        T = 1.0  # Конечное время для теста
+        mu, sigma, x0 = 0.05, 0.2, 1.0
+        rng = np.random.default_rng(42)
+
+        dt_sequence = [dt_base / (2**k) for k in range(n_refinements)]
+        errors: list[float] = []
+
+        for dt in dt_sequence:
+            n_steps = int(T / dt)
+            sqrt_dt = np.sqrt(dt)
+            realization_errors: list[float] = []
+
+            for _ in range(self._n_realizations):
+                # Интегрирование GBM: dX = mu*X*dt + sigma*X*dW
+                x = x0
+                W_total = 0.0  # Накопленный Wiener process для exact solution
+                for _step in range(n_steps):
+                    dW_scalar = rng.standard_normal() * sqrt_dt
+                    W_total += dW_scalar
+
+                    # Солвер работает с ndarray — упаковываем скаляр в 1D
+                    state = np.array([x])
+                    drift = np.array([mu * x])
+                    diffusion = np.array([sigma * x])
+                    dW = np.array([dW_scalar])
+
+                    result: StepResult = solver.step(state, drift, diffusion, dt, dW)
+                    x = max(result.new_state[0], 0.0)
+
+                # Аналитическое решение GBM
+                x_exact = x0 * np.exp((mu - sigma**2 / 2) * T + sigma * W_total)
+                realization_errors.append(abs(x - x_exact))
+
+            errors.append(float(np.mean(realization_errors)))
+
+        estimated_order = self.compute_order(errors, dt_sequence)
+        is_valid = abs(estimated_order - reference_order) < 0.2
+
+        return ConvergenceResult(
+            estimated_order=estimated_order,
+            errors=errors,
+            dt_sequence=dt_sequence,
+            reference_order=reference_order,
+            is_valid=is_valid,
+        )
 
     def manufactured_solution(
         self,
@@ -593,17 +676,19 @@ class SDEvsABMComparator:
         from scipy.stats import wasserstein_distance as _wasserstein
 
         w1 = float(_wasserstein(sde_values, abm_values))
-        ks_stat, ks_p = ks_2samp(sde_values, abm_values)
+        _ks_stat, _ks_p = ks_2samp(sde_values, abm_values)  # type: ignore[misc]
+        ks_stat = float(_ks_stat)  # type: ignore[arg-type]  # scipy stubs
+        ks_p = float(_ks_p)  # type: ignore[arg-type]  # scipy stubs
         mean_diff = float(abs(np.mean(sde_values) - np.mean(abm_values)))
         std_diff = float(abs(np.std(sde_values) - np.std(abm_values)))
-        is_consistent = float(ks_p) >= self._significance_level
+        is_consistent = ks_p >= self._significance_level
 
         return ComparisonMetrics(
             wasserstein_distance=w1,
             mean_diff=mean_diff,
             std_diff=std_diff,
-            ks_statistic=float(ks_stat),
-            ks_pvalue=float(ks_p),
+            ks_statistic=ks_stat,
+            ks_pvalue=ks_p,
             is_consistent=is_consistent,
         )
 

@@ -23,6 +23,12 @@ from src.analysis.validation import (
     ValidationRunner,
     validate_model,
 )
+from src.analysis.validation_pipeline import (
+    PipelineConfig,
+    ValidationPipeline,
+    ValidationReport,
+    run_validation,
+)
 
 __all__ = [
     "DTWCRPSResult",
@@ -35,4 +41,9 @@ __all__ = [
     "ValidationResult",
     "ValidationRunner",
     "validate_model",
+    # validation_pipeline
+    "PipelineConfig",
+    "ValidationPipeline",
+    "ValidationReport",
+    "run_validation",
 ]

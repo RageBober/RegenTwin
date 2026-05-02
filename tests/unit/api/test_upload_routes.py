@@ -43,10 +43,15 @@ def _setup():  # type: ignore[no-untyped-def]
 
 
 class TestUploadEndpoint:
-    @patch("src.api.services.file_service.FileService._try_parse_fcs")
-    def test_upload_file(self, mock_parse, tmp_path) -> None:  # type: ignore[no-untyped-def]
-        mock_parse.return_value = None
+    @patch("src.api.services.file_service.FileService._populate_upload_metadata")
+    def test_upload_file(self, mock_populate, tmp_path) -> None:  # type: ignore[no-untyped-def]
         client, _ = _setup()
+
+        def populate(record) -> None:  # type: ignore[no-untyped-def]
+            record.status = "ready"
+            record.metadata_json = {"parameter_source": "test"}
+
+        mock_populate.side_effect = populate
 
         file_content = b"FCS mock data content"
         with patch("src.api.services.file_service.settings") as mock_settings:
@@ -61,6 +66,8 @@ class TestUploadEndpoint:
         data = resp.json()
         assert data["filename"] == "test.fcs"
         assert "upload_id" in data
+        assert data["status"] == "ready"
+        assert data["metadata"]["parameter_source"] == "test"
 
     def test_upload_missing_file(self) -> None:
         client, _ = _setup()
@@ -74,10 +81,15 @@ class TestGetUploadStatus:
         resp = client.get(f"/api/v1/upload/{_UUID_NONEXISTENT}")
         assert resp.status_code == 404
 
-    @patch("src.api.services.file_service.FileService._try_parse_fcs")
-    def test_get_existing(self, mock_parse, tmp_path) -> None:  # type: ignore[no-untyped-def]
-        mock_parse.return_value = None
+    @patch("src.api.services.file_service.FileService._populate_upload_metadata")
+    def test_get_existing(self, mock_populate, tmp_path) -> None:  # type: ignore[no-untyped-def]
         client, _ = _setup()
+
+        def populate(record) -> None:  # type: ignore[no-untyped-def]
+            record.status = "ready"
+            record.metadata_json = {"kind": "test"}
+
+        mock_populate.side_effect = populate
 
         with patch("src.api.services.file_service.settings") as mock_settings:
             mock_settings.upload_dir = str(tmp_path)
@@ -91,3 +103,4 @@ class TestGetUploadStatus:
         resp = client.get(f"/api/v1/upload/{upload_id}")
         assert resp.status_code == 200
         assert resp.json()["upload_id"] == upload_id
+        assert resp.json()["status"] == "ready"

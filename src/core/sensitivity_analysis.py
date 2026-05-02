@@ -20,6 +20,7 @@ from typing import Any
 
 import numpy as np
 
+from src.core.bounds import ParameterBounds
 from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
 from src.core.parameters import ParameterSet
 
@@ -59,22 +60,9 @@ class SensitivityMethod(Enum):
 # =====================================================================
 
 
-# Description: Description/Phase3/description_sensitivity_analysis.md#ParameterBounds
-@dataclass
-class ParameterBounds:
-    """Границы одного параметра для анализа чувствительности.
-
-    Задаёт диапазон варьирования параметра при сэмплировании.
-    Номинальное значение используется для локальной чувствительности.
-
-    Подробное описание:
-        Description/Phase3/description_sensitivity_analysis.md#ParameterBounds
-    """
-
-    name: str  # Имя параметра (поле ParameterSet)
-    lower: float  # Нижняя граница
-    upper: float  # Верхняя граница
-    nominal: float | None = None  # Номинальное значение (None → из ParameterSet)
+# ParameterBounds перенесён в src.core.bounds для разрыва циклического импорта.
+# Реэкспорт для обратной совместимости:
+# from src.core.bounds import ParameterBounds  # уже импортирован выше
 
 
 # Description: Description/Phase3/description_sensitivity_analysis.md#SensitivityConfig
@@ -371,6 +359,7 @@ class SensitivityAnalyzer:
         self,
         output_variables: list[str] | None = None,
         n_samples: int = 1024,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> SobolResult:
         """Глобальный анализ чувствительности методом Sobol.
 
@@ -407,7 +396,7 @@ class SensitivityAnalyzer:
 
         param_values = saltelli_sample.sample(problem, n_samples)
         n_runs = len(param_values)
-        Y = self._evaluate_model(param_values, output_var)
+        Y = self._evaluate_model(param_values, output_var, progress_callback)
         Y = np.where(np.isfinite(Y), Y, 0.0)
 
         n_params = problem["num_vars"]
@@ -452,6 +441,7 @@ class SensitivityAnalyzer:
         output_variables: list[str] | None = None,
         n_trajectories: int = 10,
         n_levels: int = 4,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> MorrisResult:
         """Скрининг параметров методом Morris (Elementary Effects).
 
@@ -493,7 +483,7 @@ class SensitivityAnalyzer:
 
         param_values = morris_sample.sample(problem, N=n_trajectories, num_levels=n_levels)
         n_runs = len(param_values)
-        Y = self._evaluate_model(param_values, output_var)
+        Y = self._evaluate_model(param_values, output_var, progress_callback)
         Y = np.where(np.isfinite(Y), Y, 0.0)
 
         si = morris_analyze.analyze(problem, param_values, Y, num_levels=n_levels)

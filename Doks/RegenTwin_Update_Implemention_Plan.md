@@ -11,7 +11,7 @@
 
 **Стек:**
 - **Backend:** Python 3.11+, FastAPI, NumPy, SciPy, PyMC/emcee, SALib
-- **Frontend:** Tauri + React + TypeScript 
+- **Frontend:** Tauri + React + TypeScript
 - **Визуализация:** Plotly.js, Three.js (3D)
 - **Инфраструктура:** SQLite (dev) → PostgreSQL (prod), Alembic
 
@@ -166,7 +166,7 @@ RegenTwin/
 | **.dockerignore** | ✖ | Исключения: .venv, __pycache__, .git |
 | **CI/CD: lint+test** | ✖ | `.github/workflows/ci.yml`: ruff, mypy, pytest, coverage |
 | **CI/CD: Docker build** | ✖ | `.github/workflows/docker.yml`: build + push |
-| **Loguru конфигурация** | ✖ | `src/utils/logging.py`: structured logging |
+| **Loguru конфигурация** | ✔ | `src/utils/logging.py`: structured logging |
 | **pre-commit hooks** | ✖ | `.pre-commit-config.yaml`: ruff, black, mypy |
 | **Загрузка реальных данных** | ✖ | Скрипт загрузки с FlowRepository (FR-FCM-*) |
 
@@ -355,7 +355,7 @@ D(t) — сигнал повреждения, O₂(t) — кислород
 
 ## Фаза 3: Анализ и валидация ◐ ЧАСТИЧНО (60%)
 
-### 3.1 Параметрическая идентификация ◐ ЧАСТИЧНО (~75%)
+### 3.1 Параметрическая идентификация ✔ ЗАВЕРШЕНО (100%)
 
 **Файл:** `src/core/parameter_estimation.py` (~1484 LOC)
 **Тесты:** `tests/unit/core/test_parameter_estimation.py` (100 тестов)
@@ -577,7 +577,7 @@ GET  /api/v1/health              # ✔ Health check
 
 ---
 
-## Фаза 7: Тестирование ✔ РЕАЛИЗОВАНО (85%)
+## Фаза 7: Тестирование ✔ РЕАЛИЗОВАНО (90%)
 
 ### Сводка
 
@@ -592,47 +592,166 @@ GET  /api/v1/health              # ✔ Health check
 | Integration-тесты | ✔ | 12 |
 | Performance-тесты | ✔ | 12 |
 | UI тесты (Vitest) | ✔ | 31 |
-| **ИТОГО** | | **2365** |
+| E2E Backend (pytest + live uvicorn, 4 режима + WS/cancel) | ✔ | ~25 |
+| E2E Frontend (Playwright, 3 UI-режима + ABM spatial + WS/cancel) | ✔ | 11 |
+| **ИТОГО** | | **~2400** |
 
 ### Ещё нужно
 
 | Задача | Статус |
 |--------|--------|
 | Validation-тесты на реальных данных | ✖ |
-| E2E тесты (API + Frontend) | ✖ |
+| E2E тесты (API + Frontend, 4 режима + ABM spatial + WS/cancel) | ✔ |
 | Расширение UI тестов (покрытие компонентов) | ✖ |
 
 ---
 
-## Фаза 8: Интеграция и деплой ✖ НЕ НАЧАТО (0%)
+## Фаза 8: Интеграция и деплой ✔ РЕАЛИЗОВАНО (95%)
+
+> Реализована **усечённая под дипломный сценарий** версия. Решения выбраны
+> в брейншторминге 2026-05-02: локальная сборка `.msi` + бенчмаркинг
+> + DuckDB + uv + MkDocs. Выкинуто по YAGNI: Grafana, Sentry, Railway/Fly.io,
+> прод-docker-compose, multi-OS Tauri build, code signing, auto-updater.
+
+### Инфраструктура (uv + БД)
+
+| Задача | Статус |
+|--------|--------|
+| Переход на `uv` (PEP 735 dependency groups: `dev`, `docs`) | ✔ |
+| `[tool.uv]` секция в pyproject.toml | ✔ |
+| `.python-version` | ✔ |
+| Удалён `black` (заменён `ruff format`) | ✔ |
+| Pre-commit hooks (ruff, mypy на pre-push, eslint на pre-push) | ✔ |
+| Миграция SQLite → **DuckDB** (embedded, колоночный, нативный JSON) | ✔ |
+| `DuckDBImpl` для Alembic, диалект-зависимый engine | ✔ |
+| Скрипт `scripts/migrate_sqlite_to_duckdb.py` (one-shot ETL) | ✔ |
 
 ### Docker
 
 | Задача | Статус |
 |--------|--------|
-| Dockerfile (multi-stage) | ✖ |
-| docker-compose.yml | ✖ |
-| .dockerignore | ✖ |
-| docker-compose.dev.yml | ✖ |
+| Dockerfile (multi-stage, slim-bookworm + uv 0.5) | ✔ |
+| .dockerignore | ✔ |
+| docker-compose.yml | ✖ (выкинуто YAGNI: only-Tauri сценарий) |
+| docker-compose.dev.yml | ✖ (выкинуто YAGNI) |
 
 ### CI/CD (GitHub Actions)
 
 | Задача | Статус |
 |--------|--------|
-| `.github/workflows/ci.yml` | ✖ |
-| `.github/workflows/docker.yml` | ✖ |
-| `.github/workflows/release.yml` (Tauri build) | ✖ |
-| Coverage badge | ✖ |
-| Pre-commit hooks | ✖ |
+| `.github/workflows/ci.yml` (ruff + mypy + pytest matrix 3.11/3.12 + ESLint + Vitest + frontend build) | ✔ |
+| `.github/workflows/release.yml` (Tauri MSI/NSIS по тегу `v*.*.*`) | ✔ |
+| `.github/workflows/docs.yml` (MkDocs → gh-pages автодеплой) | ✔ |
+| `.github/workflows/docker.yml` | ✖ (нет публикации образа в registry) |
+| `.github/codecov.yml` (target 70%, threshold 2%) | ✔ |
+| Coverage badge в README | ✔ |
+| Pre-commit hooks | ✔ |
+
+### Расширенный Health Check
+
+| Задача | Статус |
+|--------|--------|
+| `GET /api/v1/health` — агрегированный (ok / degraded / unhealthy) | ✔ |
+| `GET /api/v1/health/live` — liveness probe | ✔ |
+| `GET /api/v1/health/ready` — readiness (503 если БД мертва) | ✔ |
+| Проверки: DB (`SELECT 1`), Celery `.ping()`, Redis `.ping()` | ✔ |
+| Параллельный запуск через `asyncio.gather` с timeout per-check | ✔ |
+| 5 unit-тестов (ok / unhealthy / degraded / live / ready 503) | ✔ |
+
+### Бенчмаркинг
+
+| Задача | Статус |
+|--------|--------|
+| `pytest-benchmark` + `py-spy` + `scalene` + `psutil` + `py-cpuinfo` в dev-group | ✔ |
+| `tests/performance/test_benchmarks.py` (7 групп: SDE/ABM/MC/Sobol) | ✔ |
+| `scripts/benchmark.py` orchestrator (CPU/RAM info, JSON snapshot per machine) | ✔ |
+| `scripts/profile_hotspots.py` (py-spy flamegraph + scalene HTML) | ✔ |
+| 4 target-скрипта в `scripts/_scalene_targets/` | ✔ |
+| `scripts/generate_benchmark_report.py` (matplotlib bar/line, Markdown) | ✔ |
+| `scripts/sync_benchmarks_to_docs.py` для встраивания в MkDocs | ✔ |
+| Бейзлайн снят на laptop-baseline (i5-8600, 6 cores, 15.9 GB) | ✔ |
 
 ### Деплой
 
 | Задача | Статус |
 |--------|--------|
-| Деплой API (Railway/Fly.io) | ✖ |
-| Tauri desktop build | ✖ |
-| Мониторинг (Health check + Sentry) | ✖ |
-| Документация (MkDocs) | ✖ |
+| Tauri desktop build (`.msi` + `.exe` через GitHub Actions) | ✔ |
+| Tauri bundling Python через `bundle.resources` | ✔ |
+| Tauri Rust launcher: bundled venv приоритет → uv → .venv → python | ✔ |
+| Health check (см. выше) | ✔ |
+| Документация (MkDocs Material RU/EN, mkdocstrings, glightbox) | ✔ |
+| `mkdocs build --strict` без warnings | ✔ |
+| Деплой API (Railway/Fly.io) | ✖ (выкинуто YAGNI: дипломка локальная) |
+| Мониторинг Sentry | ✖ (выкинуто YAGNI) |
+| Code signing MSI | ✖ (нет сертификата для дипломки — приемлемо) |
+
+### Verified локально (2026-05-02)
+
+| Шаг | Результат |
+|-----|-----------|
+| `uv lock` | 245 пакетов |
+| `uv sync --group dev --group docs` | OK |
+| `alembic upgrade head` (DuckDB) | 001 + 002 применены |
+| `pre-commit run --all-files` | auto-fix 241 + reformat 65 файлов, exit 0 |
+| `pytest -m "not benchmark and not e2e_slow"` | **2495 passed, coverage 82.24%** |
+| `scripts/diagnose.py` | **97/97 OK, 0 FAIL** |
+| `benchmark.py --quick` | SDE 96.7ms, ABM 661.7ms, Sobol 8.2ms |
+| `mkdocs build --strict` | 3.98s, RU + EN сайты |
+
+### Что осталось (5%)
+
+- Push в GitHub master (требует подтверждения пользователя — будет выполнено в этом коммите)
+- Тег `v0.1.0` → триггер `release.yml` → MSI в GitHub Release
+- Снять `continue-on-error: true` с mypy job в `ci.yml` после quality-cleanup
+- Запустить бенчмарки на powerful CPU и сравнить через `generate_benchmark_report.py`
+
+---
+
+## Фаза 9: Performance & Observability ✖ НЕ НАЧАТО (0%)
+
+> Открывается **после** анализа результатов бенчмаркинга и flamegraph'ов из Б3.
+> Решение «что переписывать» принимается на основе данных, а не интуиции.
+
+### Профилирование и анализ горячих точек
+
+| Задача | Статус |
+|--------|--------|
+| Снять py-spy flamegraph на powerful CPU (target: ABM/MC) | ✖ |
+| Снять scalene line-level profile (target: ABM step) | ✖ |
+| Сравнительная таблица «laptop vs powerful CPU» (через `generate_benchmark_report.py`) | ✖ |
+| Анализ результатов: какие функции занимают > 30% времени | ✖ |
+| Принять решение: numba / Rust+PyO3 / JAX | ✖ |
+
+### Оптимизация тяжёлого функционала (кандидаты)
+
+| Кандидат | Текущее | План оптимизации |
+|----------|---------|------------------|
+| `src/core/abm_spatial.py` (521 LoC, KDTree/SpatialHash) | O(n²) в worst case | Numba JIT для inner loops, либо Rust extension |
+| `src/core/extended_sde.py` (~1140 LoC, 72K шагов) | Pure NumPy | Numba, либо JAX (XLA + GPU "бесплатно") |
+| `src/core/monte_carlo.py` (~1170 LoC) | ProcessPoolExecutor (есть) | Уже параллелится; смотреть на overhead fork'а |
+| `src/core/sensitivity_analysis.py` (~990 LoC) | SALib serial | Параллельный run модели через MC |
+
+### Observability (если будет нужна)
+
+| Задача | Статус |
+|--------|--------|
+| Grafana + Prometheus (метрики API) | ✖ (отложено — для прод-сервера) |
+| Sentry error tracking | ✖ (отложено) |
+| OpenTelemetry tracing | ✖ (отложено) |
+| Performance regression в CI (pytest-benchmark compare) | ✖ |
+
+### БД (если возникнет concurrent writes)
+
+| Задача | Статус |
+|--------|--------|
+| Миграция DuckDB → PostgreSQL/TimescaleDB | ✖ (только если `IO Error: lock` начнёт мешать) |
+
+### Multi-OS Tauri (если потребуется)
+
+| Задача | Статус |
+|--------|--------|
+| `release.yml` matrix: ubuntu (.deb), macos (.dmg) | ✖ |
+| Code signing (Apple notarization, Authenticode) | ✖ |
 
 ---
 
@@ -652,10 +771,11 @@ GET  /api/v1/health              # ✔ Health check
 | 4 | Визуализация | ✔ Реализовано (84 теста) | 90% |
 | 5 | FastAPI Backend | ◐ Частично (INTEGRATED=501, estimation=501) | ~90% |
 | 6 | Tauri + React Frontend | ✔ Реализовано (31 тест, 48 файлов) | 100% |
-| 7 | Тестирование | ✔ Реализовано (2365 тестов) | 85% |
-| 8 | Интеграция и деплой | ✖ Не начато | 0% |
+| 7 | Тестирование | ✔ Реализовано (~2400 тестов + E2E backend/frontend) | 90% |
+| 8 | Интеграция и деплой | ✔ Реализовано (uv+DuckDB+CI/CD+MkDocs+бенчмарки+Tauri MSI) | 95% |
+| 9 | Performance & Observability | ✖ Не начато (открывается после анализа бенчей Phase 8) | 0% |
 
-### Общий прогресс: ~80%
+### Общий прогресс: ~88%
 
 ---
 

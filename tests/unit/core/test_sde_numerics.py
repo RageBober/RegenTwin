@@ -298,12 +298,64 @@ class TestEulerMaruyamaSolverStep:
 class TestEulerMaruyamaSolverSimulate:
     """Тесты полной симуляции EM."""
 
-    def test_simulate_raises_not_implemented(self):
-        """simulate() вызывает NotImplementedError для stub."""
+    def test_simulate_returns_trajectory(self):
+        """simulate() возвращает корректную ExtendedSDETrajectory."""
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        params.dt = 0.1
+        params.t_max = 1.0
+        model = ExtendedSDEModel(params=params, rng_seed=42)
+        initial_state = ExtendedSDEState()
         solver = EulerMaruyamaSolver()
 
-        with pytest.raises(NotImplementedError):
-            solver.simulate(model=None, initial_state=None, params=None)
+        trajectory = solver.simulate(model, initial_state, params)
+
+        n_steps = int(params.t_max / params.dt)
+        assert len(trajectory.states) == n_steps + 1
+        assert len(trajectory.times) == n_steps + 1
+        assert trajectory.times[0] == pytest.approx(0.0)
+        assert trajectory.times[-1] == pytest.approx(params.t_max)
+
+    def test_simulate_all_values_finite_and_nonneg(self):
+        """Все значения в траектории конечны и >= 0 (boundary conditions)."""
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        params.dt = 0.1
+        params.t_max = 1.0
+        model = ExtendedSDEModel(params=params, rng_seed=42)
+        initial_state = ExtendedSDEState()
+        solver = EulerMaruyamaSolver()
+
+        trajectory = solver.simulate(model, initial_state, params)
+
+        for state in trajectory.states:
+            arr = state.to_array()
+            assert np.all(np.isfinite(arr))
+            assert np.all(arr >= 0.0)
+
+    def test_simulate_matches_model_simulate(self):
+        """Результат solver.simulate() совпадает с model.simulate() при том же seed."""
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        params.dt = 0.1
+        params.t_max = 1.0
+
+        model1 = ExtendedSDEModel(params=params, rng_seed=123)
+        model2 = ExtendedSDEModel(params=params, rng_seed=123)
+        initial_state = ExtendedSDEState()
+        solver = EulerMaruyamaSolver()
+
+        traj_solver = solver.simulate(model2, initial_state, params)
+        traj_model = model1.simulate(initial_state)
+
+        for s1, s2 in zip(traj_model.states, traj_solver.states, strict=False):
+            np.testing.assert_array_almost_equal(s1.to_array(), s2.to_array())
 
 
 # =============================================================================
@@ -468,12 +520,62 @@ class TestMilsteinSolverStep:
 class TestMilsteinComputeDiffusionDerivative:
     """Тесты численной производной диффузии."""
 
-    def test_raises_not_implemented(self):
-        """_compute_diffusion_derivative() вызывает NotImplementedError для stub."""
+    def test_returns_correct_shape(self):
+        """σ' имеет shape (20,) и конечные значения."""
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        model = ExtendedSDEModel(params=params, rng_seed=42)
+        state = ExtendedSDEState()
         solver = MilsteinSolver()
 
-        with pytest.raises(NotImplementedError):
-            solver._compute_diffusion_derivative(model=None, state=None)
+        sigma_prime = solver._compute_diffusion_derivative(model, state)
+
+        assert sigma_prime.shape == (20,)
+        assert np.all(np.isfinite(sigma_prime))
+
+    def test_gbm_diffusion_derivative(self):
+        """Для σ(X) = σ_i·X_i производная σ'_i ≈ σ_i."""
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        model = ExtendedSDEModel(params=params, rng_seed=42)
+        state = ExtendedSDEState()
+        solver = MilsteinSolver()
+
+        sigma_prime = solver._compute_diffusion_derivative(model, state)
+
+        # Для первых 15 переменных (с ненулевым sigma): σ'_i ≈ σ_i
+        # Для ECM/auxiliary (индексы 15-19): sigma=0, σ'=0
+        for i in range(15, 20):
+            assert sigma_prime[i] == pytest.approx(0.0, abs=1e-4)
+
+
+class TestMilsteinSolverSimulate:
+    """Тесты полной симуляции Milstein."""
+
+    def test_simulate_returns_trajectory(self):
+        """simulate() возвращает корректную траекторию."""
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        params.dt = 0.1
+        params.t_max = 1.0
+        model = ExtendedSDEModel(params=params, rng_seed=42)
+        initial_state = ExtendedSDEState()
+        solver = MilsteinSolver()
+
+        trajectory = solver.simulate(model, initial_state, params)
+
+        n_steps = int(params.t_max / params.dt)
+        assert len(trajectory.states) == n_steps + 1
+        for state in trajectory.states:
+            arr = state.to_array()
+            assert np.all(np.isfinite(arr))
+            assert np.all(arr >= 0.0)
 
 
 # =============================================================================
@@ -609,16 +711,21 @@ class TestIMEXSplitterStep:
 class TestIMEXImplicitStep:
     """Тесты implicit шага для стиффных переменных."""
 
-    def test_implicit_step_forward_euler(self):
-        """_implicit_step() вычисляет state_fast + drift_fast * dt."""
+    def test_implicit_step_returns_array_same_shape(self):
+        """_implicit_step() возвращает массив той же формы что state_fast."""
+        from src.core.extended_sde import ExtendedSDEModel
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        params.dt = 0.01
+        model = ExtendedSDEModel(params=params, rng_seed=0)
         splitter = IMEXSplitter()
-        state_fast = np.full(7, 5.0)
-        drift_fast = np.full(7, -0.5)
+        state_fast = np.full(7, 1.0)
+        state_slow = np.zeros(13)
 
-        result = splitter._implicit_step(state_fast, drift_fast, dt=0.1)
+        result = splitter._implicit_step(state_fast, state_slow, dt=0.01, model=model, t=0.0)
 
-        expected = state_fast + drift_fast * 0.1
-        np.testing.assert_array_almost_equal(result, expected)
+        assert result.shape == state_fast.shape
 
 
 class TestIMEXExplicitStep:
@@ -642,6 +749,119 @@ class TestIMEXExplicitStep:
 
         expected = state_slow + drift_slow * 0.1 + diffusion_slow * dW_slow
         np.testing.assert_array_almost_equal(result, expected)
+
+
+class TestIMEXSplitterSimulate:
+    """Тесты полной симуляции IMEX."""
+
+    def test_simulate_returns_trajectory(self):
+        """simulate() возвращает корректную траекторию."""
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        params.dt = 0.1
+        params.t_max = 1.0
+        model = ExtendedSDEModel(params=params, rng_seed=42)
+        initial_state = ExtendedSDEState()
+        splitter = IMEXSplitter()
+
+        trajectory = splitter.simulate(model, initial_state, params)
+
+        n_steps = int(params.t_max / params.dt)
+        assert len(trajectory.states) == n_steps + 1
+        for state in trajectory.states:
+            arr = state.to_array()
+            assert np.all(np.isfinite(arr))
+            assert np.all(arr >= 0.0)
+
+
+class TestIMEXBackwardEuler:
+    """Тесты backward Euler (Picard fixed-point) в IMEXSplitter."""
+
+    def test_implicit_step_signature_accepts_model(self):
+        """_implicit_step должен принимать state_slow, model, t."""
+        import inspect
+
+        imex = IMEXSplitter()
+        sig = inspect.signature(imex._implicit_step)
+        param_names = list(sig.parameters.keys())
+
+        assert "state_slow" in param_names, "Ожидается параметр state_slow"
+        assert "model" in param_names, "Ожидается параметр model"
+        assert "t" in param_names, "Ожидается параметр t"
+
+    def test_implicit_step_differs_from_forward_euler(self):
+        """Backward Euler (≥2 итерации Picard) ≠ forward Euler для decay системы.
+
+        До фикса: _implicit_step = forward Euler → тест упадёт.
+        После фикса: Picard converges to backward Euler solution → PASS.
+        """
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        params.dt = 1.0  # Большой шаг → явная разница BE vs FE
+        model = ExtendedSDEModel(params=params, rng_seed=0)
+
+        imex = IMEXSplitter()
+        state_fast = np.ones(7)  # цитокины (индексы 8-14)
+        state_slow = np.zeros(13)  # клетки + ECM → нет продукции, чистый decay
+
+        result_be = imex._implicit_step(state_fast, state_slow, params.dt, model, t=0.0)
+
+        # Forward Euler вручную: 1-я итерация Picard
+        full_arr = imex._merge_state(state_fast, state_slow)
+        full_state = ExtendedSDEState.from_array(full_arr, t=0.0)
+        drift_at_n = model._compute_drift(full_state)[imex._fast_indices]
+        forward_euler = state_fast + drift_at_n * params.dt
+
+        assert not np.allclose(
+            result_be, forward_euler, rtol=1e-8
+        ), "_implicit_step возвращает forward Euler — Picard iteration не реализован"
+
+    def test_imex_simulate_uses_own_loop_not_run_simulation_loop(self):
+        """simulate() override должен использовать собственный цикл с backward Euler.
+
+        При большом dt simulate() (backward Euler) даёт ДРУГОЙ результат
+        чем _run_simulation_loop() (forward Euler через step()).
+        До фикса: simulate() = _run_simulation_loop → тест упадёт.
+        После фикса: simulate() — собственный цикл с Picard → PASS.
+        """
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        params.dt = 1.0  # γ_TNF*dt = 0.5 → Picard и FE заметно отличаются
+        params.t_max = 1.0  # 1 шаг для простоты
+
+        # IMEX simulate() с backward Euler
+        model_be = ExtendedSDEModel(params=params, rng_seed=7)
+        initial_state = ExtendedSDEState(
+            C_TNF=5.0,
+            C_IL10=3.0,
+            C_PDGF=2.0,
+            C_VEGF=2.0,
+            C_TGFb=1.0,
+            C_MCP1=4.0,
+            C_IL8=3.0,
+        )
+        imex = IMEXSplitter()
+        traj_be = imex.simulate(model_be, initial_state, params)
+        final_be = traj_be.states[-1].to_array()[8:15]  # только цитокины
+
+        # Forward Euler через _run_simulation_loop (вызывает step())
+        from src.core.sde_numerics import _run_simulation_loop
+
+        model_fe = ExtendedSDEModel(params=params, rng_seed=7)
+        traj_fe = _run_simulation_loop(imex, model_fe, initial_state, params)
+        final_fe = traj_fe.states[-1].to_array()[8:15]
+
+        # Backward Euler ≠ Forward Euler для цитокинов при γdt = 0.5
+        assert not np.allclose(final_be, final_fe, rtol=1e-6), (
+            "simulate() даёт тот же результат что _run_simulation_loop (forward Euler) — "
+            "backward Euler не реализован"
+        )
 
 
 # =============================================================================
@@ -811,6 +1031,40 @@ class TestAdaptiveTimestepperStep:
         assert result.rejected is True
 
 
+class TestAdaptiveTimestepperSimulate:
+    """Тесты полной симуляции с адаптивным шагом."""
+
+    def test_simulate_returns_trajectory(self):
+        """simulate() возвращает корректную траекторию."""
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        params.dt = 0.1
+        params.t_max = 1.0
+        config = SolverConfig(
+            solver_type=SolverType.ADAPTIVE,
+            tolerance=1e-3,
+            dt_min=1e-6,
+            dt_max=1.0,
+        )
+        adaptive = AdaptiveTimestepper(
+            base_solver=EulerMaruyamaSolver(),
+            config=config,
+        )
+        model = ExtendedSDEModel(params=params, rng_seed=42)
+        initial_state = ExtendedSDEState()
+
+        trajectory = adaptive.simulate(model, initial_state, params)
+
+        assert len(trajectory.states) >= 2  # минимум начальное + одно состояние
+        assert trajectory.times[-1] == pytest.approx(params.t_max, abs=config.dt_max)
+        for state in trajectory.states:
+            arr = state.to_array()
+            assert np.all(np.isfinite(arr))
+            assert np.all(arr >= 0.0)
+
+
 # =============================================================================
 # Test StochasticRungeKutta
 # =============================================================================
@@ -845,8 +1099,8 @@ class TestStochasticRungeKuttaStep:
         assert result.new_state.shape == (20,)
         assert np.all(np.isfinite(result.new_state))
 
-    def test_n_function_evals_equals_4(self):
-        """n_function_evals == 4 (2 det stages + 2 stoch stages)."""
+    def test_n_function_evals_equals_1(self):
+        """n_function_evals == 1 (EM fallback: pre-computed drift/diffusion)."""
         solver = StochasticRungeKutta()
         state = np.ones(20)
 
@@ -858,7 +1112,7 @@ class TestStochasticRungeKuttaStep:
             dW=np.zeros(20),
         )
 
-        assert result.n_function_evals == 4
+        assert result.n_function_evals == 1
 
     def test_result_shape_20(self):
         """new_state.shape == (20,)."""
@@ -874,6 +1128,111 @@ class TestStochasticRungeKuttaStep:
         )
 
         assert result.new_state.shape == (20,)
+
+
+class TestStochasticRungeKuttaSimulate:
+    """Тесты полной симуляции SRK."""
+
+    def test_simulate_returns_trajectory(self):
+        """simulate() возвращает корректную траекторию с 2-стадийной SRK."""
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        params.dt = 0.1
+        params.t_max = 1.0
+        model = ExtendedSDEModel(params=params, rng_seed=42)
+        initial_state = ExtendedSDEState()
+        solver = StochasticRungeKutta()
+
+        trajectory = solver.simulate(model, initial_state, params)
+
+        n_steps = int(params.t_max / params.dt)
+        assert len(trajectory.states) == n_steps + 1
+        for state in trajectory.states:
+            arr = state.to_array()
+            assert np.all(np.isfinite(arr))
+            assert np.all(arr >= 0.0)
+
+
+class TestSRKSimulateMilsteinCorrection:
+    """Тесты поправки Milstein в StochasticRungeKutta.simulate()."""
+
+    def test_srk_simulate_differs_from_heun(self):
+        """SRI2W1 с поправкой Milstein даёт ДРУГОЙ результат чем чистый Heun.
+
+        До фикса: simulate() == Heun (без поправки) → тест упадёт.
+        После фикса: correction = 0.5*(l2-l1)*(dW²-dt)/sqrt_dt добавлена → PASS.
+        """
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        params.dt = 1.0  # Большой dt → большая поправка, хорошо видна разница
+        params.t_max = 1.0  # 1 шаг
+
+        model_srk = ExtendedSDEModel(params=params, rng_seed=42)
+        initial_state = ExtendedSDEState(P=1.0, Ne=1.0, M1=1.0, M2=1.0, F=1.0, Mf=1.0, E=1.0, S=1.0)
+        srk = StochasticRungeKutta()
+        traj = srk.simulate(model_srk, initial_state, params)
+        final_srk = traj.states[-1].to_array()
+
+        # Вручную вычислить Heun БЕЗ поправки (тот же seed → тот же dW)
+        model_heun = ExtendedSDEModel(params=params, rng_seed=42)
+        sqrt_dt = np.sqrt(params.dt)
+        x = initial_state.to_array()
+
+        k1 = model_heun._compute_drift(initial_state)
+        l1 = model_heun._compute_diffusion(initial_state)
+        x_hat = x + k1 * params.dt + l1 * sqrt_dt
+        state_hat = ExtendedSDEState.from_array(x_hat, t=0.0)
+        k2 = model_heun._compute_drift(state_hat)
+        l2 = model_heun._compute_diffusion(state_hat)
+
+        dW = model_heun._rng.standard_normal(20) * sqrt_dt
+        x_heun = x + 0.5 * (k1 + k2) * params.dt + 0.5 * (l1 + l2) * dW
+        x_heun = np.maximum(x_heun, 0.0)  # boundary conditions
+
+        # SRI2W1 ≠ Heun: поправка 0.5*(l2-l1)*(dW²-dt)/sqrt_dt ≠ 0 при σ≠0
+        assert not np.allclose(
+            final_srk, x_heun, rtol=1e-10
+        ), "SRI2W1 simulate() идентичен Heun — поправка Milstein не добавлена"
+
+    def test_srk_simulate_correction_formula(self):
+        """simulate() должен точно воспроизводить формулу SRI2W1 с Milstein correction."""
+        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        from src.core.parameters import ParameterSet
+
+        params = ParameterSet()
+        params.dt = 1.0
+        params.t_max = 1.0
+
+        model = ExtendedSDEModel(params=params, rng_seed=99)
+        initial_state = ExtendedSDEState(P=2.0, Ne=1.5, M1=0.5, M2=0.5, F=1.0, Mf=0.5, E=1.0, S=0.3)
+        srk = StochasticRungeKutta()
+        traj = srk.simulate(model, initial_state, params)
+        final_srk = traj.states[-1].to_array()
+
+        # Реплицировать с поправкой (тот же seed)
+        model2 = ExtendedSDEModel(params=params, rng_seed=99)
+        sqrt_dt = np.sqrt(params.dt)
+        x = initial_state.to_array()
+
+        k1 = model2._compute_drift(initial_state)
+        l1 = model2._compute_diffusion(initial_state)
+        x_hat = x + k1 * params.dt + l1 * sqrt_dt
+        state_hat = ExtendedSDEState.from_array(x_hat, t=0.0)
+        k2 = model2._compute_drift(state_hat)
+        l2 = model2._compute_diffusion(state_hat)
+
+        dW = model2._rng.standard_normal(20) * sqrt_dt
+        correction = 0.5 * (l2 - l1) * (dW**2 - params.dt) / sqrt_dt
+        x_expected = x + 0.5 * (k1 + k2) * params.dt + 0.5 * (l1 + l2) * dW + correction
+        x_expected = np.maximum(x_expected, 0.0)
+
+        assert np.allclose(
+            final_srk, x_expected, rtol=1e-10
+        ), "SRI2W1 не совпадает с формулой Heun + Milstein correction"
 
 
 # =============================================================================

@@ -12,14 +12,13 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from src.core.extended_sde import ExtendedSDETrajectory, VARIABLE_NAMES
+from src.core.extended_sde import ExtendedSDETrajectory
 from src.core.monte_carlo import MonteCarloResults
-from src.core.wound_phases import PhaseIndicators, WoundPhase, WoundPhaseDetector
+from src.core.wound_phases import PhaseIndicators, WoundPhaseDetector
 from src.visualization.theme import (
     CYTOKINE_COLORS,
     CYTOKINE_VARS,
     ECM_COLORS,
-    ECM_VARS,
     PHASE_COLORS,
     POPULATION_COLORS,
     POPULATION_VARS,
@@ -27,6 +26,41 @@ from src.visualization.theme import (
     VARIABLE_LABELS,
     apply_default_layout,
 )
+
+
+def _get_variable_unit(variable: str) -> str | None:
+    """Вернуть единицы измерения для переменной, если они известны."""
+    if variable in POPULATION_VARS:
+        return "кл/мкл"
+    if variable in CYTOKINE_VARS or variable == "C_MMP":
+        return "нг/мл"
+    if variable in {"rho_collagen", "rho_fibrin"}:
+        return "отн. ед."
+    return None
+
+
+def _get_variable_axis_label(variable: str) -> str:
+    """Подпись оси Y с единицами, если они известны."""
+    label = VARIABLE_LABELS.get(variable, variable)
+    unit = _get_variable_unit(variable)
+    return f"{label}, {unit}" if unit else label
+
+
+def _get_value_format(variable: str) -> str:
+    """Формат чисел для hover в зависимости от типа переменной."""
+    return ".0f" if variable in POPULATION_VARS else ".3f"
+
+
+def _make_time_hovertemplate(
+    value_format: str,
+    unit: str | None = None,
+) -> str:
+    """Стандартный hover для временных рядов."""
+    value_line = f"%{{y:{value_format}}}"
+    if unit:
+        value_line = f"{value_line} {unit}"
+
+    return "%{fullData.name}" "<br>Время: %{x:.1f} ч" f"<br>{value_line}" "<extra></extra>"
 
 
 def plot_populations(
@@ -58,16 +92,19 @@ def plot_populations(
         color = POPULATION_COLORS.get(var, "#333333")
         label = VARIABLE_LABELS.get(var, var)
 
-        fig.add_trace(go.Scatter(
-            x=times,
-            y=values,
-            mode="lines",
-            name=label,
-            line=dict(color=color, width=2),
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=times,
+                y=values,
+                mode="lines",
+                name=label,
+                line=dict(color=color, width=2),
+                hovertemplate=_make_time_hovertemplate(".0f", "кл/мкл"),
+            )
+        )
 
     if show_ci and mc_results is not None:
-        _add_ci_bands(fig, mc_results, times)
+        _add_ci_bands(fig, mc_results)
 
     fig.update_xaxes(title_text="Время (ч)")
     fig.update_yaxes(title_text="Клеток/мкл")
@@ -83,7 +120,6 @@ def plot_populations(
 def _add_ci_bands(
     fig: go.Figure,
     mc_results: MonteCarloResults,
-    times: np.ndarray,
 ) -> None:
     """Добавить CI-полосы из Monte Carlo на график."""
     ci_lower = mc_results.quantiles_N.get(0.05)
@@ -96,23 +132,29 @@ def _add_ci_bands(
     if len(mc_times) != len(ci_lower):
         return
 
-    fig.add_trace(go.Scatter(
-        x=np.concatenate([mc_times, mc_times[::-1]]),
-        y=np.concatenate([ci_upper, ci_lower[::-1]]),
-        fill="toself",
-        fillcolor="rgba(46,134,193,0.12)",
-        line=dict(color="rgba(0,0,0,0)"),
-        name="95% CI (Monte Carlo)",
-        showlegend=True,
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=np.concatenate([mc_times, mc_times[::-1]]),
+            y=np.concatenate([ci_upper, ci_lower[::-1]]),
+            fill="toself",
+            fillcolor="rgba(46,134,193,0.12)",
+            line=dict(color="rgba(0,0,0,0)"),
+            name="95% CI (N, Monte Carlo)",
+            showlegend=True,
+            hoverinfo="skip",
+        )
+    )
 
-    fig.add_trace(go.Scatter(
-        x=mc_times,
-        y=mc_results.mean_N,
-        mode="lines",
-        name="Среднее (MC)",
-        line=dict(color="#2e86c1", width=2, dash="dash"),
-    ))
+    fig.add_trace(
+        go.Scatter(
+            x=mc_times,
+            y=mc_results.mean_N,
+            mode="lines",
+            name="Среднее (MC)",
+            line=dict(color="#2e86c1", width=2, dash="dash"),
+            hovertemplate=_make_time_hovertemplate(".0f", "кл/мкл"),
+        )
+    )
 
 
 def plot_cytokines(
@@ -138,7 +180,8 @@ def plot_cytokines(
     if layout == "subplots":
         n = len(vars_to_plot)
         fig = make_subplots(
-            rows=n, cols=1,
+            rows=n,
+            cols=1,
             subplot_titles=[VARIABLE_LABELS.get(v, v) for v in vars_to_plot],
             vertical_spacing=0.05,
             shared_xaxes=True,
@@ -148,27 +191,40 @@ def plot_cytokines(
             color = CYTOKINE_COLORS.get(var, "#333333")
             fig.add_trace(
                 go.Scatter(
-                    x=times, y=values,
-                    mode="lines", name=VARIABLE_LABELS.get(var, var),
+                    x=times,
+                    y=values,
+                    mode="lines",
+                    name=VARIABLE_LABELS.get(var, var),
                     line=dict(color=color, width=2),
                     showlegend=False,
+                    hovertemplate=_make_time_hovertemplate(".3f", "нг/мл"),
                 ),
-                row=i, col=1,
+                row=i,
+                col=1,
             )
             fig.update_yaxes(title_text="нг/мл", row=i, col=1)
 
         fig.update_xaxes(title_text="Время (ч)", row=n, col=1)
-        return apply_default_layout(fig, height=max(height, n * 120))
+        return apply_default_layout(
+            fig,
+            height=max(height, n * 120),
+            title="Динамика цитокинов",
+        )
     else:
         fig = go.Figure()
         for var in vars_to_plot:
             values = trajectory.get_variable(var)
             color = CYTOKINE_COLORS.get(var, "#333333")
-            fig.add_trace(go.Scatter(
-                x=times, y=values,
-                mode="lines", name=VARIABLE_LABELS.get(var, var),
-                line=dict(color=color, width=2),
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=times,
+                    y=values,
+                    mode="lines",
+                    name=VARIABLE_LABELS.get(var, var),
+                    line=dict(color=color, width=2),
+                    hovertemplate=_make_time_hovertemplate(".3f", "нг/мл"),
+                )
+            )
 
         fig.update_xaxes(title_text="Время (ч)")
         fig.update_yaxes(title_text="Концентрация (нг/мл)")
@@ -203,9 +259,12 @@ def plot_ecm(
         color = ECM_COLORS[var]
         fig.add_trace(
             go.Scatter(
-                x=times, y=values,
-                mode="lines", name=VARIABLE_LABELS.get(var, var),
+                x=times,
+                y=values,
+                mode="lines",
+                name=VARIABLE_LABELS.get(var, var),
                 line=dict(color=color, width=2),
+                hovertemplate=_make_time_hovertemplate(".3f", "отн. ед."),
             ),
             secondary_y=False,
         )
@@ -214,9 +273,12 @@ def plot_ecm(
     mmp_values = trajectory.get_variable("C_MMP")
     fig.add_trace(
         go.Scatter(
-            x=times, y=mmp_values,
-            mode="lines", name=VARIABLE_LABELS.get("C_MMP", "MMP"),
+            x=times,
+            y=mmp_values,
+            mode="lines",
+            name=VARIABLE_LABELS.get("C_MMP", "MMP"),
             line=dict(color=ECM_COLORS["C_MMP"], width=2, dash="dash"),
+            hovertemplate=_make_time_hovertemplate(".3f", "нг/мл"),
         ),
         secondary_y=True,
     )
@@ -257,7 +319,8 @@ def plot_phases(
         phase_indicators = detector.detect_phase_trajectory(trajectory)
 
     fig = make_subplots(
-        rows=2, cols=1,
+        rows=2,
+        cols=1,
         row_heights=[0.15, 0.85],
         vertical_spacing=0.05,
         shared_xaxes=True,
@@ -274,11 +337,15 @@ def plot_phases(
         color = POPULATION_COLORS.get(var, "#333333")
         fig.add_trace(
             go.Scatter(
-                x=times, y=values,
-                mode="lines", name=VARIABLE_LABELS.get(var, var),
+                x=times,
+                y=values,
+                mode="lines",
+                name=VARIABLE_LABELS.get(var, var),
                 line=dict(color=color, width=2),
+                hovertemplate=_make_time_hovertemplate(".0f", "кл/мкл"),
             ),
-            row=2, col=1,
+            row=2,
+            col=1,
         )
 
     fig.update_xaxes(title_text="Время (ч)", row=2, col=1)
@@ -300,40 +367,53 @@ def _add_phase_bar(
     row: int,
 ) -> None:
     """Добавить цветовую полосу фаз как горизонтальные прямоугольники."""
-    if len(indicators) < 2 or len(times) < 2:
+    n_points = min(len(indicators), len(times))
+    if n_points < 2:
         return
 
     # Группируем последовательные одинаковые фазы
     current_phase = indicators[0].phase
     start_idx = 0
+    seen_phases: set[str] = set()
 
-    for i in range(1, len(indicators)):
-        if indicators[i].phase != current_phase or i == len(indicators) - 1:
-            end_idx = i if indicators[i].phase != current_phase else i
-            phase_name = current_phase.value
-            color = PHASE_COLORS.get(phase_name, "#cccccc")
+    def _add_segment(phase_name: str, segment_start: int, segment_end: int) -> None:
+        color = PHASE_COLORS.get(phase_name, "#cccccc")
+        t_start = (
+            times[segment_start]
+            if segment_start == 0
+            else (times[segment_start - 1] + times[segment_start]) / 2
+        )
+        t_end = (
+            times[segment_end]
+            if segment_end == n_points - 1
+            else (times[segment_end] + times[segment_end + 1]) / 2
+        )
 
-            t_start = times[start_idx] if start_idx < len(times) else times[-1]
-            t_end = times[min(end_idx, len(times) - 1)]
+        fig.add_trace(
+            go.Scatter(
+                x=[t_start, t_end, t_end, t_start, t_start],
+                y=[0, 0, 1, 1, 0],
+                fill="toself",
+                fillcolor=color,
+                line=dict(width=0),
+                mode="lines",
+                name=phase_name.capitalize(),
+                showlegend=phase_name not in seen_phases,
+                hoverinfo="text",
+                hovertext=f"{phase_name.capitalize()} ({t_start:.0f}-{t_end:.0f} ч)",
+            ),
+            row=row,
+            col=1,
+        )
+        seen_phases.add(phase_name)
 
-            fig.add_trace(
-                go.Scatter(
-                    x=[t_start, t_end, t_end, t_start, t_start],
-                    y=[0, 0, 1, 1, 0],
-                    fill="toself",
-                    fillcolor=color,
-                    line=dict(width=0),
-                    mode="lines",
-                    name=phase_name.capitalize(),
-                    showlegend=(start_idx == 0 or indicators[start_idx].phase != indicators[start_idx - 1].phase),
-                    hoverinfo="text",
-                    hovertext=f"{phase_name.capitalize()} ({t_start:.0f}-{t_end:.0f} ч)",
-                ),
-                row=row, col=1,
-            )
-
+    for i in range(1, n_points):
+        if indicators[i].phase != current_phase:
+            _add_segment(current_phase.value, start_idx, i)
             current_phase = indicators[i].phase
             start_idx = i
+
+    _add_segment(current_phase.value, start_idx, n_points - 1)
 
 
 def plot_comparison(
@@ -363,17 +443,23 @@ def plot_comparison(
         times = trajectory.times
         color = THERAPY_COLORS.get(scenario_name, "#333333")
 
-        fig.add_trace(go.Scatter(
-            x=times,
-            y=values,
-            mode="lines",
-            name=scenario_name,
-            line=dict(color=color, width=2),
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=times,
+                y=values,
+                mode="lines",
+                name=scenario_name,
+                line=dict(color=color, width=2),
+                hovertemplate=_make_time_hovertemplate(
+                    _get_value_format(variable),
+                    _get_variable_unit(variable),
+                ),
+            )
+        )
 
     var_label = VARIABLE_LABELS.get(variable, variable)
     fig.update_xaxes(title_text="Время (ч)")
-    fig.update_yaxes(title_text=var_label)
+    fig.update_yaxes(title_text=_get_variable_axis_label(variable))
 
     return apply_default_layout(
         fig,
@@ -390,7 +476,8 @@ def _plot_comparison_all_populations(
     """Сравнение всех 8 популяций в subplots."""
     n = len(POPULATION_VARS)
     fig = make_subplots(
-        rows=n, cols=1,
+        rows=n,
+        cols=1,
         subplot_titles=[VARIABLE_LABELS.get(v, v) for v in POPULATION_VARS],
         vertical_spacing=0.03,
         shared_xaxes=True,
@@ -404,12 +491,16 @@ def _plot_comparison_all_populations(
 
             fig.add_trace(
                 go.Scatter(
-                    x=times, y=values,
-                    mode="lines", name=scenario_name,
+                    x=times,
+                    y=values,
+                    mode="lines",
+                    name=scenario_name,
                     line=dict(color=color, width=1.5),
                     showlegend=(i == 1),
+                    hovertemplate=_make_time_hovertemplate(".0f", "кл/мкл"),
                 ),
-                row=i, col=1,
+                row=i,
+                col=1,
             )
 
     fig.update_xaxes(title_text="Время (ч)", row=n, col=1)

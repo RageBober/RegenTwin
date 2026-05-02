@@ -5,7 +5,8 @@
     "results": "Results",
     "analysis": "Analysis",
     "history": "History",
-    "settings": "Settings"
+    "settings": "Settings",
+    "about": "About"
   },
   "common": {
     "loading": "Loading...",
@@ -19,16 +20,25 @@
     "reset": "Reset",
     "close": "Close",
     "backendOffline": "Backend is offline",
-    "backendOnline": "Backend is online"
+    "backendOnline": "Backend is online",
+    "online": "Online",
+    "offline": "Offline"
+  },
+  "viz": {
+    "speed": "Speed:",
+    "binSize": "Bin size:"
   },
   "home": {
     "title": "RegenTwin",
     "subtitle": "Tissue Regeneration Digital Twin",
     "description": "Multiscale wound healing simulation platform integrating SDE, ABM, and therapeutic protocols",
-    "quickStart": "Quick Start",
+    "quickStart": "Workflow",
     "uploadData": "Upload Data",
+    "configureModel": "Configure Model",
     "runSimulation": "Run Simulation",
-    "viewHistory": "View History"
+    "analyzeResults": "Analyze Results",
+    "viewHistory": "View All",
+    "recentSimulations": "Recent Simulations"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -42,8 +52,11 @@
     "model": {
       "title": "Model Selection",
       "mvp": "MVP (2 variables)",
+      "mvpDesc": "Fast 2-variable model for quick exploration",
       "extended": "Extended SDE (20 variables)",
+      "extendedDesc": "Full stochastic model with all cell populations",
       "abm": "Agent-Based Model",
+      "abmDesc": "Spatial discrete agents with individual behaviors",
       "integrated": "Integrated Model"
     },
     "params": {
@@ -106,7 +119,9 @@
       "title": "Export",
       "csv": "Export CSV",
       "png": "Export PNG",
-      "pdf": "Export PDF"
+      "pdf": "Export PDF",
+      "failed": "Export failed",
+      "unavailable": "Export is unavailable for this result"
     },
     "metadata": {
       "simulationId": "Simulation ID",
@@ -114,6 +129,11 @@
       "status": "Status",
       "created": "Created",
       "completed": "Completed"
+    },
+    "states": {
+      "loadFailedTitle": "Results failed to load",
+      "unavailableTitle": "Results are unavailable",
+      "unavailableDescription": "The simulation metadata is incomplete or the result bundle is missing."
     }
   },
   "analysis": {
@@ -126,13 +146,16 @@
       "run": "Run Analysis",
       "results": "Results",
       "s1": "First-order index (S1)",
-      "st": "Total index (ST)"
+      "st": "Total index (ST)",
+      "hint": "Sensitivity analysis uses the current simulation configuration as a forward model — no data upload is required."
     },
     "estimation": {
       "title": "Parameter Estimation",
       "method": "Method",
       "targetVariable": "Target variable",
-      "run": "Run Estimation"
+      "run": "Run Estimation",
+      "needUpload": "Upload a time-series CSV to run parameter estimation.",
+      "dataFormatHint": "Requires a CSV with a `time` column (hours) and a target variable column (e.g. F, Ne, M1). FCS files contain a single snapshot and are only usable as initial conditions for simulation."
     }
   },
   "history": {
@@ -147,7 +170,10 @@
     },
     "view": "View",
     "filterByStatus": "Filter by status",
-    "all": "All"
+    "all": "All",
+    "clearAll": "Clear history",
+    "clearConfirm": "Delete all simulations and their result files? This cannot be undone.",
+    "clearSuccess": "History cleared"
   },
   "settings": {
     "title": "Settings",
@@ -156,6 +182,50 @@
     "themeLight": "Light",
     "themeDark": "Dark",
     "language": "Language",
-    "resetDefaults": "Reset to defaults"
+    "resetDefaults": "Reset to defaults",
+    "resetApiUrl": "Reset",
+    "apiUrlHint": "Leave empty for auto-proxy (dev)"
+  },
+  "about": {
+    "title": "About RegenTwin",
+    "subtitle": "A software tool for multiscale tissue regeneration simulation using flow cytometry data",
+    "mathModel": "Mathematical Model",
+    "mathModelDesc": "The system uses a two-level modeling architecture.",
+    "macroLevel": "Macro Level — SDE",
+    "macroLevelDesc": "Stochastic Differential Equations (Langevin equation) for cell population dynamics with logistic growth, therapeutic factors, and stochastic noise.",
+    "microLevel": "Micro Level — ABM",
+    "microLevelDesc": "Discrete agents of 6 types with spatial movement, chemotaxis, division, death, and intercellular interactions.",
+    "agentTypes": "ABM Agent Types",
+    "agentType": "Type",
+    "marker": "Marker",
+    "role": "Role",
+    "agents": {
+      "stem": "Stem Cells",
+      "stemRole": "Differentiation, self-renewal",
+      "macro": "Macrophages",
+      "macroRole": "Phagocytosis, M1↔M2 polarization",
+      "fibro": "Fibroblasts",
+      "fibroRole": "ECM and collagen production",
+      "neutro": "Neutrophils",
+      "neutroRole": "Primary immune response",
+      "endo": "Endothelial Cells",
+      "endoRole": "Angiogenesis",
+      "myofibro": "Myofibroblasts",
+      "myofibroRole": "Wound contraction"
+    },
+    "therapyModels": "Therapy Models",
+    "prpDesc": "Multi-component release kinetics of PDGF, VEGF, TGF-β, EGF with different time constants.",
+    "pemfDesc": "Frequency-dependent effect on proliferation, anti-inflammatory action, and cell migration.",
+    "synergy": "PRP + PEMF Synergy",
+    "synergyDesc": "Multiplicative factor for combined application of both methods.",
+    "techStack": "Technology Stack",
+    "backend": "Backend",
+    "frontend": "Frontend",
+    "desktop": "Desktop",
+    "scientific": "Scientific Computing",
+    "visualization": "Visualization",
+    "methods": "Methods",
+    "projectStructure": "Project Structure",
+    "license": "MIT License — RegenTwin Team"
   }
 }

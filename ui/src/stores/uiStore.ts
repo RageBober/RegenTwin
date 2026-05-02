@@ -7,7 +7,7 @@ interface UIStore {
   setTheme: (t: 'light' | 'dark') => void;
 }
 
-const savedTheme = (localStorage.getItem('regentwin-theme') as 'light' | 'dark') || 'light';
+const savedTheme = (localStorage.getItem('regentwin-theme') as 'light' | 'dark') || 'dark';
 
 export const useUIStore = create<UIStore>((set) => ({
   sidebarCollapsed: false,

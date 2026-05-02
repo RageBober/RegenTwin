@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from src.api.models.schemas import UploadResponse
-from src.api.services.file_service import FileSizeExceededError, FileService
+from src.api.services.file_service import FileService, FileSizeExceededError
 from src.db.session import get_db
 
 router = APIRouter(prefix="/api/v1", tags=["upload"])

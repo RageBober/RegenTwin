@@ -139,7 +139,7 @@ class TestClipNegativeConcentrations:
         result = clip_negative_concentrations(state, variables=["C"])
 
         assert result["N"] == -1.0  # Не обработана
-        assert result["C"] == 0.0   # Обработана
+        assert result["C"] == 0.0  # Обработана
 
     def test_empty_dict(self):
         """Пустой словарь возвращает пустой словарь."""
@@ -400,9 +400,7 @@ class TestHandleDivergence:
 
     def test_overflow_divergence_clips(self):
         """Overflow (мягкая дивергенция) → клиппинг текущего состояния."""
-        div_info = DivergenceInfo(
-            has_nan=False, has_inf=False, max_value=1e20, message="overflow"
-        )
+        div_info = DivergenceInfo(has_nan=False, has_inf=False, max_value=1e20, message="overflow")
         state_current = {"N": -5.0, "C": 1e20}
         state_previous = {"N": 100.0, "C": 5.0}
 
@@ -420,9 +418,7 @@ class TestHandleDivergence:
         state_current = {"N": float("nan")}
         state_previous = {"N": 100.0}
 
-        _, new_dt, _ = handle_divergence(
-            div_info, state_current, state_previous, dt_current=0.2
-        )
+        _, new_dt, _ = handle_divergence(div_info, state_current, state_previous, dt_current=0.2)
 
         assert new_dt == pytest.approx(0.1)
 
@@ -433,8 +429,11 @@ class TestHandleDivergence:
         state_previous = {"N": 100.0}
 
         _, new_dt, should_stop = handle_divergence(
-            div_info, state_current, state_previous,
-            dt_current=1e-6, dt_min=1e-6,
+            div_info,
+            state_current,
+            state_previous,
+            dt_current=1e-6,
+            dt_min=1e-6,
         )
 
         assert should_stop is True
@@ -461,8 +460,11 @@ class TestHandleDivergence:
         state_previous = {"N": 100.0}
 
         _, new_dt, _ = handle_divergence(
-            div_info, state_current, state_previous,
-            dt_current=1e-7, dt_min=1e-6,
+            div_info,
+            state_current,
+            state_previous,
+            dt_current=1e-7,
+            dt_min=1e-6,
         )
 
         assert new_dt >= 1e-6
@@ -470,8 +472,10 @@ class TestHandleDivergence:
     def test_safe_state_no_nan_or_inf(self):
         """safe_state не содержит NaN или Inf."""
         div_info = DivergenceInfo(
-            has_nan=True, has_inf=True,
-            nan_variables=["N"], inf_variables=["C"],
+            has_nan=True,
+            has_inf=True,
+            nan_variables=["N"],
+            inf_variables=["C"],
             message="NaN+Inf",
         )
         state_current = {"N": float("nan"), "C": float("inf")}
@@ -501,9 +505,7 @@ class TestHandleDivergenceLogging:
         state_previous = {"N": 100.0}
 
         with patch("src.core.numerical_utils.logger") as mock_logger:
-            handle_divergence(
-                div_info, state_current, state_previous, dt_current=0.1
-            )
+            handle_divergence(div_info, state_current, state_previous, dt_current=0.1)
             mock_logger.warning.assert_called()
 
     def test_logs_error_on_stop(self):
@@ -514,8 +516,11 @@ class TestHandleDivergenceLogging:
 
         with patch("src.core.numerical_utils.logger") as mock_logger:
             handle_divergence(
-                div_info, state_current, state_previous,
-                dt_current=1e-6, dt_min=1e-6,
+                div_info,
+                state_current,
+                state_previous,
+                dt_current=1e-6,
+                dt_min=1e-6,
             )
             mock_logger.error.assert_called()
 
@@ -533,9 +538,7 @@ class TestAdaptiveTimestep:
         state_current = {"N": 100.001, "C": 5.0001}
         state_previous = {"N": 100.0, "C": 5.0}
 
-        new_dt = adaptive_timestep(
-            state_current, state_previous, dt_current=0.01, tolerance=0.1
-        )
+        new_dt = adaptive_timestep(state_current, state_previous, dt_current=0.01, tolerance=0.1)
 
         assert new_dt > 0.01
 
@@ -544,9 +547,7 @@ class TestAdaptiveTimestep:
         state_current = {"N": 200.0, "C": 50.0}
         state_previous = {"N": 100.0, "C": 5.0}
 
-        new_dt = adaptive_timestep(
-            state_current, state_previous, dt_current=0.1, tolerance=0.1
-        )
+        new_dt = adaptive_timestep(state_current, state_previous, dt_current=0.1, tolerance=0.1)
 
         assert new_dt < 0.1
 
@@ -554,9 +555,7 @@ class TestAdaptiveTimestep:
         """Одинаковые состояния → dt = dt_max."""
         state = {"N": 100.0, "C": 5.0}
 
-        new_dt = adaptive_timestep(
-            state, state, dt_current=0.01, dt_max=1.0
-        )
+        new_dt = adaptive_timestep(state, state, dt_current=0.01, dt_max=1.0)
 
         assert new_dt == pytest.approx(1.0) or new_dt >= 0.01 * 2
 
@@ -566,8 +565,11 @@ class TestAdaptiveTimestep:
         state_previous = {"N": 1.0}
 
         new_dt = adaptive_timestep(
-            state_current, state_previous,
-            dt_current=0.001, dt_min=1e-6, tolerance=0.01,
+            state_current,
+            state_previous,
+            dt_current=0.001,
+            dt_min=1e-6,
+            tolerance=0.01,
         )
 
         assert new_dt >= 1e-6
@@ -578,8 +580,10 @@ class TestAdaptiveTimestep:
         state_previous = {"N": 100.0}
 
         new_dt = adaptive_timestep(
-            state_current, state_previous,
-            dt_current=0.5, dt_max=1.0,
+            state_current,
+            state_previous,
+            dt_current=0.5,
+            dt_max=1.0,
         )
 
         assert new_dt <= 1.0
@@ -587,7 +591,10 @@ class TestAdaptiveTimestep:
     def test_empty_dicts_returns_dt_max(self):
         """Пустые словари → dt_max (нет переменных для проверки)."""
         new_dt = adaptive_timestep(
-            {}, {}, dt_current=0.01, dt_max=1.0,
+            {},
+            {},
+            dt_current=0.01,
+            dt_max=1.0,
         )
 
         assert new_dt == pytest.approx(1.0) or new_dt >= 0.01
@@ -597,12 +604,8 @@ class TestAdaptiveTimestep:
         state_current = {"N": 110.0}
         state_previous = {"N": 100.0}
 
-        dt_loose = adaptive_timestep(
-            state_current, state_previous, dt_current=0.1, tolerance=0.5
-        )
-        dt_tight = adaptive_timestep(
-            state_current, state_previous, dt_current=0.1, tolerance=0.01
-        )
+        dt_loose = adaptive_timestep(state_current, state_previous, dt_current=0.1, tolerance=0.5)
+        dt_tight = adaptive_timestep(state_current, state_previous, dt_current=0.1, tolerance=0.01)
 
         assert dt_tight <= dt_loose
 
@@ -611,9 +614,7 @@ class TestAdaptiveTimestep:
         state_current = {"N": -50.0}
         state_previous = {"N": -100.0}
 
-        new_dt = adaptive_timestep(
-            state_current, state_previous, dt_current=0.1
-        )
+        new_dt = adaptive_timestep(state_current, state_previous, dt_current=0.1)
 
         assert isinstance(new_dt, float)
         assert new_dt > 0
@@ -636,8 +637,11 @@ class TestAdaptiveTimestepInvariants:
         dt_max = 1.0
 
         new_dt = adaptive_timestep(
-            state_current, state_previous,
-            dt_current=dt_current, dt_min=dt_min, dt_max=dt_max,
+            state_current,
+            state_previous,
+            dt_current=dt_current,
+            dt_min=dt_min,
+            dt_max=dt_max,
         )
 
         assert dt_min <= new_dt <= dt_max
@@ -657,9 +661,7 @@ class TestAdaptiveTimestepInvariants:
 
     def test_result_is_float(self):
         """Результат всегда float."""
-        new_dt = adaptive_timestep(
-            {"N": 100.0}, {"N": 50.0}, dt_current=0.1
-        )
+        new_dt = adaptive_timestep({"N": 100.0}, {"N": 50.0}, dt_current=0.1)
 
         assert isinstance(new_dt, float)
 

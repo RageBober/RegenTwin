@@ -1,5 +1,4 @@
-"""
-TDD тесты для модуля fcs_parser.py
+"""TDD тесты для модуля fcs_parser.py
 
 Тестирует:
 - FCSMetadata dataclass
@@ -9,18 +8,19 @@ TDD тесты для модуля fcs_parser.py
 Основано на спецификации: Description/description_fcs_parser.md
 """
 
-import pytest
+from pathlib import Path
+from unittest.mock import patch
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+import pytest
 
-from src.data.fcs_parser import FCSMetadata, FCSLoader, load_fcs
-
+from src.data.fcs_parser import FCSLoader, FCSMetadata, load_fcs
 
 # =============================================================================
 # Тесты для FCSMetadata
 # =============================================================================
+
 
 class TestFCSMetadata:
     """Тесты для dataclass FCSMetadata."""
@@ -34,7 +34,7 @@ class TestFCSMetadata:
             channels=["FSC-A", "SSC-A", "CD34-APC"],
             cytometer="BD FACSAria",
             date="2026-01-22",
-            fcs_version="3.1"
+            fcs_version="3.1",
         )
 
         assert metadata.filename == "test.fcs"
@@ -54,7 +54,7 @@ class TestFCSMetadata:
             channels=["FSC-A"],
             cytometer=None,
             date=None,
-            fcs_version=None
+            fcs_version=None,
         )
 
         assert metadata.filename == "test.fcs"
@@ -66,12 +66,7 @@ class TestFCSMetadata:
     def test_metadata_channels_is_list(self):
         """Тест что channels - это список строк."""
         channels = ["FSC-A", "FSC-H", "SSC-A"]
-        metadata = FCSMetadata(
-            filename="test.fcs",
-            n_events=1000,
-            n_channels=3,
-            channels=channels
-        )
+        metadata = FCSMetadata(filename="test.fcs", n_events=1000, n_channels=3, channels=channels)
 
         assert isinstance(metadata.channels, list)
         assert all(isinstance(ch, str) for ch in metadata.channels)
@@ -80,6 +75,7 @@ class TestFCSMetadata:
 # =============================================================================
 # Тесты для FCSLoader.__init__
 # =============================================================================
+
 
 class TestFCSLoaderInit:
     """Тесты для FCSLoader.__init__."""
@@ -114,10 +110,11 @@ class TestFCSLoaderInit:
 # Тесты для FCSLoader.load
 # =============================================================================
 
+
 class TestFCSLoaderLoad:
     """Тесты для FCSLoader.load."""
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_load_valid_file_returns_self(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -129,7 +126,7 @@ class TestFCSLoaderLoad:
 
         assert result is loader
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_load_sets_sample_attribute(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -142,10 +139,8 @@ class TestFCSLoaderLoad:
         assert loader._sample is not None
         assert loader._sample == mock_flowkit_sample
 
-    @patch('src.data.fcs_parser.Sample')
-    def test_load_sets_file_path(
-        self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
-    ):
+    @patch("src.data.fcs_parser.Sample")
+    def test_load_sets_file_path(self, mock_sample_class, mock_fcs_file, mock_flowkit_sample):
         """Тест что load устанавливает _file_path."""
         mock_sample_class.return_value = mock_flowkit_sample
 
@@ -154,10 +149,8 @@ class TestFCSLoaderLoad:
 
         assert loader._file_path == Path(mock_fcs_file)
 
-    @patch('src.data.fcs_parser.Sample')
-    def test_load_with_string_path(
-        self, mock_sample_class, tmp_path, mock_flowkit_sample
-    ):
+    @patch("src.data.fcs_parser.Sample")
+    def test_load_with_string_path(self, mock_sample_class, tmp_path, mock_flowkit_sample):
         """Тест загрузки с путём как строка."""
         mock_sample_class.return_value = mock_flowkit_sample
         fcs_path = tmp_path / "test.fcs"
@@ -175,10 +168,8 @@ class TestFCSLoaderLoad:
         with pytest.raises(FileNotFoundError):
             loader.load("/nonexistent/path/to/file.fcs")
 
-    @patch('src.data.fcs_parser.Sample')
-    def test_load_invalid_fcs_format_raises_value_error(
-        self, mock_sample_class, mock_fcs_file
-    ):
+    @patch("src.data.fcs_parser.Sample")
+    def test_load_invalid_fcs_format_raises_value_error(self, mock_sample_class, mock_fcs_file):
         """Тест что невалидный формат вызывает ValueError."""
         mock_sample_class.side_effect = ValueError("Invalid FCS format")
 
@@ -187,7 +178,7 @@ class TestFCSLoaderLoad:
         with pytest.raises(ValueError, match="Invalid FCS format"):
             loader.load(mock_fcs_file)
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_load_passes_subsample_to_flowkit(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -199,9 +190,9 @@ class TestFCSLoaderLoad:
 
         # Проверяем что Sample был вызван с правильными параметрами
         call_kwargs = mock_sample_class.call_args[1]
-        assert call_kwargs.get('subsample') == 5000
+        assert call_kwargs.get("subsample") == 5000
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_load_passes_ignore_offset_flags(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -212,21 +203,20 @@ class TestFCSLoaderLoad:
         loader.load(mock_fcs_file)
 
         call_kwargs = mock_sample_class.call_args[1]
-        assert call_kwargs.get('ignore_offset_error') is True
-        assert call_kwargs.get('ignore_offset_discrepancy') is True
+        assert call_kwargs.get("ignore_offset_error") is True
+        assert call_kwargs.get("ignore_offset_discrepancy") is True
 
 
 # =============================================================================
 # Тесты для FCSLoader.get_channels
 # =============================================================================
 
+
 class TestFCSLoaderGetChannels:
     """Тесты для FCSLoader.get_channels."""
 
-    @patch('src.data.fcs_parser.Sample')
-    def test_get_channels_returns_list(
-        self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
-    ):
+    @patch("src.data.fcs_parser.Sample")
+    def test_get_channels_returns_list(self, mock_sample_class, mock_fcs_file, mock_flowkit_sample):
         """Тест что get_channels возвращает список."""
         mock_sample_class.return_value = mock_flowkit_sample
 
@@ -235,7 +225,7 @@ class TestFCSLoaderGetChannels:
 
         assert isinstance(channels, list)
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_channels_returns_strings(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -247,7 +237,7 @@ class TestFCSLoaderGetChannels:
 
         assert all(isinstance(ch, str) for ch in channels)
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_channels_expected_values(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample, sample_channels
     ):
@@ -272,10 +262,11 @@ class TestFCSLoaderGetChannels:
 # Тесты для FCSLoader.get_events
 # =============================================================================
 
+
 class TestFCSLoaderGetEvents:
     """Тесты для FCSLoader.get_events."""
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_events_returns_ndarray(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -287,7 +278,7 @@ class TestFCSLoaderGetEvents:
 
         assert isinstance(events, np.ndarray)
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_events_shape_matches_events_channels(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -301,10 +292,8 @@ class TestFCSLoaderGetEvents:
 
         assert events.shape == (10000, 7)
 
-    @patch('src.data.fcs_parser.Sample')
-    def test_get_events_raw_source(
-        self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
-    ):
+    @patch("src.data.fcs_parser.Sample")
+    def test_get_events_raw_source(self, mock_sample_class, mock_fcs_file, mock_flowkit_sample):
         """Тест получения raw данных."""
         mock_sample_class.return_value = mock_flowkit_sample
 
@@ -313,10 +302,8 @@ class TestFCSLoaderGetEvents:
 
         mock_flowkit_sample.get_events.assert_called_with(source="raw")
 
-    @patch('src.data.fcs_parser.Sample')
-    def test_get_events_comp_source(
-        self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
-    ):
+    @patch("src.data.fcs_parser.Sample")
+    def test_get_events_comp_source(self, mock_sample_class, mock_fcs_file, mock_flowkit_sample):
         """Тест получения компенсированных данных."""
         mock_sample_class.return_value = mock_flowkit_sample
 
@@ -325,10 +312,8 @@ class TestFCSLoaderGetEvents:
 
         mock_flowkit_sample.get_events.assert_called_with(source="comp")
 
-    @patch('src.data.fcs_parser.Sample')
-    def test_get_events_xform_source(
-        self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
-    ):
+    @patch("src.data.fcs_parser.Sample")
+    def test_get_events_xform_source(self, mock_sample_class, mock_fcs_file, mock_flowkit_sample):
         """Тест получения трансформированных данных."""
         mock_sample_class.return_value = mock_flowkit_sample
 
@@ -337,7 +322,7 @@ class TestFCSLoaderGetEvents:
 
         mock_flowkit_sample.get_events.assert_called_with(source="xform")
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_events_with_channel_filter(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample, sample_channels
     ):
@@ -352,7 +337,7 @@ class TestFCSLoaderGetEvents:
 
         assert events.shape[1] == 2
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_events_default_returns_all_channels(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample, sample_channels
     ):
@@ -377,10 +362,11 @@ class TestFCSLoaderGetEvents:
 # Тесты для FCSLoader.get_metadata
 # =============================================================================
 
+
 class TestFCSLoaderGetMetadata:
     """Тесты для FCSLoader.get_metadata."""
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_metadata_returns_fcsmetadata(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -392,7 +378,7 @@ class TestFCSLoaderGetMetadata:
 
         assert isinstance(metadata, FCSMetadata)
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_metadata_filename_from_path(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -404,7 +390,7 @@ class TestFCSLoaderGetMetadata:
 
         assert metadata.filename == mock_fcs_file.name
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_metadata_n_events_from_sample(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -417,7 +403,7 @@ class TestFCSLoaderGetMetadata:
 
         assert metadata.n_events == 10000
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_metadata_n_channels_correct(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample, sample_channels
     ):
@@ -430,37 +416,35 @@ class TestFCSLoaderGetMetadata:
 
         assert metadata.n_channels == len(sample_channels)
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_metadata_cytometer_from_cyt(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
         """Тест извлечения cytometer из $CYT."""
         mock_flowkit_sample.get_metadata.return_value = {
-            '$CYT': 'BD FACSAria',
-            '$DATE': '22-JAN-2026',
-            'FCSversion': '3.1'
+            "$CYT": "BD FACSAria",
+            "$DATE": "22-JAN-2026",
+            "FCSversion": "3.1",
         }
         mock_sample_class.return_value = mock_flowkit_sample
 
         loader = FCSLoader().load(mock_fcs_file)
         metadata = loader.get_metadata()
 
-        assert metadata.cytometer == 'BD FACSAria'
+        assert metadata.cytometer == "BD FACSAria"
 
-    @patch('src.data.fcs_parser.Sample')
-    def test_get_metadata_fcs_version(
-        self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
-    ):
+    @patch("src.data.fcs_parser.Sample")
+    def test_get_metadata_fcs_version(self, mock_sample_class, mock_fcs_file, mock_flowkit_sample):
         """Тест извлечения версии FCS."""
-        mock_flowkit_sample.get_metadata.return_value = {'FCSversion': '3.1'}
+        mock_flowkit_sample.get_metadata.return_value = {"FCSversion": "3.1"}
         mock_sample_class.return_value = mock_flowkit_sample
 
         loader = FCSLoader().load(mock_fcs_file)
         metadata = loader.get_metadata()
 
-        assert metadata.fcs_version == '3.1'
+        assert metadata.fcs_version == "3.1"
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_metadata_missing_optional_fields_are_none(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -487,10 +471,11 @@ class TestFCSLoaderGetMetadata:
 # Тесты для FCSLoader.to_dataframe
 # =============================================================================
 
+
 class TestFCSLoaderToDataframe:
     """Тесты для FCSLoader.to_dataframe."""
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_to_dataframe_returns_dataframe(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -502,7 +487,7 @@ class TestFCSLoaderToDataframe:
 
         assert isinstance(df, pd.DataFrame)
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_to_dataframe_columns_match_channels(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample, sample_channels
     ):
@@ -516,7 +501,7 @@ class TestFCSLoaderToDataframe:
 
         assert list(df.columns) == sample_channels
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_to_dataframe_with_channel_filter(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample, sample_channels
     ):
@@ -530,7 +515,7 @@ class TestFCSLoaderToDataframe:
 
         assert list(df.columns) == ["FSC-A", "SSC-A"]
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_to_dataframe_row_count_matches_events(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample, sample_channels
     ):
@@ -556,10 +541,11 @@ class TestFCSLoaderToDataframe:
 # Тесты для FCSLoader.get_channel_data
 # =============================================================================
 
+
 class TestFCSLoaderGetChannelData:
     """Тесты для FCSLoader.get_channel_data."""
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_channel_data_returns_1d_array(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -573,7 +559,7 @@ class TestFCSLoaderGetChannelData:
         assert isinstance(data, np.ndarray)
         assert data.ndim == 1
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_channel_data_correct_length(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -587,7 +573,7 @@ class TestFCSLoaderGetChannelData:
 
         assert len(data) == 10000
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_channel_data_nonexistent_channel_raises(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -600,7 +586,7 @@ class TestFCSLoaderGetChannelData:
         with pytest.raises((KeyError, ValueError)):
             loader.get_channel_data("NONEXISTENT_CHANNEL")
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_get_channel_data_source_parameter(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -625,10 +611,11 @@ class TestFCSLoaderGetChannelData:
 # Тесты для FCSLoader.validate_required_channels
 # =============================================================================
 
+
 class TestFCSLoaderValidateRequiredChannels:
     """Тесты для FCSLoader.validate_required_channels."""
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_validate_all_channels_present_returns_true(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample, sample_channels
     ):
@@ -641,7 +628,7 @@ class TestFCSLoaderValidateRequiredChannels:
 
         assert result is True
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_validate_missing_channel_raises_value_error(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -654,7 +641,7 @@ class TestFCSLoaderValidateRequiredChannels:
         with pytest.raises(ValueError):
             loader.validate_required_channels(["FSC-A", "CD34-APC"])
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_validate_partial_match_by_substring(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -667,7 +654,7 @@ class TestFCSLoaderValidateRequiredChannels:
 
         assert result is True
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_validate_empty_required_list_returns_true(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -679,7 +666,7 @@ class TestFCSLoaderValidateRequiredChannels:
 
         assert result is True
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_validate_error_message_lists_missing_channels(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -697,10 +684,8 @@ class TestFCSLoaderValidateRequiredChannels:
         assert "CD14" in error_message
         assert "Annexin-V" in error_message
 
-    @patch('src.data.fcs_parser.Sample')
-    def test_validate_case_sensitivity(
-        self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
-    ):
+    @patch("src.data.fcs_parser.Sample")
+    def test_validate_case_sensitivity(self, mock_sample_class, mock_fcs_file, mock_flowkit_sample):
         """Тест чувствительности к регистру."""
         mock_flowkit_sample.pnn_labels = ["FSC-A", "SSC-A"]
         mock_sample_class.return_value = mock_flowkit_sample
@@ -723,10 +708,11 @@ class TestFCSLoaderValidateRequiredChannels:
 # Тесты для load_fcs функции
 # =============================================================================
 
+
 class TestLoadFcsFunction:
     """Тесты для convenience функции load_fcs."""
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_load_fcs_returns_fcsloader(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
     ):
@@ -737,10 +723,8 @@ class TestLoadFcsFunction:
 
         assert isinstance(loader, FCSLoader)
 
-    @patch('src.data.fcs_parser.Sample')
-    def test_load_fcs_with_subsample(
-        self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
-    ):
+    @patch("src.data.fcs_parser.Sample")
+    def test_load_fcs_with_subsample(self, mock_sample_class, mock_fcs_file, mock_flowkit_sample):
         """Тест передачи subsample параметра."""
         mock_sample_class.return_value = mock_flowkit_sample
 
@@ -748,10 +732,8 @@ class TestLoadFcsFunction:
 
         assert loader._subsample == 5000
 
-    @patch('src.data.fcs_parser.Sample')
-    def test_load_fcs_file_is_loaded(
-        self, mock_sample_class, mock_fcs_file, mock_flowkit_sample
-    ):
+    @patch("src.data.fcs_parser.Sample")
+    def test_load_fcs_file_is_loaded(self, mock_sample_class, mock_fcs_file, mock_flowkit_sample):
         """Тест что файл загружен."""
         mock_sample_class.return_value = mock_flowkit_sample
 
@@ -759,7 +741,7 @@ class TestLoadFcsFunction:
 
         assert loader._sample is not None
 
-    @patch('src.data.fcs_parser.Sample')
+    @patch("src.data.fcs_parser.Sample")
     def test_load_fcs_can_chain_get_channels(
         self, mock_sample_class, mock_fcs_file, mock_flowkit_sample, sample_channels
     ):

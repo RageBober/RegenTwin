@@ -18,7 +18,7 @@ import pandas as pd
 
 # Optional import for Otsu thresholding
 try:
-    from skimage.filters import threshold_otsu
+    from skimage.filters import threshold_otsu  # type: ignore
 
     HAS_SKIMAGE = True
 except ImportError:
@@ -129,15 +129,15 @@ class GatingStrategy:
 
     # Standard column order for ndarray input
     STANDARD_COLUMN_ORDER: list[str] = [
-        "fsc_area",    # index 0
+        "fsc_area",  # index 0
         "fsc_height",  # index 1
-        "ssc_area",    # index 2
-        "cd34",        # index 3
-        "cd14",        # index 4
-        "cd68",        # index 5
-        "annexin",     # index 6
-        "cd66b",       # index 7 — нейтрофилы
-        "cd31",        # index 8 — эндотелиальные клетки
+        "ssc_area",  # index 2
+        "cd34",  # index 3
+        "cd14",  # index 4
+        "cd68",  # index 5
+        "annexin",  # index 6
+        "cd66b",  # index 7 — нейтрофилы
+        "cd31",  # index 8 — эндотелиальные клетки
     ]
 
     def apply(self, data: pd.DataFrame | np.ndarray) -> GatingResults:
@@ -165,9 +165,9 @@ class GatingStrategy:
             n_total = data.shape[0]
         else:
             # Get channel data using mapping for DataFrame
-            fsc_a = data[self._channels["fsc_area"]].values
-            fsc_h = data[self._channels["fsc_height"]].values
-            ssc_a = data[self._channels["ssc_area"]].values
+            fsc_a = data[self._channels["fsc_area"]].to_numpy()
+            fsc_h = data[self._channels["fsc_height"]].to_numpy()
+            ssc_a = data[self._channels["ssc_area"]].to_numpy()
 
             # Find matching channels for markers
             cd34_col = self._find_channel(data.columns, self._channels["cd34"])
@@ -175,10 +175,10 @@ class GatingStrategy:
             cd68_col = self._find_channel(data.columns, self._channels["cd68"])
             annexin_col = self._find_channel(data.columns, self._channels["annexin"])
 
-            cd34 = data[cd34_col].values
-            cd14 = data[cd14_col].values
-            cd68 = data[cd68_col].values
-            annexin = data[annexin_col].values
+            cd34 = data[cd34_col].to_numpy()
+            cd14 = data[cd14_col].to_numpy()
+            cd68 = data[cd68_col].to_numpy()
+            annexin = data[annexin_col].to_numpy()
             n_total = len(data)
 
         # Hierarchical gating
@@ -238,8 +238,8 @@ class GatingStrategy:
 
     def debris_gate(
         self,
-        fsc: np.ndarray,
-        ssc: np.ndarray,
+        fsc: Any,
+        ssc: Any,
         fsc_threshold: float | None = None,
         ssc_threshold: float | None = None,
     ) -> np.ndarray:
@@ -267,8 +267,8 @@ class GatingStrategy:
 
     def singlets_gate(
         self,
-        fsc_a: np.ndarray,
-        fsc_h: np.ndarray,
+        fsc_a: Any,
+        fsc_h: Any,
         tolerance: float = 0.1,
     ) -> np.ndarray:
         """Гейт для выделения синглетов (одиночных клеток).
@@ -291,7 +291,7 @@ class GatingStrategy:
 
     def live_cells_gate(
         self,
-        annexin: np.ndarray,
+        annexin: Any,
         threshold: float | None = None,
     ) -> np.ndarray:
         """Гейт для выделения живых клеток.
@@ -313,7 +313,7 @@ class GatingStrategy:
 
     def cd34_gate(
         self,
-        cd34: np.ndarray,
+        cd34: Any,
         threshold: float | None = None,
         percentile: float = 90.0,
     ) -> np.ndarray:
@@ -335,8 +335,8 @@ class GatingStrategy:
 
     def macrophage_gate(
         self,
-        cd14: np.ndarray,
-        cd68: np.ndarray,
+        cd14: Any,
+        cd68: Any,
         cd14_threshold: float | None = None,
         cd68_threshold: float | None = None,
     ) -> np.ndarray:
@@ -362,7 +362,7 @@ class GatingStrategy:
 
     def apoptotic_gate(
         self,
-        annexin: np.ndarray,
+        annexin: Any,
         threshold: float | None = None,
     ) -> np.ndarray:
         """Гейт для апоптотических клеток.
@@ -421,7 +421,7 @@ class GatingStrategy:
                     return float(bin_centers[min_idx])
 
                 # Fallback to standard Otsu if no valleys found
-                return float(threshold_otsu(data))
+                return float(threshold_otsu(data))  # type: ignore
             else:
                 # Fallback: find threshold between two peaks using percentiles
                 return float(np.percentile(data, 70))
@@ -464,7 +464,7 @@ class GatingStrategy:
 
     def neutrophil_gate(
         self,
-        cd66b: np.ndarray,
+        cd66b: Any,
         threshold: float | None = None,
         percentile: float = 95.0,
     ) -> np.ndarray:
@@ -494,7 +494,7 @@ class GatingStrategy:
 
     def endothelial_gate(
         self,
-        cd31: np.ndarray,
+        cd31: Any,
         threshold: float | None = None,
         percentile: float = 95.0,
     ) -> np.ndarray:
@@ -556,9 +556,7 @@ class GatingStrategy:
         """
         if isinstance(data, np.ndarray):
             if data.shape[1] < 9:
-                raise ValueError(
-                    f"Expected at least 9 columns, got {data.shape[1]}"
-                )
+                raise ValueError(f"Expected at least 9 columns, got {data.shape[1]}")
             fsc_a = data[:, 0]
             fsc_h = data[:, 1]
             ssc_a = data[:, 2]
@@ -570,29 +568,23 @@ class GatingStrategy:
             cd31 = data[:, 8]
             n_total = data.shape[0]
         else:
-            fsc_a = data[self._channels["fsc_area"]].values
-            fsc_h = data[self._channels["fsc_height"]].values
-            ssc_a = data[self._channels["ssc_area"]].values
+            fsc_a = data[self._channels["fsc_area"]].to_numpy()
+            fsc_h = data[self._channels["fsc_height"]].to_numpy()
+            ssc_a = data[self._channels["ssc_area"]].to_numpy()
 
             cd34_col = self._find_channel(data.columns, self._channels["cd34"])
             cd14_col = self._find_channel(data.columns, self._channels["cd14"])
             cd68_col = self._find_channel(data.columns, self._channels["cd68"])
-            annexin_col = self._find_channel(
-                data.columns, self._channels["annexin"]
-            )
-            cd66b_col = self._find_channel(
-                data.columns, self._channels["cd66b"]
-            )
-            cd31_col = self._find_channel(
-                data.columns, self._channels["cd31"]
-            )
+            annexin_col = self._find_channel(data.columns, self._channels["annexin"])
+            cd66b_col = self._find_channel(data.columns, self._channels["cd66b"])
+            cd31_col = self._find_channel(data.columns, self._channels["cd31"])
 
-            cd34 = data[cd34_col].values
-            cd14 = data[cd14_col].values
-            cd68 = data[cd68_col].values
-            annexin = data[annexin_col].values
-            cd66b = data[cd66b_col].values
-            cd31 = data[cd31_col].values
+            cd34 = data[cd34_col].to_numpy()
+            cd14 = data[cd14_col].to_numpy()
+            cd68 = data[cd68_col].to_numpy()
+            annexin = data[annexin_col].to_numpy()
+            cd66b = data[cd66b_col].to_numpy()
+            cd31 = data[cd31_col].to_numpy()
             n_total = len(data)
 
         # Иерархическое гейтирование
@@ -607,44 +599,60 @@ class GatingStrategy:
 
         gates = {
             "non_debris": GateResult(
-                name="non_debris", mask=non_debris,
+                name="non_debris",
+                mask=non_debris,
                 n_events=int(non_debris.sum()),
-                fraction=non_debris.sum() / n_total, parent=None,
+                fraction=non_debris.sum() / n_total,
+                parent=None,
             ),
             "singlets": GateResult(
-                name="singlets", mask=singlets,
+                name="singlets",
+                mask=singlets,
                 n_events=int(singlets.sum()),
-                fraction=singlets.sum() / n_total, parent="non_debris",
+                fraction=singlets.sum() / n_total,
+                parent="non_debris",
             ),
             "live_cells": GateResult(
-                name="live_cells", mask=live,
+                name="live_cells",
+                mask=live,
                 n_events=int(live.sum()),
-                fraction=live.sum() / n_total, parent="singlets",
+                fraction=live.sum() / n_total,
+                parent="singlets",
             ),
             "cd34_positive": GateResult(
-                name="cd34_positive", mask=cd34_pos,
+                name="cd34_positive",
+                mask=cd34_pos,
                 n_events=int(cd34_pos.sum()),
-                fraction=cd34_pos.sum() / n_total, parent="live_cells",
+                fraction=cd34_pos.sum() / n_total,
+                parent="live_cells",
             ),
             "macrophages": GateResult(
-                name="macrophages", mask=macrophages,
+                name="macrophages",
+                mask=macrophages,
                 n_events=int(macrophages.sum()),
-                fraction=macrophages.sum() / n_total, parent="live_cells",
+                fraction=macrophages.sum() / n_total,
+                parent="live_cells",
             ),
             "apoptotic": GateResult(
-                name="apoptotic", mask=apoptotic,
+                name="apoptotic",
+                mask=apoptotic,
                 n_events=int(apoptotic.sum()),
-                fraction=apoptotic.sum() / n_total, parent="singlets",
+                fraction=apoptotic.sum() / n_total,
+                parent="singlets",
             ),
             "neutrophils": GateResult(
-                name="neutrophils", mask=neutrophils,
+                name="neutrophils",
+                mask=neutrophils,
                 n_events=int(neutrophils.sum()),
-                fraction=neutrophils.sum() / n_total, parent="live_cells",
+                fraction=neutrophils.sum() / n_total,
+                parent="live_cells",
             ),
             "endothelial": GateResult(
-                name="endothelial", mask=endothelial,
+                name="endothelial",
+                mask=endothelial,
                 n_events=int(endothelial.sum()),
-                fraction=endothelial.sum() / n_total, parent="live_cells",
+                fraction=endothelial.sum() / n_total,
+                parent="live_cells",
             ),
         }
 

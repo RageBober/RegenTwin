@@ -60,7 +60,7 @@ dC = [ηN - γC + S_PRP(t)]dt + σ_c·C·dW₂
 
 Обозначения:
 - **P(t)** — тромбоциты (platelets), клеток/мкл
-- **Nₑ(t)** — нейтрофилы, клеток/мкл  
+- **Nₑ(t)** — нейтрофилы, клеток/мкл
 - **M₁(t)** — M1 макрофаги (провоспалительные), клеток/мкл
 - **M₂(t)** — M2 макрофаги (репаративные), клеток/мкл
 - **F(t)** — фибробласты, клеток/мкл
@@ -638,7 +638,7 @@ class ExtendedSDEState:
     Mf: float     # миофибробласты
     E: float      # эндотелиальные
     S: float      # стволовые
-    
+
     # Цитокины
     C_TNF: float
     C_IL10: float
@@ -647,12 +647,12 @@ class ExtendedSDEState:
     C_TGFb: float
     C_MCP1: float
     C_IL8: float
-    
+
     # ECM
     rho_collagen: float
     C_MMP: float
     rho_fibrin: float
-    
+
     # Вспомогательные
     D: float      # сигнал повреждения
     O2: float     # кислород

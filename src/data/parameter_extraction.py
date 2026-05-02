@@ -137,18 +137,26 @@ class ExtendedModelParameters:
         Подробное описание: Description/Phase1/description_parameter_extraction.md#ExtendedModelParameters.to_dict
         """
         return {
-            "P0": self.P0, "Ne0": self.Ne0,
-            "M1_0": self.M1_0, "M2_0": self.M2_0,
-            "F0": self.F0, "Mf0": self.Mf0,
-            "E0": self.E0, "S0": self.S0,
-            "C_TNF": self.C_TNF, "C_IL10": self.C_IL10,
-            "C_PDGF": self.C_PDGF, "C_VEGF": self.C_VEGF,
-            "C_TGFb": self.C_TGFb, "C_MCP1": self.C_MCP1,
+            "P0": self.P0,
+            "Ne0": self.Ne0,
+            "M1_0": self.M1_0,
+            "M2_0": self.M2_0,
+            "F0": self.F0,
+            "Mf0": self.Mf0,
+            "E0": self.E0,
+            "S0": self.S0,
+            "C_TNF": self.C_TNF,
+            "C_IL10": self.C_IL10,
+            "C_PDGF": self.C_PDGF,
+            "C_VEGF": self.C_VEGF,
+            "C_TGFb": self.C_TGFb,
+            "C_MCP1": self.C_MCP1,
             "C_IL8": self.C_IL8,
             "rho_collagen": self.rho_collagen,
             "C_MMP": self.C_MMP,
             "rho_fibrin": self.rho_fibrin,
-            "D": self.D, "O2": self.O2,
+            "D": self.D,
+            "O2": self.O2,
             "source_file": self.source_file,
             "total_events": self.total_events,
             "inflammation_level": self.inflammation_level,
@@ -176,20 +184,28 @@ class ExtendedModelParameters:
         """
         # Клеточные популяции >= 0
         for name, value in [
-            ("P0", self.P0), ("Ne0", self.Ne0),
-            ("M1_0", self.M1_0), ("M2_0", self.M2_0),
-            ("F0", self.F0), ("Mf0", self.Mf0),
-            ("E0", self.E0), ("S0", self.S0),
+            ("P0", self.P0),
+            ("Ne0", self.Ne0),
+            ("M1_0", self.M1_0),
+            ("M2_0", self.M2_0),
+            ("F0", self.F0),
+            ("Mf0", self.Mf0),
+            ("E0", self.E0),
+            ("S0", self.S0),
         ]:
             if value < 0:
                 raise ValueError(f"{name} must be >= 0, got {value}")
 
         # Цитокины >= 0
         for name, value in [
-            ("C_TNF", self.C_TNF), ("C_IL10", self.C_IL10),
-            ("C_PDGF", self.C_PDGF), ("C_VEGF", self.C_VEGF),
-            ("C_TGFb", self.C_TGFb), ("C_MCP1", self.C_MCP1),
-            ("C_IL8", self.C_IL8), ("C_MMP", self.C_MMP),
+            ("C_TNF", self.C_TNF),
+            ("C_IL10", self.C_IL10),
+            ("C_PDGF", self.C_PDGF),
+            ("C_VEGF", self.C_VEGF),
+            ("C_TGFb", self.C_TGFb),
+            ("C_MCP1", self.C_MCP1),
+            ("C_IL8", self.C_IL8),
+            ("C_MMP", self.C_MMP),
         ]:
             if value < 0:
                 raise ValueError(f"{name} must be >= 0, got {value}")
@@ -250,9 +266,7 @@ class ExtendedModelParameters:
         E0 = 0.0  # Нет данных CD31 в базовом гейтинге
         Mf0 = 0.0  # Начальное состояние
         remaining = max(
-            1.0 - basic.stem_cell_fraction
-            - basic.macrophage_fraction
-            - basic.apoptotic_fraction,
+            1.0 - basic.stem_cell_fraction - basic.macrophage_fraction - basic.apoptotic_fraction,
             0.0,
         )
         F0 = n0 * remaining * 0.1
@@ -277,12 +291,26 @@ class ExtendedModelParameters:
         O2 = 0.95  # Почти нормальный кислород
 
         return cls(
-            P0=P0, Ne0=Ne0, M1_0=M1_0, M2_0=M2_0,
-            F0=F0, Mf0=Mf0, E0=E0, S0=S0,
-            C_TNF=C_TNF, C_IL10=C_IL10, C_PDGF=C_PDGF, C_VEGF=C_VEGF,
-            C_TGFb=C_TGFb, C_MCP1=C_MCP1, C_IL8=C_IL8,
-            rho_collagen=rho_collagen, C_MMP=C_MMP, rho_fibrin=rho_fibrin,
-            D=D, O2=O2,
+            P0=P0,
+            Ne0=Ne0,
+            M1_0=M1_0,
+            M2_0=M2_0,
+            F0=F0,
+            Mf0=Mf0,
+            E0=E0,
+            S0=S0,
+            C_TNF=C_TNF,
+            C_IL10=C_IL10,
+            C_PDGF=C_PDGF,
+            C_VEGF=C_VEGF,
+            C_TGFb=C_TGFb,
+            C_MCP1=C_MCP1,
+            C_IL8=C_IL8,
+            rho_collagen=rho_collagen,
+            C_MMP=C_MMP,
+            rho_fibrin=rho_fibrin,
+            D=D,
+            O2=O2,
             source_file=basic.source_file,
             total_events=basic.total_events,
             inflammation_level=basic.inflammation_level,
@@ -305,22 +333,22 @@ class ExtendedModelParameters:
         Подробное описание: Description/Phase1/description_parameter_extraction.md#to_basic_parameters
         """
         # n0: сумма всех клеточных популяций
-        n0 = (self.P0 + self.Ne0 + self.M1_0 + self.M2_0
-              + self.F0 + self.Mf0 + self.E0 + self.S0)
+        n0 = self.P0 + self.Ne0 + self.M1_0 + self.M2_0 + self.F0 + self.Mf0 + self.E0 + self.S0
         if n0 <= 0:
             n0 = 1.0
 
         stem_cell_fraction = float(np.clip(self.S0 / n0, 0, 1))
-        macrophage_fraction = float(
-            np.clip((self.M1_0 + self.M2_0) / n0, 0, 1)
-        )
-        apoptotic_fraction = float(
-            np.clip(self.inflammation_level * 0.1, 0, 1)
-        )
+        macrophage_fraction = float(np.clip((self.M1_0 + self.M2_0) / n0, 0, 1))
+        apoptotic_fraction = float(np.clip(self.inflammation_level * 0.1, 0, 1))
 
         cytokines = [
-            self.C_TNF, self.C_IL10, self.C_PDGF, self.C_VEGF,
-            self.C_TGFb, self.C_MCP1, self.C_IL8,
+            self.C_TNF,
+            self.C_IL10,
+            self.C_PDGF,
+            self.C_VEGF,
+            self.C_TGFb,
+            self.C_MCP1,
+            self.C_IL8,
         ]
         c0 = float(np.clip(np.mean(cytokines), 1.0, 100.0))
 
@@ -348,14 +376,31 @@ class ExtendedModelParameters:
 
         Подробное описание: Description/Phase1/description_parameter_extraction.md#to_sde_state_vector
         """
-        return np.array([
-            self.P0, self.Ne0, self.M1_0, self.M2_0,
-            self.F0, self.Mf0, self.E0, self.S0,
-            self.C_TNF, self.C_IL10, self.C_PDGF, self.C_VEGF,
-            self.C_TGFb, self.C_MCP1, self.C_IL8,
-            self.rho_collagen, self.C_MMP, self.rho_fibrin,
-            self.D, self.O2,
-        ], dtype=np.float64)
+        return np.array(
+            [
+                self.P0,
+                self.Ne0,
+                self.M1_0,
+                self.M2_0,
+                self.F0,
+                self.Mf0,
+                self.E0,
+                self.S0,
+                self.C_TNF,
+                self.C_IL10,
+                self.C_PDGF,
+                self.C_VEGF,
+                self.C_TGFb,
+                self.C_MCP1,
+                self.C_IL8,
+                self.rho_collagen,
+                self.C_MMP,
+                self.rho_fibrin,
+                self.D,
+                self.O2,
+            ],
+            dtype=np.float64,
+        )
 
 
 @dataclass
@@ -525,8 +570,7 @@ class ParameterExtractor:
         # Calculate inflammation score based on deviation from normal
         # Weighted combination: macrophages (60%) + apoptosis (40%)
         inflammation = (
-            0.6 * min(f_macro / REF_MACRO, 3.0)
-            + 0.4 * min(f_apopt / REF_APOPT, 3.0)
+            0.6 * min(f_macro / REF_MACRO, 3.0) + 0.4 * min(f_apopt / REF_APOPT, 3.0)
         ) / 3.0
 
         return float(np.clip(inflammation, 0.0, 1.0))
@@ -612,7 +656,8 @@ class ParameterExtractor:
         E0 = fractions.get("endothelial", 0.0) * n0
         Mf0 = 0.0
         remaining = max(
-            1.0 - fractions.get("cd34_positive", 0)
+            1.0
+            - fractions.get("cd34_positive", 0)
             - fractions.get("macrophages", 0)
             - fractions.get("apoptotic", 0)
             - fractions.get("neutrophils", 0)
@@ -626,15 +671,26 @@ class ParameterExtractor:
         ecm = self.estimate_ecm_state(gating_results)
 
         return ExtendedModelParameters(
-            P0=P0, Ne0=Ne0, M1_0=M1_0, M2_0=M2_0,
-            F0=F0, Mf0=Mf0, E0=E0, S0=S0,
-            C_TNF=cytokines["TNF"], C_IL10=cytokines["IL10"],
-            C_PDGF=cytokines["PDGF"], C_VEGF=cytokines["VEGF"],
-            C_TGFb=cytokines["TGFb"], C_MCP1=cytokines["MCP1"],
+            P0=P0,
+            Ne0=Ne0,
+            M1_0=M1_0,
+            M2_0=M2_0,
+            F0=F0,
+            Mf0=Mf0,
+            E0=E0,
+            S0=S0,
+            C_TNF=cytokines["TNF"],
+            C_IL10=cytokines["IL10"],
+            C_PDGF=cytokines["PDGF"],
+            C_VEGF=cytokines["VEGF"],
+            C_TGFb=cytokines["TGFb"],
+            C_MCP1=cytokines["MCP1"],
             C_IL8=cytokines["IL8"],
-            rho_collagen=ecm["rho_collagen"], C_MMP=ecm["C_MMP"],
+            rho_collagen=ecm["rho_collagen"],
+            C_MMP=ecm["C_MMP"],
             rho_fibrin=ecm["rho_fibrin"],
-            D=1.0, O2=0.95,
+            D=1.0,
+            O2=0.95,
             source_file=source_file,
             total_events=gating_results.total_events,
             inflammation_level=inflammation,

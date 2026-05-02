@@ -13,6 +13,42 @@ const AGENT_COLORS: Record<string, string> = {
   myofibroblast: '#1abc9c',
 };
 
+const TRACE_NAME_ALIASES: Record<string, string> = {
+  stem: 'stem',
+  'stem cell': 'stem',
+  'stem cells': 'stem',
+  'cd34+': 'stem',
+  'stem (cd34+)': 'stem',
+  'stem cells (cd34+)': 'stem',
+  'стволовые (cd34+)': 'stem',
+  macro: 'macro',
+  macrophage: 'macro',
+  macrophages: 'macro',
+  'макрофаги': 'macro',
+  fibro: 'fibro',
+  fibroblast: 'fibro',
+  fibroblasts: 'fibro',
+  'фибробласты': 'fibro',
+  neutro: 'neutrophil',
+  neutrophil: 'neutrophil',
+  neutrophils: 'neutrophil',
+  'нейтрофилы': 'neutrophil',
+  endothelial: 'endothelial',
+  'endothelial cell': 'endothelial',
+  'endothelial cells': 'endothelial',
+  endo: 'endothelial',
+  'эндотелиальные': 'endothelial',
+  myofibro: 'myofibroblast',
+  myofibroblast: 'myofibroblast',
+  myofibroblasts: 'myofibroblast',
+  'миофибробласты': 'myofibroblast',
+};
+
+export function normalizeTraceName(name: string): string {
+  const normalized = name.trim().toLowerCase();
+  return TRACE_NAME_ALIASES[normalized] ?? normalized.replace(/\s+/g, '_');
+}
+
 function AgentSphere({ position, color }: { position: [number, number, number]; color: string }) {
   return (
     <mesh position={position}>
@@ -45,7 +81,11 @@ function WebGLFallback() {
   );
 }
 
-export default function SpatialView3D() {
+interface Props {
+  simulationId?: string;
+}
+
+export default function SpatialView3D({ simulationId }: Props) {
   const { t } = useTranslation();
   const [hasWebGL] = useState(() => {
     try {
@@ -56,9 +96,8 @@ export default function SpatialView3D() {
     }
   });
 
-  const { data: scatterData, isLoading } = useSpatialScatter({});
+  const { data: scatterData, isLoading } = useSpatialScatter({ simulation_id: simulationId });
 
-  // Extract agent positions from Plotly scatter data
   const agents = useMemo(() => {
     if (!scatterData?.data) return [];
     const result: { x: number; y: number; type: string }[] = [];
@@ -66,9 +105,10 @@ export default function SpatialView3D() {
       const x = (trace as Record<string, unknown>).x as number[] | undefined;
       const y = (trace as Record<string, unknown>).y as number[] | undefined;
       const name = ((trace as Record<string, unknown>).name as string) || 'unknown';
+      const agentType = normalizeTraceName(name);
       if (x && y) {
         for (let i = 0; i < x.length; i++) {
-          result.push({ x: x[i], y: y[i], type: name.toLowerCase() });
+          result.push({ x: x[i], y: y[i], type: agentType });
         }
       }
     }
@@ -86,8 +126,10 @@ export default function SpatialView3D() {
   }
 
   return (
-    <div className="h-[500px] rounded-lg border border-slate-200 dark:border-slate-700">
-      {/* Legend */}
+    <div
+      className="h-[500px] rounded-lg border border-slate-200 dark:border-slate-700"
+      data-testid="spatial-view-3d"
+    >
       <div className="flex flex-wrap gap-3 border-b border-slate-200 px-4 py-2 dark:border-slate-700">
         {Object.entries(AGENT_COLORS).map(([type, color]) => (
           <div key={type} className="flex items-center gap-1.5">

@@ -33,34 +33,49 @@ class StateIndex(IntEnum):
         Description/Phase2/description_extended_sde.md#StateIndex
     """
 
-    P = 0            # Тромбоциты
-    Ne = 1           # Нейтрофилы
-    M1 = 2           # M1 макрофаги
-    M2 = 3           # M2 макрофаги
-    F = 4            # Фибробласты
-    Mf = 5           # Миофибробласты
-    E = 6            # Эндотелиальные
-    S = 7            # Стволовые (CD34+)
-    C_TNF = 8        # TNF-α
-    C_IL10 = 9       # IL-10
-    C_PDGF = 10      # PDGF
-    C_VEGF = 11      # VEGF
-    C_TGFb = 12      # TGF-β
-    C_MCP1 = 13      # MCP-1
-    C_IL8 = 14       # IL-8
+    P = 0  # Тромбоциты
+    Ne = 1  # Нейтрофилы
+    M1 = 2  # M1 макрофаги
+    M2 = 3  # M2 макрофаги
+    F = 4  # Фибробласты
+    Mf = 5  # Миофибробласты
+    E = 6  # Эндотелиальные
+    S = 7  # Стволовые (CD34+)
+    C_TNF = 8  # TNF-α
+    C_IL10 = 9  # IL-10
+    C_PDGF = 10  # PDGF
+    C_VEGF = 11  # VEGF
+    C_TGFb = 12  # TGF-β
+    C_MCP1 = 13  # MCP-1
+    C_IL8 = 14  # IL-8
     RHO_COLLAGEN = 15  # Плотность коллагена
-    C_MMP = 16       # MMP
+    C_MMP = 16  # MMP
     RHO_FIBRIN = 17  # Плотность фибрина
-    D = 18           # Сигнал повреждения
-    O2 = 19          # Кислород
+    D = 18  # Сигнал повреждения
+    O2 = 19  # Кислород
 
 
 VARIABLE_NAMES: list[str] = [
-    "P", "Ne", "M1", "M2", "F", "Mf", "E", "S",
-    "C_TNF", "C_IL10", "C_PDGF", "C_VEGF", "C_TGFb",
-    "C_MCP1", "C_IL8",
-    "rho_collagen", "C_MMP", "rho_fibrin",
-    "D", "O2",
+    "P",
+    "Ne",
+    "M1",
+    "M2",
+    "F",
+    "Mf",
+    "E",
+    "S",
+    "C_TNF",
+    "C_IL10",
+    "C_PDGF",
+    "C_VEGF",
+    "C_TGFb",
+    "C_MCP1",
+    "C_IL8",
+    "rho_collagen",
+    "C_MMP",
+    "rho_fibrin",
+    "D",
+    "O2",
 ]
 """Имена всех 20 переменных в порядке StateIndex."""
 
@@ -80,31 +95,31 @@ class ExtendedSDEState:
     """
 
     # Клеточные популяции (клеток/мкл)
-    P: float = 0.0    # Тромбоциты
-    Ne: float = 0.0   # Нейтрофилы
-    M1: float = 0.0   # M1 макрофаги (провоспалительные)
-    M2: float = 0.0   # M2 макрофаги (репаративные)
-    F: float = 0.0    # Фибробласты
-    Mf: float = 0.0   # Миофибробласты
-    E: float = 0.0    # Эндотелиальные клетки
-    S: float = 0.0    # Стволовые/прогениторные (CD34+)
+    P: float = 0.0  # Тромбоциты
+    Ne: float = 0.0  # Нейтрофилы
+    M1: float = 0.0  # M1 макрофаги (провоспалительные)
+    M2: float = 0.0  # M2 макрофаги (репаративные)
+    F: float = 0.0  # Фибробласты
+    Mf: float = 0.0  # Миофибробласты
+    E: float = 0.0  # Эндотелиальные клетки
+    S: float = 0.0  # Стволовые/прогениторные (CD34+)
 
     # Цитокины (нг/мл)
-    C_TNF: float = 0.0   # TNF-α
+    C_TNF: float = 0.0  # TNF-α
     C_IL10: float = 0.0  # IL-10
     C_PDGF: float = 0.0  # PDGF
     C_VEGF: float = 0.0  # VEGF
     C_TGFb: float = 0.0  # TGF-β
     C_MCP1: float = 0.0  # MCP-1
-    C_IL8: float = 0.0   # IL-8
+    C_IL8: float = 0.0  # IL-8
 
     # ECM
     rho_collagen: float = 0.0  # Плотность коллагена
-    C_MMP: float = 0.0         # Концентрация MMP
-    rho_fibrin: float = 0.0    # Плотность фибрина
+    C_MMP: float = 0.0  # Концентрация MMP
+    rho_fibrin: float = 0.0  # Плотность фибрина
 
     # Вспомогательные
-    D: float = 0.0   # Сигнал повреждения (DAMPs)
+    D: float = 0.0  # Сигнал повреждения (DAMPs)
     O2: float = 0.0  # Кислород (mmHg)
 
     # Время
@@ -124,16 +139,36 @@ class ExtendedSDEState:
         Подробное описание:
             Description/Phase2/description_extended_sde.md#to_array
         """
-        return np.array([
-            self.P, self.Ne, self.M1, self.M2, self.F, self.Mf, self.E,
-            self.S, self.C_TNF, self.C_IL10, self.C_PDGF, self.C_VEGF,
-            self.C_TGFb, self.C_MCP1, self.C_IL8, self.rho_collagen,
-            self.C_MMP, self.rho_fibrin, self.D, self.O2,
-        ])
+        return np.array(
+            [
+                self.P,
+                self.Ne,
+                self.M1,
+                self.M2,
+                self.F,
+                self.Mf,
+                self.E,
+                self.S,
+                self.C_TNF,
+                self.C_IL10,
+                self.C_PDGF,
+                self.C_VEGF,
+                self.C_TGFb,
+                self.C_MCP1,
+                self.C_IL8,
+                self.rho_collagen,
+                self.C_MMP,
+                self.rho_fibrin,
+                self.D,
+                self.O2,
+            ]
+        )
 
     @classmethod
     def from_array(
-        cls, arr: np.ndarray, t: float = 0.0,
+        cls,
+        arr: np.ndarray,
+        t: float = 0.0,
     ) -> ExtendedSDEState:
         """Создание состояния из numpy массива.
 
@@ -151,20 +186,28 @@ class ExtendedSDEState:
             Description/Phase2/description_extended_sde.md#from_array
         """
         if len(arr) != N_VARIABLES:
-            raise ValueError(
-                f"Ожидался массив длины {N_VARIABLES}, получен {len(arr)}"
-            )
+            raise ValueError(f"Ожидался массив длины {N_VARIABLES}, получен {len(arr)}")
         return cls(
-            P=float(arr[0]), Ne=float(arr[1]),
-            M1=float(arr[2]), M2=float(arr[3]),
-            F=float(arr[4]), Mf=float(arr[5]),
-            E=float(arr[6]), S=float(arr[7]),
-            C_TNF=float(arr[8]), C_IL10=float(arr[9]),
-            C_PDGF=float(arr[10]), C_VEGF=float(arr[11]),
-            C_TGFb=float(arr[12]), C_MCP1=float(arr[13]),
-            C_IL8=float(arr[14]), rho_collagen=float(arr[15]),
-            C_MMP=float(arr[16]), rho_fibrin=float(arr[17]),
-            D=float(arr[18]), O2=float(arr[19]),
+            P=float(arr[0]),
+            Ne=float(arr[1]),
+            M1=float(arr[2]),
+            M2=float(arr[3]),
+            F=float(arr[4]),
+            Mf=float(arr[5]),
+            E=float(arr[6]),
+            S=float(arr[7]),
+            C_TNF=float(arr[8]),
+            C_IL10=float(arr[9]),
+            C_PDGF=float(arr[10]),
+            C_VEGF=float(arr[11]),
+            C_TGFb=float(arr[12]),
+            C_MCP1=float(arr[13]),
+            C_IL8=float(arr[14]),
+            rho_collagen=float(arr[15]),
+            C_MMP=float(arr[16]),
+            rho_fibrin=float(arr[17]),
+            D=float(arr[18]),
+            O2=float(arr[19]),
             t=t,
         )
 
@@ -180,15 +223,26 @@ class ExtendedSDEState:
             Description/Phase2/description_extended_sde.md#to_dict
         """
         return {
-            "P": self.P, "Ne": self.Ne, "M1": self.M1, "M2": self.M2,
-            "F": self.F, "Mf": self.Mf, "E": self.E, "S": self.S,
-            "C_TNF": self.C_TNF, "C_IL10": self.C_IL10,
-            "C_PDGF": self.C_PDGF, "C_VEGF": self.C_VEGF,
-            "C_TGFb": self.C_TGFb, "C_MCP1": self.C_MCP1,
+            "P": self.P,
+            "Ne": self.Ne,
+            "M1": self.M1,
+            "M2": self.M2,
+            "F": self.F,
+            "Mf": self.Mf,
+            "E": self.E,
+            "S": self.S,
+            "C_TNF": self.C_TNF,
+            "C_IL10": self.C_IL10,
+            "C_PDGF": self.C_PDGF,
+            "C_VEGF": self.C_VEGF,
+            "C_TGFb": self.C_TGFb,
+            "C_MCP1": self.C_MCP1,
             "C_IL8": self.C_IL8,
-            "rho_collagen": self.rho_collagen, "C_MMP": self.C_MMP,
+            "rho_collagen": self.rho_collagen,
+            "C_MMP": self.C_MMP,
             "rho_fibrin": self.rho_fibrin,
-            "D": self.D, "O2": self.O2,
+            "D": self.D,
+            "O2": self.O2,
             "t": self.t,
         }
 
@@ -305,8 +359,13 @@ class ExtendedSDEModel:
         # Инициализация механистической PRP-модели (если включена)
         self._prp_model = None
         if therapy and therapy.prp_enabled:
-            from src.core.therapy_models import PRPModel
-            self._prp_model = PRPModel()
+            from src.core.therapy_models import PRPConfig, PRPModel
+
+            self._prp_model = PRPModel(
+                config=PRPConfig(
+                    dose=therapy.prp_intensity,
+                )
+            )
 
     # ===== Основные методы =====
 
@@ -314,7 +373,8 @@ class ExtendedSDEModel:
         self,
         initial_state: ExtendedSDEState,
         t_span: tuple[float, float] | None = None,
-        progress_callback: "Callable[[int, int], None] | None" = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+        cancel_callback: Callable[[], None] | None = None,
     ) -> ExtendedSDETrajectory:
         """Полная симуляция методом Эйлера-Маруямы.
 
@@ -330,6 +390,7 @@ class ExtendedSDEModel:
                     None → (0, params.t_max)
             progress_callback: Вызывается с (current_step, total_steps)
                     для отслеживания прогресса. None → без отслеживания.
+            cancel_callback: Вызывается для кооперативной отмены симуляции.
 
         Returns:
             ExtendedSDETrajectory с результатами
@@ -352,9 +413,15 @@ class ExtendedSDEModel:
         states.append(current_state)
 
         # Интервал для вызова progress_callback (~50 раз за симуляцию)
-        report_interval = max(1, n_steps // 50)
+        report_interval = max(1, n_steps // 50) if n_steps else 1
+
+        if cancel_callback is not None:
+            cancel_callback()
 
         for i in range(n_steps):
+            if cancel_callback is not None:
+                cancel_callback()
+
             drift = self._compute_drift(current_state)
             diffusion = self._compute_diffusion(current_state)
             dW = self._rng.standard_normal(self.N_VARIABLES) * sqrt_dt
@@ -365,11 +432,13 @@ class ExtendedSDEModel:
             states.append(new_state)
             current_state = new_state
 
-            if progress_callback and (i + 1) % report_interval == 0:
+            if progress_callback and ((i + 1) % report_interval == 0 or i + 1 == n_steps):
                 progress_callback(i + 1, n_steps)
 
         return ExtendedSDETrajectory(
-            times=times, states=states, params=p,
+            times=times,
+            states=states,
+            params=p,
         )
 
     def _compute_drift(self, state: ExtendedSDEState) -> np.ndarray:
@@ -410,7 +479,8 @@ class ExtendedSDEModel:
         return drift
 
     def _compute_diffusion(
-        self, state: ExtendedSDEState,
+        self,
+        state: ExtendedSDEState,
     ) -> np.ndarray:
         """Вычисление 20-мерного вектора diffusion σ(X, t).
 
@@ -428,14 +498,30 @@ class ExtendedSDEModel:
         """
         p = self.params
         x = state.to_array()
-        sigmas = np.array([
-            p.sigma_P, p.sigma_Ne, p.sigma_M, p.sigma_M,
-            p.sigma_F, p.sigma_Mf, p.sigma_E, p.sigma_S,
-            p.sigma_TNF, p.sigma_IL10, p.sigma_PDGF, p.sigma_VEGF,
-            p.sigma_TGF, p.sigma_MCP1, p.sigma_IL8,
-            0.0, 0.0, 0.0,  # ECM: collagen, MMP, fibrin
-            0.0, 0.0,        # auxiliary: D, O2
-        ])
+        sigmas = np.array(
+            [
+                p.sigma_P,
+                p.sigma_Ne,
+                p.sigma_M1,
+                p.sigma_M2,
+                p.sigma_F,
+                p.sigma_Mf,
+                p.sigma_E,
+                p.sigma_S,
+                p.sigma_TNF,
+                p.sigma_IL10,
+                p.sigma_PDGF,
+                p.sigma_VEGF,
+                p.sigma_TGF,
+                p.sigma_MCP1,
+                p.sigma_IL8,
+                0.0,
+                0.0,
+                0.0,  # ECM: collagen, MMP, fibrin
+                0.0,
+                0.0,  # auxiliary: D, O2
+            ]
+        )
         return sigmas * x
 
     # ===== Drift клеточных популяций (§2.1) =====
@@ -470,9 +556,7 @@ class ExtendedSDEModel:
         apoptosis = p.delta_Ne * state.Ne
         m_total = state.M1 + state.M2
         denom = state.Ne + p.K_phag
-        phagocytosis = (
-            p.k_phag * m_total * state.Ne / denom if denom > 0 else 0.0
-        )
+        phagocytosis = p.k_phag * m_total * state.Ne / denom if denom > 0 else 0.0
         return recruitment - apoptosis - phagocytosis
 
     def _drift_M1(self, state: ExtendedSDEState) -> float:
@@ -509,9 +593,7 @@ class ExtendedSDEModel:
         phi2 = self._polarization_M2(state)
         recruitment = r_m * phi2
         switching_in = p.k_switch * self._switching_function(state) * state.M1
-        switching_out = (
-            p.k_reverse * self._reverse_switching(state) * state.M2
-        )
+        switching_out = p.k_reverse * self._reverse_switching(state) * state.M2
         death = p.delta_M * state.M2
         return recruitment + switching_in - switching_out - death
 
@@ -530,12 +612,8 @@ class ExtendedSDEModel:
         logistic = p.r_F * state.F * (1.0 - (state.F + state.Mf) / p.K_F)
         h = self._mitogenic_stimulation(state)
         growth = logistic * h
-        diff_in = (
-            p.k_diff_S * state.S * self._differentiation_probability(state)
-        )
-        activation_out = (
-            p.k_act * state.F * self._activation_function(state)
-        )
+        diff_in = p.k_diff_S * state.S * self._differentiation_probability(state)
+        activation_out = p.k_act * state.F * self._activation_function(state)
         death = p.delta_F * state.F
         return growth + diff_in - activation_out - death
 
@@ -553,9 +631,7 @@ class ExtendedSDEModel:
         a = self._activation_function(state)
         influx = p.k_act * state.F * a
         denom = p.K_survival + state.C_TGFb
-        survival_factor = (
-            state.C_TGFb / denom if denom > 0 else 0.0
-        )
+        survival_factor = state.C_TGFb / denom if denom > 0 else 0.0
         apoptosis = p.delta_Mf * state.Mf * (1.0 - survival_factor)
         return influx - apoptosis
 
@@ -571,9 +647,7 @@ class ExtendedSDEModel:
         p = self.params
         v = self._vegf_activation(state)
         theta = self._hypoxia_factor(state)
-        growth = (
-            p.r_E * state.E * (1.0 - state.E / p.K_E) * v * (1.0 - theta)
-        )
+        growth = p.r_E * state.E * (1.0 - state.E / p.K_E) * v * (1.0 - theta)
         death = p.delta_E * state.E
         return growth - death
 
@@ -591,14 +665,12 @@ class ExtendedSDEModel:
         prp_factor = 0.0
         if self.therapy and self.therapy.prp_enabled:
             t_days = state.t / 24.0
-            if self.therapy.prp_start_time <= t_days < self.therapy.prp_end_time:
+            if self.therapy.prp_start_time <= t_days < (self.therapy.prp_end_time or float("inf")):
                 prp_factor = self.therapy.prp_intensity
 
         logistic = p.r_S * state.S * (1.0 - state.S / p.K_S)
         growth = logistic * (1.0 + p.alpha_PRP_S * prp_factor)
-        diff_loss = (
-            p.k_diff_S * state.S * self._differentiation_probability(state)
-        )
+        diff_loss = p.k_diff_S * state.S * self._differentiation_probability(state)
         death = p.delta_S * state.S
         return growth - diff_loss - death
 
@@ -618,10 +690,7 @@ class ExtendedSDEModel:
         production = p.s_TNF_M1 * state.M1 + p.s_TNF_Ne * state.Ne
         degradation = p.gamma_TNF * state.C_TNF
         denom = p.K_inhib + state.C_TNF
-        inhibition = (
-            p.k_inhib_IL10 * state.C_IL10 * state.C_TNF / denom
-            if denom > 0 else 0.0
-        )
+        inhibition = p.k_inhib_IL10 * state.C_IL10 * state.C_TNF / denom if denom > 0 else 0.0
         return production - degradation - inhibition
 
     def _drift_C_IL10(self, state: ExtendedSDEState) -> float:
@@ -637,12 +706,8 @@ class ExtendedSDEModel:
         p = self.params
         m_total = state.M1 + state.M2
         denom = state.Ne + p.K_phag
-        phag_rate = (
-            p.k_phag * m_total * state.Ne / denom if denom > 0 else 0.0
-        )
-        production = (
-            p.s_IL10_M2 * state.M2 + p.s_IL10_efferocytosis * phag_rate
-        )
+        phag_rate = p.k_phag * m_total * state.Ne / denom if denom > 0 else 0.0
+        production = p.s_IL10_M2 * state.M2 + p.s_IL10_efferocytosis * phag_rate
         degradation = p.gamma_IL10 * state.C_IL10
         return production - degradation
 
@@ -661,10 +726,7 @@ class ExtendedSDEModel:
         macro_production = p.s_PDGF_M * (state.M1 + state.M2)
         degradation = p.gamma_PDGF * state.C_PDGF
         denom = p.K_PDGF + state.C_PDGF
-        binding = (
-            p.k_bind_F * state.F * state.C_PDGF / denom
-            if denom > 0 else 0.0
-        )
+        binding = p.k_bind_F * state.F * state.C_PDGF / denom if denom > 0 else 0.0
         # PRP-вклад в PDGF (двухфазная кинетика высвобождения)
         prp_pdgf = 0.0
         if self._prp_model is not None:
@@ -684,16 +746,11 @@ class ExtendedSDEModel:
         """
         p = self.params
         theta = self._hypoxia_factor(state)
-        m2_production = (
-            p.s_VEGF_M2 * state.M2 * (1.0 + p.alpha_hypoxia * (1.0 - theta))
-        )
+        m2_production = p.s_VEGF_M2 * state.M2 * (1.0 + p.alpha_hypoxia * (1.0 - theta))
         f_production = p.s_VEGF_F * state.F
         degradation = p.gamma_VEGF * state.C_VEGF
         denom = p.K_VEGF + state.C_VEGF
-        binding = (
-            p.k_bind_E * state.E * state.C_VEGF / denom
-            if denom > 0 else 0.0
-        )
+        binding = p.k_bind_E * state.E * state.C_VEGF / denom if denom > 0 else 0.0
         # PRP-вклад в VEGF (двухфазная кинетика высвобождения)
         prp_vegf = 0.0
         if self._prp_model is not None:
@@ -752,11 +809,7 @@ class ExtendedSDEModel:
             Description/Phase2/description_extended_sde.md#_drift_C_IL8
         """
         p = self.params
-        production = (
-            p.s_IL8_damage * state.D
-            + p.s_IL8_M1 * state.M1
-            + p.s_IL8_Ne * state.Ne
-        )
+        production = p.s_IL8_damage * state.D + p.s_IL8_M1 * state.M1 + p.s_IL8_Ne * state.Ne
         # Расширение §2.2.7: IL-10 подавляет хемокины через NF-κB
         il10_suppression = 1.0 + state.C_IL10 / p.K_inhib
         degradation = p.gamma_IL8 * state.C_IL8
@@ -775,15 +828,11 @@ class ExtendedSDEModel:
             Description/Phase2/description_extended_sde.md#_drift_collagen
         """
         p = self.params
-        production = (
-            (p.q_F * state.F + p.q_Mf * state.Mf)
-            * (1.0 - state.rho_collagen / p.rho_c_max)
+        production = (p.q_F * state.F + p.q_Mf * state.Mf) * (
+            1.0 - state.rho_collagen / p.rho_c_max
         )
         denom = p.K_MMP_sub + state.rho_collagen
-        degradation = (
-            p.k_MMP_deg * state.C_MMP * state.rho_collagen / denom
-            if denom > 0 else 0.0
-        )
+        degradation = p.k_MMP_deg * state.C_MMP * state.rho_collagen / denom if denom > 0 else 0.0
         return production - degradation
 
     def _drift_MMP(self, state: ExtendedSDEState) -> float:
@@ -802,10 +851,7 @@ class ExtendedSDEModel:
         f_secretion = p.s_MMP_F * state.F
         timp_inhibition = p.k_TIMP * p.C_TIMP * state.C_MMP
         degradation = p.gamma_MMP * state.C_MMP
-        return (
-            m1_secretion + m2_secretion + f_secretion
-            - timp_inhibition - degradation
-        )
+        return m1_secretion + m2_secretion + f_secretion - timp_inhibition - degradation
 
     def _drift_fibrin(self, state: ExtendedSDEState) -> float:
         """Drift фибрина ρ_f(t).
@@ -846,17 +892,13 @@ class ExtendedSDEModel:
             Description/Phase2/description_extended_sde.md#_drift_oxygen
         """
         p = self.params
-        l_sq = p.L_diffusion ** 2
+        l_sq = p.L_diffusion**2
         diffusion = p.D_O2 * (p.O2_blood - state.O2) / l_sq
         total_cells = (
-            state.P + state.Ne + state.M1 + state.M2
-            + state.F + state.Mf + state.E + state.S
+            state.P + state.Ne + state.M1 + state.M2 + state.F + state.Mf + state.E + state.S
         )
         denom = p.K_O2_consume + state.O2
-        consumption = (
-            p.k_consumption * total_cells * state.O2 / denom
-            if denom > 0 else 0.0
-        )
+        consumption = p.k_consumption * total_cells * state.O2 / denom if denom > 0 else 0.0
         perfusion = p.k_angio * state.E
         return diffusion - consumption + perfusion
 
@@ -881,8 +923,8 @@ class ExtendedSDEModel:
         """
         if x <= 0:
             return 0.0
-        xn = x ** n
-        kn = K ** n
+        xn = x**n
+        kn = K**n
         return xn / (kn + xn)
 
     def _polarization_M1(self, state: ExtendedSDEState) -> float:
@@ -957,7 +999,8 @@ class ExtendedSDEModel:
         return self._hill(state.C_TNF, self.params.K_reverse_half, 2)
 
     def _mitogenic_stimulation(
-        self, state: ExtendedSDEState,
+        self,
+        state: ExtendedSDEState,
     ) -> float:
         """Митогенная стимуляция фибробластов H(C_PDGF, C_TGFβ).
 
@@ -976,17 +1019,14 @@ class ExtendedSDEModel:
         """
         p = self.params
         denom_pdgf = p.K_PDGF + state.C_PDGF
-        pdgf_term = (
-            state.C_PDGF / denom_pdgf if denom_pdgf > 0 else 0.0
-        )
+        pdgf_term = state.C_PDGF / denom_pdgf if denom_pdgf > 0 else 0.0
         denom_tgf = p.K_TGFb_prolif + state.C_TGFb
-        tgf_term = (
-            state.C_TGFb / denom_tgf if denom_tgf > 0 else 0.0
-        )
+        tgf_term = state.C_TGFb / denom_tgf if denom_tgf > 0 else 0.0
         return pdgf_term * (1.0 + p.alpha_TGF * tgf_term)
 
     def _differentiation_probability(
-        self, state: ExtendedSDEState,
+        self,
+        state: ExtendedSDEState,
     ) -> float:
         """Вероятность дифференциации стволовых: g_diff(C_TGFβ).
 
@@ -1064,7 +1104,8 @@ class ExtendedSDEModel:
     # ===== Граничные условия и утилиты =====
 
     def _apply_boundary_conditions(
-        self, state: ExtendedSDEState,
+        self,
+        state: ExtendedSDEState,
     ) -> ExtendedSDEState:
         """Граничные условия: все переменные >= 0.
 
@@ -1119,7 +1160,10 @@ class ExtendedSDEModel:
         """
         p = self.params
         return ExtendedSDEState(
-            P=p.P_max, D=p.D0, O2=p.O2_blood, rho_fibrin=1.0,
+            P=p.P_max,
+            D=p.D0,
+            O2=p.O2_blood,
+            rho_fibrin=1.0,
             # Резидентные клетки раневого ложа
             F=10.0,
             # Ранние нейтрофилы из повреждённых сосудов (Kolaczkowska 2013)

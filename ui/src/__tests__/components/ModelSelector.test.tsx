@@ -11,8 +11,11 @@ vi.mock('react-i18next', () => ({
       const map: Record<string, string> = {
         'dashboard.model.title': 'Model',
         'dashboard.model.mvp': 'MVP',
+        'dashboard.model.mvpDesc': 'Fast model',
         'dashboard.model.extended': 'Extended',
+        'dashboard.model.extendedDesc': 'Full model',
         'dashboard.model.abm': 'ABM',
+        'dashboard.model.abmDesc': 'Agent model',
         'dashboard.model.integrated': 'Integrated',
       };
       return map[key] || key;
@@ -20,28 +23,40 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+// Mock framer-motion to avoid animation issues in tests
+vi.mock('framer-motion', () => ({
+  motion: {
+    div: ({ children, ...props }: React.PropsWithChildren<Record<string, unknown>>) => {
+      const { layoutId: _l, initial: _i, animate: _a, exit: _e, transition: _t, ...rest } = props;
+      return <div {...rest}>{children}</div>;
+    },
+  },
+  AnimatePresence: ({ children }: React.PropsWithChildren) => children,
+}));
+
 describe('ModelSelector', () => {
   beforeEach(() => {
     useSimulationStore.setState({ params: { ...DEFAULT_SIMULATION_PARAMS } });
   });
 
-  it('renders all 4 mode options', () => {
+  it('renders only the currently supported mode options', () => {
     render(<ModelSelector />);
     expect(screen.getByText('MVP')).toBeInTheDocument();
     expect(screen.getByText('Extended')).toBeInTheDocument();
     expect(screen.getByText('ABM')).toBeInTheDocument();
-    expect(screen.getByText('Integrated')).toBeInTheDocument();
+    expect(screen.queryByText('Integrated')).not.toBeInTheDocument();
   });
 
   it('selects the current mode from store', () => {
     render(<ModelSelector />);
-    const extendedRadio = screen.getByDisplayValue('extended') as HTMLInputElement;
-    expect(extendedRadio.checked).toBe(true);
+    // Default mode is 'extended' — the Extended button should exist
+    expect(screen.getByText('Extended')).toBeInTheDocument();
+    expect(useSimulationStore.getState().params.mode).toBe('extended');
   });
 
   it('updates store when mode changes', () => {
     render(<ModelSelector />);
-    fireEvent.click(screen.getByDisplayValue('abm'));
+    fireEvent.click(screen.getByText('ABM'));
     expect(useSimulationStore.getState().params.mode).toBe('abm');
   });
 });

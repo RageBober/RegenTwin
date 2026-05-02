@@ -1,5 +1,4 @@
-"""
-E2E интеграционные тесты для полного data pipeline RegenTwin.
+"""E2E интеграционные тесты для полного data pipeline RegenTwin.
 
 Проверяет весь поток обработки данных:
 FCS Data → Gating → Parameter Extraction → Model Parameters
@@ -10,30 +9,27 @@ FCS Data → Gating → Parameter Extraction → Model Parameters
 - Регенерация
 """
 
-import pytest
 import numpy as np
-import pandas as pd
+import pytest
 
-from src.data.gating import GatingStrategy, GatingResults
+from src.data.gating import GatingResults, GatingStrategy
 from src.data.parameter_extraction import (
-    ParameterExtractor,
     ExtractionConfig,
     ModelParameters,
     extract_model_parameters,
 )
 
-
 # =============================================================================
 # E2E Pipeline Tests
 # =============================================================================
+
 
 @pytest.mark.integration
 class TestFullPipeline:
     """E2E тесты полного data pipeline."""
 
     def test_pipeline_normal_scenario(self, mock_fcs_data_normal):
-        """
-        E2E тест: нормальный образец.
+        """E2E тест: нормальный образец.
 
         Pipeline: DataFrame → Gating → Parameters
         """
@@ -57,8 +53,7 @@ class TestFullPipeline:
         assert params.inflammation_level < 0.8
 
     def test_pipeline_inflamed_scenario(self, mock_fcs_data_inflamed):
-        """
-        E2E тест: воспалённый образец.
+        """E2E тест: воспалённый образец.
 
         Ожидаемые характеристики:
         - Повышенные макрофаги (>5%)
@@ -81,8 +76,7 @@ class TestFullPipeline:
         assert params.inflammation_level > 0.4
 
     def test_pipeline_regenerating_scenario(self, mock_fcs_data_regenerating):
-        """
-        E2E тест: регенерирующий образец.
+        """E2E тест: регенерирующий образец.
 
         Ожидаемые характеристики:
         - Повышенные стволовые клетки (>7%)
@@ -111,8 +105,7 @@ class TestFullPipeline:
         mock_fcs_data_inflamed,
         mock_fcs_data_regenerating,
     ):
-        """
-        E2E тест: все сценарии проходят pipeline и дают валидные результаты.
+        """E2E тест: все сценарии проходят pipeline и дают валидные результаты.
 
         Проверяет что:
         - Все сценарии обрабатываются без ошибок
@@ -149,9 +142,7 @@ class TestPipelineConsistency:
     """Тесты консистентности pipeline."""
 
     def test_deterministic_output(self, mock_fcs_data_normal):
-        """
-        Тест детерминизма: один и тот же вход → один и тот же выход.
-        """
+        """Тест детерминизма: один и тот же вход → один и тот же выход."""
         strategy = GatingStrategy()
 
         # Run pipeline twice
@@ -170,9 +161,7 @@ class TestPipelineConsistency:
         assert params1.apoptotic_fraction == params2.apoptotic_fraction
 
     def test_pipeline_with_custom_config(self, mock_fcs_data_normal):
-        """
-        Тест pipeline с кастомной конфигурацией.
-        """
+        """Тест pipeline с кастомной конфигурацией."""
         strategy = GatingStrategy()
         gating_results = strategy.apply(mock_fcs_data_normal)
 
@@ -191,9 +180,7 @@ class TestPipelineConsistency:
         assert params.n0 < 5000  # Lower due to higher volume
 
     def test_pipeline_total_events_preserved(self, mock_fcs_data_normal):
-        """
-        Тест: total_events сохраняется через весь pipeline.
-        """
+        """Тест: total_events сохраняется через весь pipeline."""
         n_input = len(mock_fcs_data_normal)
 
         strategy = GatingStrategy()
@@ -209,9 +196,7 @@ class TestPipelineGateHierarchy:
     """Тесты иерархии гейтов в pipeline."""
 
     def test_hierarchical_gating_subsets(self, mock_fcs_data_normal):
-        """
-        Тест: дочерние популяции являются подмножествами родительских.
-        """
+        """Тест: дочерние популяции являются подмножествами родительских."""
         strategy = GatingStrategy()
         results = strategy.apply(mock_fcs_data_normal)
 
@@ -233,28 +218,26 @@ class TestPipelineGateHierarchy:
         assert np.all(singlets_mask <= non_debris_mask)
 
     def test_all_gate_fractions_valid(self, mock_fcs_data_normal):
-        """
-        Тест: все фракции в диапазоне [0, 1].
-        """
+        """Тест: все фракции в диапазоне [0, 1]."""
         strategy = GatingStrategy()
         results = strategy.apply(mock_fcs_data_normal)
 
         for gate_name, gate_result in results.gates.items():
-            assert 0 <= gate_result.fraction <= 1, \
-                f"Gate {gate_name} has invalid fraction: {gate_result.fraction}"
+            assert (
+                0 <= gate_result.fraction <= 1
+            ), f"Gate {gate_name} has invalid fraction: {gate_result.fraction}"
 
     def test_all_masks_correct_length(self, mock_fcs_data_normal):
-        """
-        Тест: все маски имеют правильную длину.
-        """
+        """Тест: все маски имеют правильную длину."""
         n_events = len(mock_fcs_data_normal)
 
         strategy = GatingStrategy()
         results = strategy.apply(mock_fcs_data_normal)
 
         for gate_name, gate_result in results.gates.items():
-            assert len(gate_result.mask) == n_events, \
-                f"Gate {gate_name} mask has wrong length: {len(gate_result.mask)} != {n_events}"
+            assert (
+                len(gate_result.mask) == n_events
+            ), f"Gate {gate_name} mask has wrong length: {len(gate_result.mask)} != {n_events}"
 
 
 @pytest.mark.integration
@@ -266,28 +249,29 @@ class TestPipelineParameterRanges:
         mock_fcs_data_normal,
         expected_parameter_ranges,
     ):
-        """
-        Тест: параметры в ожидаемых диапазонах из документации.
-        """
+        """Тест: параметры в ожидаемых диапазонах из документации."""
         strategy = GatingStrategy()
         gating_results = strategy.apply(mock_fcs_data_normal)
         params = extract_model_parameters(gating_results)
 
         ranges = expected_parameter_ranges
 
-        assert ranges["n0"]["min"] <= params.n0 <= ranges["n0"]["max"], \
-            f"n0={params.n0} not in [{ranges['n0']['min']}, {ranges['n0']['max']}]"
+        assert (
+            ranges["n0"]["min"] <= params.n0 <= ranges["n0"]["max"]
+        ), f"n0={params.n0} not in [{ranges['n0']['min']}, {ranges['n0']['max']}]"
 
-        assert ranges["c0"]["min"] <= params.c0 <= ranges["c0"]["max"], \
-            f"c0={params.c0} not in [{ranges['c0']['min']}, {ranges['c0']['max']}]"
+        assert (
+            ranges["c0"]["min"] <= params.c0 <= ranges["c0"]["max"]
+        ), f"c0={params.c0} not in [{ranges['c0']['min']}, {ranges['c0']['max']}]"
 
-        assert ranges["inflammation_level"]["min"] <= params.inflammation_level <= ranges["inflammation_level"]["max"], \
-            f"inflammation_level={params.inflammation_level} not in [0, 1]"
+        assert (
+            ranges["inflammation_level"]["min"]
+            <= params.inflammation_level
+            <= ranges["inflammation_level"]["max"]
+        ), f"inflammation_level={params.inflammation_level} not in [0, 1]"
 
     def test_to_dict_serialization(self, mock_fcs_data_normal):
-        """
-        Тест: параметры корректно сериализуются в словарь.
-        """
+        """Тест: параметры корректно сериализуются в словарь."""
         strategy = GatingStrategy()
         gating_results = strategy.apply(mock_fcs_data_normal)
         params = extract_model_parameters(gating_results, source_file="test.fcs")

@@ -28,13 +28,14 @@ except ImportError:
 
     logger = _logging.getLogger(__name__)  # type: ignore[assignment]
 
+from src.core.extended_sde import (
+    ExtendedSDEState,
+    ExtendedSDETrajectory,
+)
+from src.core.parameters import ParameterSet
+
 if TYPE_CHECKING:
-    from src.core.extended_sde import (
-        ExtendedSDEModel,
-        ExtendedSDEState,
-        ExtendedSDETrajectory,
-    )
-    from src.core.parameters import ParameterSet
+    from src.core.extended_sde import ExtendedSDEModel
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +158,55 @@ class SDESolver(Protocol):
 
 
 # ---------------------------------------------------------------------------
+# Общий цикл симуляции (shared by solvers that delegate to step())
+# ---------------------------------------------------------------------------
+
+
+def _run_simulation_loop(
+    solver: SDESolver,
+    model: ExtendedSDEModel,
+    initial_state: ExtendedSDEState,
+    params: ParameterSet,
+) -> ExtendedSDETrajectory:
+    """Общий цикл интегрирования SDE через solver.step().
+
+    Порт из ExtendedSDEModel.simulate() — идентичная логика,
+    но шаг делегируется в solver.step() вместо inline EM.
+
+    Args:
+        solver: Солвер с методом step()
+        model: Модель с _compute_drift/_compute_diffusion
+        initial_state: Начальное состояние
+        params: Параметры (dt, t_max)
+
+    Returns:
+        ExtendedSDETrajectory с результатами
+    """
+    n_steps = int(params.t_max / params.dt)
+    sqrt_dt = np.sqrt(params.dt)
+    times = np.linspace(0.0, params.t_max, n_steps + 1)
+
+    states: list[ExtendedSDEState] = []
+    current_state = initial_state
+    states.append(current_state)
+
+    for i in range(n_steps):
+        drift = model._compute_drift(current_state)
+        diffusion = model._compute_diffusion(current_state)
+        dW = model._rng.standard_normal(model.N_VARIABLES) * sqrt_dt
+
+        x = current_state.to_array()
+        result = solver.step(x, drift, diffusion, params.dt, dW)
+
+        new_state = ExtendedSDEState.from_array(result.new_state, t=times[i + 1])
+        new_state = model._apply_boundary_conditions(new_state)
+        states.append(new_state)
+        current_state = new_state
+
+    return ExtendedSDETrajectory(times=times, states=states, params=params)
+
+
+# ---------------------------------------------------------------------------
 # Euler-Maruyama
 # ---------------------------------------------------------------------------
 
@@ -232,7 +282,7 @@ class EulerMaruyamaSolver:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#EulerMaruyamaSolver.simulate
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        return _run_simulation_loop(self, model, initial_state, params)
 
 
 # ---------------------------------------------------------------------------
@@ -323,7 +373,29 @@ class MilsteinSolver:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#MilsteinSolver.simulate
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        n_steps = int(params.t_max / params.dt)
+        sqrt_dt = np.sqrt(params.dt)
+        times = np.linspace(0.0, params.t_max, n_steps + 1)
+
+        states: list[ExtendedSDEState] = []
+        current_state = initial_state
+        states.append(current_state)
+
+        for i in range(n_steps):
+            drift = model._compute_drift(current_state)
+            diffusion = model._compute_diffusion(current_state)
+            sigma_prime = self._compute_diffusion_derivative(model, current_state)
+            dW = model._rng.standard_normal(model.N_VARIABLES) * sqrt_dt
+
+            x = current_state.to_array()
+            result = self.step(x, drift, diffusion, params.dt, dW, diffusion_derivative=sigma_prime)
+
+            new_state = ExtendedSDEState.from_array(result.new_state, t=times[i + 1])
+            new_state = model._apply_boundary_conditions(new_state)
+            states.append(new_state)
+            current_state = new_state
+
+        return ExtendedSDETrajectory(times=times, states=states, params=params)
 
     def _compute_diffusion_derivative(
         self,
@@ -347,7 +419,19 @@ class MilsteinSolver:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#_compute_diffusion_derivative
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        eps = eps if eps is not None else self._config.fd_epsilon
+        x = state.to_array()
+        sigma_base = model._compute_diffusion(state)
+        sigma_prime = np.zeros_like(x)
+
+        for i in range(len(x)):
+            x_pert = x.copy()
+            x_pert[i] += eps
+            state_pert = ExtendedSDEState.from_array(x_pert, t=state.t)
+            sigma_pert = model._compute_diffusion(state_pert)
+            sigma_prime[i] = (sigma_pert[i] - sigma_base[i]) / eps
+
+        return sigma_prime
 
 
 # ---------------------------------------------------------------------------
@@ -428,7 +512,9 @@ class IMEXSplitter:
         _, slow_diffusion = self._split_state(diffusion)
         _, slow_dW = self._split_state(dW)
 
-        new_fast = self._implicit_step(fast_state, fast_drift, dt)
+        # step() не имеет доступа к model → forward Euler для fast vars.
+        # Для proper backward Euler используйте simulate().
+        new_fast = fast_state + fast_drift * dt
         new_slow = self._explicit_step(
             slow_state,
             slow_drift,
@@ -462,25 +548,64 @@ class IMEXSplitter:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#IMEXSplitter.simulate
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        from src.core.extended_sde import ExtendedSDEState, ExtendedSDETrajectory  # noqa: PLC0415
+
+        n_steps = int(params.t_max / params.dt)
+        sqrt_dt = np.sqrt(params.dt)
+        times = np.linspace(0.0, params.t_max, n_steps + 1)
+
+        states: list[ExtendedSDEState] = [initial_state]
+        current_state = initial_state
+
+        for i in range(n_steps):
+            x = current_state.to_array()
+            state_fast = x[self._fast_indices]
+            state_slow = x[self._slow_indices]
+
+            drift_full = model._compute_drift(current_state)
+            diffusion_full = model._compute_diffusion(current_state)
+
+            drift_slow = drift_full[self._slow_indices]
+            diffusion_slow = diffusion_full[self._slow_indices]
+
+            dW_full = model._rng.standard_normal(model.N_VARIABLES) * sqrt_dt
+            dW_slow = dW_full[self._slow_indices]
+
+            new_fast = self._implicit_step(state_fast, state_slow, params.dt, model, times[i])
+            new_slow = state_slow + drift_slow * params.dt + diffusion_slow * dW_slow
+
+            new_x = self._merge_state(new_fast, new_slow)
+            new_state = ExtendedSDEState.from_array(new_x, t=times[i + 1])
+            new_state = model._apply_boundary_conditions(new_state)
+            states.append(new_state)
+            current_state = new_state
+
+        return ExtendedSDETrajectory(times=times, states=states, params=params)
 
     def _implicit_step(
         self,
         state_fast: np.ndarray,
-        drift_fast: np.ndarray,
+        state_slow: np.ndarray,
         dt: float,
-        max_iter: int = 10,  # noqa: ARG002
-        tol: float = 1e-8,  # noqa: ARG002
+        model: ExtendedSDEModel,
+        t: float,
+        max_iter: int = 10,
+        tol: float = 1e-8,
     ) -> np.ndarray:
         """Implicit шаг (backward Euler) для стиффных переменных.
 
-        Решает X^{n+1} = X^n + μ(X^{n+1})·dt
-        методом неподвижной точки (fixed-point iteration).
+        Решает X^{n+1} = X^n + μ_fast(X^{n+1}, X_slow^n)·dt
+        методом неподвижной точки (Picard iteration).
+
+        Сходимость гарантирована при γ·dt < 1.
+        При стандартном dt=0.01: max(γ·dt) = 0.5·0.01 = 0.005 ≪ 1.
 
         Args:
-            state_fast: Быстрые компоненты X_fast^n
-            drift_fast: Дрифт быстрых компонент μ_fast(X^n)
+            state_fast: Быстрые компоненты X_fast^n (цитокины)
+            state_slow: Медленные компоненты X_slow^n (фиксированы)
             dt: Шаг времени
+            model: ExtendedSDEModel для вычисления drift
+            t: Текущее время
             max_iter: Максимум итераций fixed-point
             tol: Допуск сходимости
 
@@ -490,7 +615,18 @@ class IMEXSplitter:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#_implicit_step
         """
-        return state_fast + drift_fast * dt
+        from src.core.extended_sde import ExtendedSDEState  # noqa: PLC0415
+
+        x = state_fast.copy()
+        for _ in range(max_iter):
+            full_arr = self._merge_state(x, state_slow)
+            full_state = ExtendedSDEState.from_array(full_arr, t=t)
+            drift_fast = model._compute_drift(full_state)[self._fast_indices]
+            x_new = state_fast + drift_fast * dt
+            if float(np.linalg.norm(x_new - x)) < tol:
+                return x_new
+            x = x_new
+        return x
 
     def _explicit_step(
         self,
@@ -692,7 +828,45 @@ class AdaptiveTimestepper:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#AdaptiveTimestepper.simulate
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        t = 0.0
+        dt = params.dt
+        step_count = 0
+
+        times_list: list[float] = [0.0]
+        states: list[ExtendedSDEState] = []
+        current_state = initial_state
+        states.append(current_state)
+
+        while t < params.t_max and step_count < self._config.max_steps:
+            # Ограничить dt чтобы не перешагнуть t_max
+            dt = min(dt, params.t_max - t)
+            if dt <= 0:
+                break
+
+            drift = model._compute_drift(current_state)
+            diffusion = model._compute_diffusion(current_state)
+            sqrt_dt = np.sqrt(dt)
+            dW = model._rng.standard_normal(model.N_VARIABLES) * sqrt_dt
+
+            x = current_state.to_array()
+            result = self.step(x, drift, diffusion, dt, dW)
+            step_count += 1
+
+            if not result.rejected:
+                t += dt
+                new_state = ExtendedSDEState.from_array(result.new_state, t=t)
+                new_state = model._apply_boundary_conditions(new_state)
+                states.append(new_state)
+                times_list.append(t)
+                current_state = new_state
+
+            dt = np.clip(result.dt_used, self._config.dt_min, self._config.dt_max)
+
+        return ExtendedSDETrajectory(
+            times=np.array(times_list),
+            states=states,
+            params=params,
+        )
 
     def _estimate_error(
         self,
@@ -790,10 +964,13 @@ class StochasticRungeKutta:
         dt: float,
         dW: np.ndarray,
     ) -> StepResult:
-        """Один шаг SRI2W1.
+        """Один шаг Эйлера-Маруямы (strong order 0.5).
 
-        Использует стадии Рунге-Кутты с детерминированным и стохастическим
-        tableau для достижения strong order 1.0.
+        Примечание: настоящий SRI2W1 (strong order 1.0) требует вычисления
+        drift в промежуточной точке, что невозможно с pre-computed drift/diffusion.
+        Метод step() получает уже вычисленные drift и diffusion, поэтому
+        реализует Euler-Maruyama. Для SRI2W1 используйте simulate() с доступом
+        к модели (пока не реализован).
 
         Args:
             state: X_n, shape (20,)
@@ -808,13 +985,12 @@ class StochasticRungeKutta:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#StochasticRungeKutta.step
         """
-        # SRI2W1 упрощённый: Heun (дет.) + EM (стох.)
-        # k1 = k2 = drift (предвычислены, модель недоступна)
-        new_state = state + 0.5 * (drift + drift) * dt + diffusion * dW
+        # Fallback: Euler-Maruyama (model unavailable for 2nd stage evaluation)
+        new_state = state + drift * dt + diffusion * dW
         return StepResult(
             new_state=new_state,
             dt_used=dt,
-            n_function_evals=4,
+            n_function_evals=1,
         )
 
     def simulate(
@@ -836,7 +1012,42 @@ class StochasticRungeKutta:
         Подробное описание:
             Description/Phase2/description_sde_numerics.md#StochasticRungeKutta.simulate
         """
-        raise NotImplementedError("Stub: требуется реализация в Этап 3")
+        n_steps = int(params.t_max / params.dt)
+        sqrt_dt = np.sqrt(params.dt)
+        times = np.linspace(0.0, params.t_max, n_steps + 1)
+
+        states: list[ExtendedSDEState] = []
+        current_state = initial_state
+        states.append(current_state)
+
+        for i in range(n_steps):
+            # Стадия 1: drift и diffusion в текущей точке X_n
+            k1 = model._compute_drift(current_state)
+            l1 = model._compute_diffusion(current_state)
+
+            # Промежуточное состояние: X_hat = X_n + K1*dt + L1*sqrt(dt)
+            x = current_state.to_array()
+            x_hat = x + k1 * params.dt + l1 * sqrt_dt
+            state_hat = ExtendedSDEState.from_array(x_hat, t=current_state.t)
+
+            # Стадия 2: drift и diffusion в промежуточной точке
+            k2 = model._compute_drift(state_hat)
+            l2 = model._compute_diffusion(state_hat)
+
+            # Винеровские приращения
+            dW = model._rng.standard_normal(model.N_VARIABLES) * sqrt_dt
+
+            # SRI2W1: Heun + поправка Milstein (strong order 1.0, диагональный шум)
+            # correction = 0.5*(L2-L1)*(dW²-dt)/sqrt_dt  [Platen derivative-free Milstein]
+            correction = 0.5 * (l2 - l1) * (dW**2 - params.dt) / sqrt_dt
+            x_new = x + 0.5 * (k1 + k2) * params.dt + 0.5 * (l1 + l2) * dW + correction
+
+            new_state = ExtendedSDEState.from_array(x_new, t=times[i + 1])
+            new_state = model._apply_boundary_conditions(new_state)
+            states.append(new_state)
+            current_state = new_state
+
+        return ExtendedSDETrajectory(times=times, states=states, params=params)
 
 
 # ---------------------------------------------------------------------------
