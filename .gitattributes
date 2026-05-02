@@ -1,0 +1,28 @@
+# Принудительно LF для всех текстовых файлов (избегаем drift между Windows/Linux ruff/eslint).
+* text=auto eol=lf
+
+# Бинарные форматы — оставить как есть.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.icns binary
+*.fcs binary
+*.npz binary
+*.parquet binary
+*.duckdb binary
+*.db binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.zip binary
+*.gz binary
+*.exe binary
+*.msi binary
+
+# Windows-специфичные скрипты — CRLF.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
