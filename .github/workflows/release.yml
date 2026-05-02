@@ -50,38 +50,49 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
-      # Принудительно переставляем Rust — pre-installed на windows-2022
-      # помнит несуществующий путь VS Community, ломая cc-rs build scripts.
-      - name: Reinstall Rust toolchain (refresh MSVC linkage)
+      # Удалить любой stale .cargo/config с hardcoded путями к VS Community.
+      - name: Wipe stale cargo configs
         shell: pwsh
         run: |
-          rustup self update
-          rustup toolchain uninstall stable-x86_64-pc-windows-msvc
-          rustup toolchain install stable-x86_64-pc-windows-msvc --profile minimal
-          rustup default stable-x86_64-pc-windows-msvc
-          rustc --version
-          rustc --print sysroot
+          $cfg = "$env:USERPROFILE\.cargo\config.toml"
+          if (Test-Path $cfg) {
+            Write-Host "Removing $cfg"
+            Get-Content $cfg
+            Remove-Item $cfg -Force
+          }
+          $cfg2 = "$env:USERPROFILE\.cargo\config"
+          if (Test-Path $cfg2) {
+            Remove-Item $cfg2 -Force
+          }
+
+      # Чистая установка Rust toolchain через actions-rust-lang
+      # (без зависимости от pre-installed rustup на runner image).
+      - name: Set up Rust toolchain (clean)
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-pc-windows-msvc
 
       - name: Cache Rust target
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ui/src-tauri -> target
-          # Bump cache key, чтобы выкинуть старый кэш, вмерзший в Community-путь.
-          prefix-key: v2-rust-msvc-refresh
+          prefix-key: v3-rust-msvc-cleanenv
 
       - name: npm ci
         working-directory: ui
         run: npm ci
 
-      # Официальный tauri-action: сам ставит wix3, тестирует, билдит и
-      # аплоадит .msi/.exe в GitHub Release с тем же тегом.
+      # Build с явным linker override — cargo должен использовать link.exe
+      # из PATH (msvc-dev-cmd добавил), а не hardcoded путь Community.
       - name: Build & publish Tauri release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Подсказка cc-rs: linker найдём по PATH (msvc-dev-cmd уже добавил его).
+          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: link.exe
           CC: cl.exe
           CXX: cl.exe
+          RUSTFLAGS: "-C linker=link.exe"
         with:
           projectPath: ui
           tagName: ${{ github.ref_name }}
