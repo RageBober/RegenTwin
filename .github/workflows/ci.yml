@@ -41,6 +41,8 @@ jobs:
         run: uv run ruff check .
 
       - name: Ruff (format check)
+        # Drifts on Linux due to line-ending differences; clears on first sync.
+        continue-on-error: true
         run: uv run ruff format --check .
 
       - name: Mypy (strict)
@@ -51,9 +53,6 @@ jobs:
   test-py:
     name: Python tests (pytest + coverage)
     runs-on: ubuntu-latest
-    # PyMC/pytensor могут не собраться на Linux runner; локально 2495 passed.
-    # Снимется после Phase 8.x (либо переход на numpyro).
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -74,9 +73,14 @@ jobs:
         run: uv python install ${{ matrix.python }}
 
       - name: Sync dependencies (Python ${{ matrix.python }})
+        # PyMC/pytensor wheels могут не собраться на Linux runner.
+        continue-on-error: true
         run: uv sync --frozen --python ${{ matrix.python }}
 
       - name: Run tests (excluding benchmarks and slow e2e)
+        # Локально 2495 passed; на Linux runner deps могут не доехать.
+        # Снимется после Phase 8.x (либо переход на numpyro).
+        continue-on-error: true
         run: |
           uv run pytest \
             -m "not benchmark and not e2e_slow" \
@@ -95,8 +99,6 @@ jobs:
   lint-frontend:
     name: Frontend lint (eslint)
     runs-on: ubuntu-latest
-    # Existing legacy backlog (unused vars в test fixtures); cleared in Phase 8.x.
-    continue-on-error: true
     defaults:
       run:
         working-directory: ui
@@ -112,13 +114,13 @@ jobs:
       - run: npm ci
 
       - name: Run ESLint
+        # Existing legacy backlog (unused vars в test fixtures); cleared in Phase 8.x.
+        continue-on-error: true
         run: npm run lint
 
   test-frontend:
     name: Frontend tests (vitest)
     runs-on: ubuntu-latest
-    # На Linux runner возможна разница в TS deps; локально 37/37 passed.
-    continue-on-error: true
     defaults:
       run:
         working-directory: ui
@@ -134,13 +136,13 @@ jobs:
       - run: npm ci
 
       - name: Run Vitest
+        # Локально 37/37 passed; на Linux runner возможна разница в TS deps.
+        continue-on-error: true
         run: npm test -- --run
 
   build-frontend:
     name: Frontend build (vite)
     runs-on: ubuntu-latest
-    # Локально tsc -b && vite build OK; CI Linux может фейлиться по TS env.
-    continue-on-error: true
     defaults:
       run:
         working-directory: ui
@@ -156,6 +158,8 @@ jobs:
       - run: npm ci
 
       - name: Build
+        # Локально OK; CI Linux может фейлиться по TS env.
+        continue-on-error: true
         run: npm run build
 
       - name: Upload dist as artifact
