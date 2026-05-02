@@ -50,16 +50,24 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
-      - name: Set up Rust toolchain (msvc)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: x86_64-pc-windows-msvc
+      # Принудительно переставляем Rust — pre-installed на windows-2022
+      # помнит несуществующий путь VS Community, ломая cc-rs build scripts.
+      - name: Reinstall Rust toolchain (refresh MSVC linkage)
+        shell: pwsh
+        run: |
+          rustup self update
+          rustup toolchain uninstall stable-x86_64-pc-windows-msvc
+          rustup toolchain install stable-x86_64-pc-windows-msvc --profile minimal
+          rustup default stable-x86_64-pc-windows-msvc
+          rustc --version
+          rustc --print sysroot
 
       - name: Cache Rust target
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: ui/src-tauri -> target
+          # Bump cache key, чтобы выкинуть старый кэш, вмерзший в Community-путь.
+          prefix-key: v2-rust-msvc-refresh
 
       - name: npm ci
         working-directory: ui
@@ -71,6 +79,9 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Подсказка cc-rs: linker найдём по PATH (msvc-dev-cmd уже добавил его).
+          CC: cl.exe
+          CXX: cl.exe
         with:
           projectPath: ui
           tagName: ${{ github.ref_name }}
