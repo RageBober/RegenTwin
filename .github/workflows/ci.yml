@@ -73,6 +73,13 @@ jobs:
       - name: Sync dependencies (Python ${{ matrix.python }})
         run: uv sync --frozen --python ${{ matrix.python }}
 
+      - name: Initialize DuckDB schema
+        # test_cancel_nonexistent (и потенциально другие route-тесты)
+        # используют production engine; нужна созданная schema.
+        run: |
+          mkdir -p data
+          uv run alembic upgrade head
+
       - name: Run tests (excluding benchmarks and slow e2e)
         run: |
           uv run pytest \
