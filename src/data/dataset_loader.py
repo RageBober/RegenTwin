@@ -104,9 +104,7 @@ class TimeSeriesData:
         Подробное описание: Description/Phase1/description_dataset_loader.md#get_variable
         """
         if name not in self.values:
-            raise KeyError(
-                f"Variable '{name}' not found. " f"Available: {list(self.values.keys())}"
-            )
+            raise KeyError(f"Variable '{name}' not found. Available: {list(self.values.keys())}")
         return self.values[name]
 
     def interpolate(
@@ -267,9 +265,7 @@ AVAILABLE_DATASETS: dict[str, DatasetMetadata] = {
         tissue_type="skin",
         url="https://www.proteinatlas.org",
         citation=(
-            "Uhlén M et al. (2015) "
-            "Tissue-based map of the human proteome. "
-            "Science 347:1260419"
+            "Uhlén M et al. (2015) Tissue-based map of the human proteome. Science 347:1260419"
         ),
     ),
     "literature-flegg2010": DatasetMetadata(
@@ -432,12 +428,12 @@ class DatasetLoader:
                 if len(source.time_points) >= 2:
                     if not np.all(np.diff(source.time_points) > 0):
                         raise ValueError(
-                            f"{source_name}: time_points are not " "monotonically increasing"
+                            f"{source_name}: time_points are not monotonically increasing"
                         )
                 # Неотрицательность значений
                 for var_name, values in source.values.items():
                     if np.any(values < 0):
-                        raise ValueError(f"{source_name}.{var_name}: " "contains negative values")
+                        raise ValueError(f"{source_name}.{var_name}: contains negative values")
 
         return True
 

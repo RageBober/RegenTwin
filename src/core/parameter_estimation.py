@@ -290,7 +290,7 @@ class ForwardModelWrapper:
         """
         if len(theta) != len(self.estimated_param_names):
             raise ValueError(
-                f"Expected theta of length {len(self.estimated_param_names)}, " f"got {len(theta)}"
+                f"Expected theta of length {len(self.estimated_param_names)}, got {len(theta)}"
             )
         params = self._build_parameter_set(theta)
         trajectory = self._run_simulation(params)

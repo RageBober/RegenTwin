@@ -53,9 +53,7 @@ class DiagReport:
         warn = sum(1 for r in self.results if r.status == "WARN")
         skip = sum(1 for r in self.results if r.status == "SKIP")
         total = len(self.results)
-        return (
-            f"\n{'='*60}\nRESULT: {ok}/{total} OK, {fail} FAIL, {warn} WARN, {skip} SKIP\n{'='*60}"
-        )
+        return f"\n{'=' * 60}\nRESULT: {ok}/{total} OK, {fail} FAIL, {warn} WARN, {skip} SKIP\n{'=' * 60}"
 
 
 def timed_test(report: DiagReport, name: str):
@@ -572,7 +570,7 @@ with timed_test(report, "api:simulations_list"):
         DiagResult(
             name="api:simulations_list",
             status="OK" if r.status_code == 200 else "FAIL",
-            message=f"{r.status_code}, count={len(r.json()) if r.status_code==200 else 'N/A'}",
+            message=f"{r.status_code}, count={len(r.json()) if r.status_code == 200 else 'N/A'}",
         )
     )
 

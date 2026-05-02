@@ -175,7 +175,7 @@ def plot_posterior(
         if p not in result.posterior_samples:
             available = list(result.posterior_samples.keys())
             raise ValueError(
-                f"Параметр '{p}' отсутствует в posterior_samples. " f"Доступные: {available}"
+                f"Параметр '{p}' отсутствует в posterior_samples. Доступные: {available}"
             )
 
     if layout == "marginals":

@@ -60,7 +60,7 @@ def _make_time_hovertemplate(
     if unit:
         value_line = f"{value_line} {unit}"
 
-    return "%{fullData.name}" "<br>Время: %{x:.1f} ч" f"<br>{value_line}" "<extra></extra>"
+    return f"%{{fullData.name}}<br>Время: %{{x:.1f}} ч<br>{value_line}<extra></extra>"
 
 
 def plot_populations(

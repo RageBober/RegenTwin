@@ -256,8 +256,8 @@ def main():
     test("POST /api/v1/simulate (invalid mode) -> 422", t_422)
 
     # Summary
-    print(f"\n{'='*50}")
-    print(f"Results: {PASS} passed, {FAIL} failed out of {PASS+FAIL}")
+    print(f"\n{'=' * 50}")
+    print(f"Results: {PASS} passed, {FAIL} failed out of {PASS + FAIL}")
     if FAIL:
         print("SOME TESTS FAILED!")
     else:

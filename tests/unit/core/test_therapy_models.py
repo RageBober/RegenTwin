@@ -435,7 +435,7 @@ class TestBiphasicRelease:
         for i in range(len(values) - 1):
             assert (
                 values[i] >= values[i + 1]
-            ), f"Не убывает: v({times[i]})={values[i]} < v({times[i+1]})={values[i+1]}"
+            ), f"Не убывает: v({times[i]})={values[i]} < v({times[i + 1]})={values[i + 1]}"
 
     def test_peak_time_formula(self, prp_model):
         """Пик при t_peak = τ_b·τ_s·ln(τ_s/τ_b)/(τ_s-τ_b)."""

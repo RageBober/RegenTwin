@@ -207,15 +207,13 @@ def handle_divergence(
         # Жёсткая дивергенция — откат к предыдущему состоянию
         safe_state = dict(state_previous)
         logger.warning(
-            f"Откат к предыдущему состоянию: {divergence_info.message}, "
-            f"dt: {dt_current} → {new_dt}"
+            f"Откат к предыдущему состоянию: {divergence_info.message}, dt: {dt_current} → {new_dt}"
         )
     else:
         # Мягкая дивергенция (overflow) — клиппинг текущего
         safe_state = clip_negative_concentrations(state_current)
         logger.warning(
-            f"Клиппинг текущего состояния: {divergence_info.message}, "
-            f"dt: {dt_current} → {new_dt}"
+            f"Клиппинг текущего состояния: {divergence_info.message}, dt: {dt_current} → {new_dt}"
         )
 
     if should_stop:
@@ -358,8 +356,7 @@ class NumericalGuard:
         # Логирование
         if self._log_warnings and self._warnings_list:
             logger.warning(
-                f"NumericalGuard: {len(self._warnings_list)} предупреждений: "
-                f"{self._warnings_list}"
+                f"NumericalGuard: {len(self._warnings_list)} предупреждений: {self._warnings_list}"
             )
 
         return False

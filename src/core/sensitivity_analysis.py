@@ -133,8 +133,7 @@ class SensitivityConfig:
                 )
             if b.nominal is not None and not (b.lower <= b.nominal <= b.upper):
                 raise ValueError(
-                    f"Parameter '{b.name}': nominal ({b.nominal}) "
-                    f"must be in [{b.lower}, {b.upper}]"
+                    f"Parameter '{b.name}': nominal ({b.nominal}) must be in [{b.lower}, {b.upper}]"
                 )
         # Validate parameter names against ParameterSet
         valid_names = {f.name for f in dataclasses.fields(ParameterSet)}
@@ -387,7 +386,7 @@ class SensitivityAnalyzer:
             from SALib.analyze import sobol as sobol_analyze
             from SALib.sample import saltelli as saltelli_sample
         except ImportError:
-            raise ImportError("SALib is required for Sobol analysis. " "Install: pip install SALib")
+            raise ImportError("SALib is required for Sobol analysis. Install: pip install SALib")
 
         output_vars = output_variables or self.config.output_variables
         output_var = output_vars[0]
@@ -401,9 +400,7 @@ class SensitivityAnalyzer:
 
         n_params = problem["num_vars"]
         if Y.std() == 0:
-            logger.warning(
-                "All model outputs identical — " "Sobol indices undefined, returning zeros"
-            )
+            logger.warning("All model outputs identical — Sobol indices undefined, returning zeros")
             return SobolResult(
                 parameter_names=problem["names"],
                 S1=np.zeros(n_params),
@@ -472,9 +469,7 @@ class SensitivityAnalyzer:
             from SALib.analyze import morris as morris_analyze
             from SALib.sample import morris as morris_sample
         except ImportError:
-            raise ImportError(
-                "SALib is required for Morris analysis. " "Install: pip install SALib"
-            )
+            raise ImportError("SALib is required for Morris analysis. Install: pip install SALib")
 
         output_vars = output_variables or self.config.output_variables
         output_var = output_vars[0]
@@ -872,7 +867,7 @@ class TornadoPlotter:
             import matplotlib.pyplot as plt
         except ImportError:
             raise ImportError(
-                "matplotlib is required for plotting. " "Install: pip install matplotlib"
+                "matplotlib is required for plotting. Install: pip install matplotlib"
             )
 
         if len(data.parameter_names) == 0:

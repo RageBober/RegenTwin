@@ -198,9 +198,7 @@ def get_hpa_metadata() -> DatasetMetadata:
         tissue_type="skin",
         url="https://www.proteinatlas.org",
         citation=(
-            "Uhlén M et al. (2015) "
-            "Tissue-based map of the human proteome. "
-            "Science 347:1260419"
+            "Uhlén M et al. (2015) Tissue-based map of the human proteome. Science 347:1260419"
         ),
     )
 

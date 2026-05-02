@@ -315,8 +315,8 @@ class TestPerformanceBenchmarks:
 
         # Логируем для анализа
         print("\nGating apply benchmark:")
-        print(f"  Average: {avg_time*1000:.1f} ms")
-        print(f"  Max:     {max_time*1000:.1f} ms")
+        print(f"  Average: {avg_time * 1000:.1f} ms")
+        print(f"  Max:     {max_time * 1000:.1f} ms")
 
         # Baseline: среднее < 500ms для 10000 событий
         assert avg_time < 0.5, f"Средняя скорость {avg_time:.2f}s превышает baseline 0.5s"
@@ -336,7 +336,7 @@ class TestPerformanceBenchmarks:
         avg_time = sum(times) / len(times)
 
         print("\nParameter extraction benchmark:")
-        print(f"  Average: {avg_time*1000:.2f} ms")
+        print(f"  Average: {avg_time * 1000:.2f} ms")
 
         # Baseline: среднее < 10ms
-        assert avg_time < 0.01, f"Средняя скорость {avg_time*1000:.2f}ms превышает baseline 10ms"
+        assert avg_time < 0.01, f"Средняя скорость {avg_time * 1000:.2f}ms превышает baseline 10ms"

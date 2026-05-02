@@ -356,9 +356,7 @@ class ParameterSet:
             if k not in valid_fields:
                 continue
             if not isinstance(v, (int, float)):
-                raise TypeError(
-                    f"Значение для {k} должно быть числом, " f"получено {type(v).__name__}"
-                )
+                raise TypeError(f"Значение для {k} должно быть числом, получено {type(v).__name__}")
             filtered[k] = v
         return cls(**filtered)
 
