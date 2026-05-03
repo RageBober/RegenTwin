@@ -13,7 +13,8 @@ crate-type = ["lib", "cdylib", "staticlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# devtools = открыть Ctrl+Shift+I в production .msi для диагностики runtime ошибок.
+tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

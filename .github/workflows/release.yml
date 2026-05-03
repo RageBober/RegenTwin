@@ -40,8 +40,10 @@ jobs:
       - name: Set up Python 3.11
         run: uv python install 3.11
 
-      - name: Sync Python deps (no dev) — bundled into MSI
-        run: uv sync --frozen --no-dev
+      - name: Sync Python deps (no dev, no editable) — bundled into MSI
+        # --no-editable: regentwin копируется в site-packages, а НЕ через .pth
+        # ссылку на исходный путь (который не существует на машине пользователя).
+        run: uv sync --frozen --no-dev --no-editable
 
       - name: Set up Node 20
         uses: actions/setup-node@v4

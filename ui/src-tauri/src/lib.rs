@@ -98,12 +98,26 @@ fn spawn_uv_backend(project_root: &Path) -> Option<Child> {
         .ok()
 }
 
+fn backend_log_paths(project_root: &Path) -> (PathBuf, PathBuf) {
+    let log_dir = project_root.join("logs");
+    let _ = std::fs::create_dir_all(&log_dir);
+    (
+        log_dir.join("backend-stdout.log"),
+        log_dir.join("backend-stderr.log"),
+    )
+}
+
 fn spawn_python_backend(project_root: &Path, python: &Path) -> Option<Child> {
+    let (stdout_path, stderr_path) = backend_log_paths(project_root);
+    let stdout_file = std::fs::File::create(&stdout_path).ok()?;
+    let stderr_file = std::fs::File::create(&stderr_path).ok()?;
+    println!("Backend logs: {} | {}", stdout_path.display(), stderr_path.display());
+
     Command::new(python)
         .args(["-m", "uvicorn", "src.api.main:app", "--host", "127.0.0.1", "--port", "8000"])
         .current_dir(project_root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stdout(Stdio::from(stdout_file))
+        .stderr(Stdio::from(stderr_file))
         .spawn()
         .ok()
 }
@@ -196,6 +210,12 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            // В production DevTools доступны через Ctrl+Shift+I (feature "devtools").
+            // Открываем автоматически только в debug билдах.
+            #[cfg(debug_assertions)]
+            if let Some(window) = app.get_webview_window("main") {
+                window.open_devtools();
+            }
             let backend = start_backend();
             app.manage(BackendProcess(Mutex::new(backend)));
             Ok(())
