@@ -1,6 +1,6 @@
 [project]
 name = "regentwin"
-version = "0.1.4"
+version = "0.1.5"
 description = "Программный инструмент для симуляции регенерации тканей с использованием данных flow cytometry и моделирования терапий PRP/PEMF"
 readme = "README.md"
 license = { text = "MIT" }

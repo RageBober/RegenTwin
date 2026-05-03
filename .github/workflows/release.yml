@@ -57,17 +57,23 @@ jobs:
           Copy-Item -Recurse $pyHome $runtime
           Write-Host "Copied to: $runtime"
 
+          # uv-managed Python ships a PEP 668 marker (Lib/EXTERNALLY-MANAGED)
+          # that blocks `pip install`. We're building a self-contained runtime,
+          # so it doesn't apply here — drop it.
+          $marker = "$runtime\Lib\EXTERNALLY-MANAGED"
+          if (Test-Path $marker) { Remove-Item -Force $marker; Write-Host "Removed PEP 668 marker" }
+
           # Bootstrap pip inside the portable runtime
           & "$runtime\python.exe" -m ensurepip --upgrade
-          & "$runtime\python.exe" -m pip install --upgrade pip --no-warn-script-location
+          & "$runtime\python.exe" -m pip install --upgrade pip --no-warn-script-location --break-system-packages
 
           # Export locked deps (no dev, no project itself) and install into the
           # runtime's site-packages. --no-emit-project: regentwin is installed
           # separately via `pip install .` below.
           uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file req-bundle.txt
-          & "$runtime\python.exe" -m pip install -r req-bundle.txt --no-warn-script-location --no-deps
+          & "$runtime\python.exe" -m pip install -r req-bundle.txt --no-warn-script-location --no-deps --break-system-packages
           # Install regentwin itself (project root) without re-resolving deps
-          & "$runtime\python.exe" -m pip install --no-deps --no-warn-script-location .
+          & "$runtime\python.exe" -m pip install --no-deps --no-warn-script-location --break-system-packages .
 
           # Smoke test: importable + uvicorn entry exists
           & "$runtime\python.exe" -c "import src.api.main; import uvicorn; print('runtime ok')"
