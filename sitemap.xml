@@ -2,294 +2,294 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
     <url>
         <loc>https://regentwin.local/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/"/>
     </url>
     <url>
         <loc>https://regentwin.local/changelog/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/changelog/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/changelog/"/>
     </url>
     <url>
         <loc>https://regentwin.local/api-reference/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/api-reference/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/api-reference/"/>
     </url>
     <url>
         <loc>https://regentwin.local/api-reference/abm/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/api-reference/abm/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/api-reference/abm/"/>
     </url>
     <url>
         <loc>https://regentwin.local/api-reference/extended-sde/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/api-reference/extended-sde/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/api-reference/extended-sde/"/>
     </url>
     <url>
         <loc>https://regentwin.local/api-reference/monte-carlo/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/api-reference/monte-carlo/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/api-reference/monte-carlo/"/>
     </url>
     <url>
         <loc>https://regentwin.local/architecture/abm-model/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/abm-model/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/abm-model/"/>
     </url>
     <url>
         <loc>https://regentwin.local/architecture/mathematical-framework/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/mathematical-framework/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/mathematical-framework/"/>
     </url>
     <url>
         <loc>https://regentwin.local/architecture/monte-carlo/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/monte-carlo/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/monte-carlo/"/>
     </url>
     <url>
         <loc>https://regentwin.local/architecture/overview/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/overview/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/overview/"/>
     </url>
     <url>
         <loc>https://regentwin.local/architecture/sde-model/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/sde-model/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/sde-model/"/>
     </url>
     <url>
         <loc>https://regentwin.local/architecture/sensitivity/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/sensitivity/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/sensitivity/"/>
     </url>
     <url>
         <loc>https://regentwin.local/architecture/validation/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/validation/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/validation/"/>
     </url>
     <url>
         <loc>https://regentwin.local/benchmarks/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/benchmarks/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/benchmarks/"/>
     </url>
     <url>
         <loc>https://regentwin.local/benchmarks/report/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/benchmarks/report/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/benchmarks/report/"/>
     </url>
     <url>
         <loc>https://regentwin.local/getting-started/first-simulation/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/getting-started/first-simulation/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/getting-started/first-simulation/"/>
     </url>
     <url>
         <loc>https://regentwin.local/getting-started/installation/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/getting-started/installation/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/getting-started/installation/"/>
     </url>
     <url>
         <loc>https://regentwin.local/getting-started/troubleshooting/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/getting-started/troubleshooting/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/getting-started/troubleshooting/"/>
     </url>
     <url>
         <loc>https://regentwin.local/tutorials/add-therapy/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/tutorials/add-therapy/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/tutorials/add-therapy/"/>
     </url>
     <url>
         <loc>https://regentwin.local/tutorials/interpret-results/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/tutorials/interpret-results/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/tutorials/interpret-results/"/>
     </url>
     <url>
         <loc>https://regentwin.local/tutorials/run-simulation/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/tutorials/run-simulation/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/tutorials/run-simulation/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/changelog/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/changelog/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/changelog/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/api-reference/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/api-reference/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/api-reference/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/api-reference/abm/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/api-reference/abm/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/api-reference/abm/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/api-reference/extended-sde/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/api-reference/extended-sde/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/api-reference/extended-sde/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/api-reference/monte-carlo/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/api-reference/monte-carlo/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/api-reference/monte-carlo/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/architecture/abm-model/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/abm-model/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/abm-model/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/architecture/mathematical-framework/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/mathematical-framework/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/mathematical-framework/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/architecture/monte-carlo/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/monte-carlo/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/monte-carlo/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/architecture/overview/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/overview/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/overview/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/architecture/sde-model/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/sde-model/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/sde-model/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/architecture/sensitivity/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/sensitivity/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/sensitivity/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/architecture/validation/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/architecture/validation/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/architecture/validation/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/benchmarks/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/benchmarks/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/benchmarks/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/benchmarks/report/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/benchmarks/report/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/benchmarks/report/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/getting-started/first-simulation/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/getting-started/first-simulation/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/getting-started/first-simulation/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/getting-started/installation/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/getting-started/installation/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/getting-started/installation/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/getting-started/troubleshooting/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/getting-started/troubleshooting/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/getting-started/troubleshooting/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/tutorials/add-therapy/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/tutorials/add-therapy/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/tutorials/add-therapy/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/tutorials/interpret-results/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/tutorials/interpret-results/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/tutorials/interpret-results/"/>
     </url>
     <url>
         <loc>https://regentwin.local/en/tutorials/run-simulation/</loc>
-        <lastmod>2026-05-02</lastmod>
+        <lastmod>2026-05-03</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://regentwin.local/en/tutorials/run-simulation/"/>
         <xhtml:link rel="alternate" hreflang="ru" href="https://regentwin.local/tutorials/run-simulation/"/>
