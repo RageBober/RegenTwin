@@ -59,9 +59,10 @@ fn find_project_root() -> Option<PathBuf> {
 
 fn local_python_candidates(root: &Path) -> Vec<PathBuf> {
     vec![
-        // Bundled venv (production .msi: tauri.conf.json bundle.resources)
-        root.join("venv").join("Scripts").join("python.exe"),
-        root.join("venv").join("bin").join("python"),
+        // Production: portable Python runtime bundled in MSI (tauri.conf.json
+        // bundle.resources → python-runtime/). Real python.exe, not a venv shim.
+        root.join("python-runtime").join("python.exe"),
+        root.join("python-runtime").join("bin").join("python"),
         // Dev / source .venv
         root.join(".venv").join("Scripts").join("python.exe"),
         root.join(".venv").join("bin").join("python"),

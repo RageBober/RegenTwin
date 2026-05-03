@@ -40,10 +40,37 @@ jobs:
       - name: Set up Python 3.11
         run: uv python install 3.11
 
-      - name: Sync Python deps (no dev, no editable) — bundled into MSI
-        # --no-editable: regentwin копируется в site-packages, а НЕ через .pth
-        # ссылку на исходный путь (который не существует на машине пользователя).
-        run: uv sync --frozen --no-dev --no-editable
+      # Bundling .venv from `uv sync` is broken in production:
+      # pyvenv.cfg references uv-managed Python at C:\Users\runneradmin\...
+      # which doesn't exist on the user's machine → "No Python at ..." crash.
+      # Instead: copy the standalone Python distribution itself, install deps
+      # directly into its site-packages, and ship that as a portable runtime.
+      - name: Build portable Python runtime
+        shell: pwsh
+        run: |
+          $pyExe = (uv python find 3.11).Trim()
+          $pyHome = Split-Path -Parent $pyExe
+          Write-Host "uv-managed Python at: $pyHome"
+
+          $runtime = "python-runtime"
+          if (Test-Path $runtime) { Remove-Item -Recurse -Force $runtime }
+          Copy-Item -Recurse $pyHome $runtime
+          Write-Host "Copied to: $runtime"
+
+          # Bootstrap pip inside the portable runtime
+          & "$runtime\python.exe" -m ensurepip --upgrade
+          & "$runtime\python.exe" -m pip install --upgrade pip --no-warn-script-location
+
+          # Export locked deps (no dev, no project itself) and install into the
+          # runtime's site-packages. --no-emit-project: regentwin is installed
+          # separately via `pip install .` below.
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file req-bundle.txt
+          & "$runtime\python.exe" -m pip install -r req-bundle.txt --no-warn-script-location --no-deps
+          # Install regentwin itself (project root) without re-resolving deps
+          & "$runtime\python.exe" -m pip install --no-deps --no-warn-script-location .
+
+          # Smoke test: importable + uvicorn entry exists
+          & "$runtime\python.exe" -c "import src.api.main; import uvicorn; print('runtime ok')"
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
