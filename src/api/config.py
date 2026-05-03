@@ -27,6 +27,8 @@ class Settings(BaseSettings):
             "http://127.0.0.1:5174",
             "http://127.0.0.1:5175",
             "https://tauri.localhost",
+            "http://tauri.localhost",
+            "tauri://localhost",
         ],
         description="Override via REGENTWIN_CORS_ORIGINS for production",
     )

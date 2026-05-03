@@ -57,6 +57,9 @@ export function useSimulationsList(status?: string) {
         `${API_V1}/simulations`,
         { params },
       );
+      if (!Array.isArray(data)) {
+        throw new Error(`Expected array of simulations, got ${typeof data}`);
+      }
       return data;
     },
   });
