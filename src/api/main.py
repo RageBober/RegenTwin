@@ -34,7 +34,7 @@ def _reconcile_orphans() -> None:
     db = SessionLocal()
     try:
         now = datetime.now(UTC)
-        message = "Server restarted before completion"
+        ts = now.strftime("%Y-%m-%d %H:%M:%S UTC")
         stale_states = ("running", "pending", "cancelling")
 
         sim_stale = (
@@ -42,7 +42,10 @@ def _reconcile_orphans() -> None:
         )
         for record in sim_stale:
             record.status = "cancelled"
-            record.message = message
+            progress_pct = int(round((record.progress or 0.0) * 100))
+            record.message = (
+                f"Прервано рестартом сервера в {ts}. Последний прогресс: {progress_pct}%."
+            )
             record.completed_at = now
 
         analysis_stale = (

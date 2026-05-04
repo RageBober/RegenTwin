@@ -1,12 +1,26 @@
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::Manager;
 
-struct BackendProcess(Mutex<Option<Child>>);
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+// CreateProcess flags. Without these, spawning python.exe (a console-subsystem
+// app) from a windowless Tauri parent makes Windows allocate a brand-new console
+// for it. That console window is what the user saw on launch — closing it sent
+// CTRL_CLOSE_EVENT to python.exe and killed the backend.
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+#[cfg(target_os = "windows")]
+const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+
+type SharedChild = Arc<Mutex<Option<Child>>>;
+
+struct BackendProcess(SharedChild);
 
 impl Drop for BackendProcess {
     fn drop(&mut self) {
@@ -81,22 +95,30 @@ fn bundled_resource_root() -> Option<PathBuf> {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn apply_windows_spawn_flags(cmd: &mut Command) {
+    cmd.creation_flags(CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn apply_windows_spawn_flags(_cmd: &mut Command) {}
+
 fn spawn_uv_backend(project_root: &Path) -> Option<Child> {
-    Command::new("uv")
-        .args([
-            "run",
-            "uvicorn",
-            "src.api.main:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            "8000",
-        ])
-        .current_dir(project_root)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .ok()
+    let mut cmd = Command::new("uv");
+    cmd.args([
+        "run",
+        "uvicorn",
+        "src.api.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000",
+    ])
+    .current_dir(project_root)
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
+    apply_windows_spawn_flags(&mut cmd);
+    cmd.spawn().ok()
 }
 
 fn backend_log_paths(project_root: &Path) -> (PathBuf, PathBuf) {
@@ -114,13 +136,13 @@ fn spawn_python_backend(project_root: &Path, python: &Path) -> Option<Child> {
     let stderr_file = std::fs::File::create(&stderr_path).ok()?;
     println!("Backend logs: {} | {}", stdout_path.display(), stderr_path.display());
 
-    Command::new(python)
-        .args(["-m", "uvicorn", "src.api.main:app", "--host", "127.0.0.1", "--port", "8000"])
+    let mut cmd = Command::new(python);
+    cmd.args(["-m", "uvicorn", "src.api.main:app", "--host", "127.0.0.1", "--port", "8000"])
         .current_dir(project_root)
         .stdout(Stdio::from(stdout_file))
-        .stderr(Stdio::from(stderr_file))
-        .spawn()
-        .ok()
+        .stderr(Stdio::from(stderr_file));
+    apply_windows_spawn_flags(&mut cmd);
+    cmd.spawn().ok()
 }
 
 fn ensure_data_dir(root: &Path) {
@@ -151,14 +173,14 @@ fn start_backend() -> Option<Child> {
 
     ensure_data_dir(&project_root);
 
-    // Production-first: bundled venv (resources/venv/Scripts/python.exe).
+    // Production-first: bundled portable Python (resources/python-runtime/python.exe).
     let child = bundled
         .as_ref()
         .and_then(|res_root| {
             for python in local_python_candidates(res_root) {
                 if python.exists() {
                     if let Some(child) = spawn_python_backend(&project_root, &python) {
-                        println!("Backend started from bundled venv: {}", python.display());
+                        println!("Backend started from bundled runtime: {}", python.display());
                         return Some(child);
                     }
                 }
@@ -202,6 +224,53 @@ fn start_backend() -> Option<Child> {
     child
 }
 
+/// Watchdog: раз в 5 секунд проверяет, что child жив и порт слушается.
+/// Если backend упал — пытается перезапустить, не более 3 раз за 60 секунд.
+fn spawn_backend_watchdog(state: SharedChild) {
+    thread::spawn(move || {
+        let port: u16 = 8000;
+        let mut restart_count: u32 = 0;
+        let mut window_start = Instant::now();
+        loop {
+            thread::sleep(Duration::from_secs(5));
+
+            let dead = {
+                let mut guard = match state.lock() {
+                    Ok(g) => g,
+                    Err(_) => continue,
+                };
+                match guard.as_mut() {
+                    Some(child) => matches!(child.try_wait(), Ok(Some(_))),
+                    None => true,
+                }
+            };
+
+            if !dead {
+                continue;
+            }
+            if is_port_in_use(port) {
+                continue;
+            }
+
+            if window_start.elapsed() > Duration::from_secs(60) {
+                restart_count = 0;
+                window_start = Instant::now();
+            }
+            if restart_count >= 3 {
+                eprintln!("Watchdog: backend died 3x in 60s, giving up until next window");
+                continue;
+            }
+            restart_count += 1;
+            eprintln!("Watchdog: backend dead, restart attempt {}", restart_count);
+
+            let new_child = start_backend();
+            if let Ok(mut guard) = state.lock() {
+                *guard = new_child;
+            }
+        }
+    });
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! RegenTwin is ready.", name)
@@ -218,7 +287,9 @@ pub fn run() {
                 window.open_devtools();
             }
             let backend = start_backend();
-            app.manage(BackendProcess(Mutex::new(backend)));
+            let state: SharedChild = Arc::new(Mutex::new(backend));
+            spawn_backend_watchdog(Arc::clone(&state));
+            app.manage(BackendProcess(state));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![greet])

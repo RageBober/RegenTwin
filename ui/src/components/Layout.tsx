@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { ComponentType, ReactNode, SVGProps } from 'react';
@@ -77,13 +77,19 @@ export default function Layout() {
   const [backendOnline, setBackendOnline] = useState(false);
   const { data: simulations } = useSimulationsList();
 
+  const failureCountRef = useRef(0);
+
   useEffect(() => {
     const checkHealth = async () => {
       try {
         await apiClient.get(`${API_V1}/health`);
+        failureCountRef.current = 0;
         setBackendOnline(true);
       } catch {
-        setBackendOnline(false);
+        failureCountRef.current += 1;
+        if (failureCountRef.current >= 2) {
+          setBackendOnline(false);
+        }
       }
     };
 

@@ -1459,7 +1459,9 @@ export default function Dashboard() {
 
         <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs card">
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: statusMeta.dotColor }} />
-          <span style={{ color: 'var(--text-muted)' }}>Активная:</span>
+          <span style={{ color: 'var(--text-muted)' }}>
+            {resolvedStatus === 'running' || resolvedStatus === 'pending' ? 'Активная:' : 'Просмотр:'}
+          </span>
           <span className="font-mono" style={{ color: 'var(--text-primary)' }}>{shortId(inspectedRunId)}</span>
           <span className={statusMeta.badgeClass}>{statusMeta.label}</span>
           <span className="font-mono" style={{ color: 'var(--text-muted)' }}>{activeHours} ч</span>
