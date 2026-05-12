@@ -1301,6 +1301,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#src.core.extended_sde.ExtendedSDEState.update_in_place" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        update_in_place
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#src.core.extended_sde.ExtendedSDEState.from_array" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1625,6 +1636,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#src.core.extended_sde.ExtendedSDEState.update_in_place" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        update_in_place
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#src.core.extended_sde.ExtendedSDEState.from_array" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1731,14 +1753,20 @@
 <a id="src.core.extended_sde"></a>
     <div class="doc doc-contents first">
 
-        <p>Расширенная 20-переменная SDE модель регенерации тканей.</p>
-<p>Полная система стохастических дифференциальных уравнений:
+        <p>Расширенная SDE модель регенерации тканей.</p>
+<p>v1.0: 20 переменных (8 клеток + 7 цитокинов + 3 ECM + 2 aux).
+v2.0 (FIX-06, FIX-09): 22 переменные — добавлены C_SDF1 (8-й цитокин) и
+C_TIMP (4-й ECM-компонент). Уравнения для них вводятся пофазно:
+    Phase 2: state-структура (текущая правка). Drift = 0 (константные placeholder'ы).
+    Phase 3: FIX-09 — динамическое уравнение dC_TIMP.
+    Phase 4: FIX-06 — динамическое уравнение dC_SDF1.</p>
+<p>Полная система:
 - 8 клеточных популяций: P, Ne, M1, M2, F, Mf, E, S
-- 7 цитокинов: TNF-α, IL-10, PDGF, VEGF, TGF-β, MCP-1, IL-8
-- 3 ECM компонента: коллаген, MMP, фибрин
+- 8 цитокинов: TNF-α, IL-10, PDGF, VEGF, TGF-β, MCP-1, IL-8, SDF-1 (NEW)
+- 4 ECM компонента: коллаген, MMP, TIMP (NEW), фибрин
 - 2 вспомогательных: D (damage signal), O₂</p>
 <p>Численное интегрирование методом Эйлера-Маруямы.
-Математическое обоснование: Doks/RegenTwin_Mathematical_Framework.md §2</p>
+Математическое обоснование: RegenTwin_Mathematical_Framework_v2.md §2</p>
 <p>Подробное описание: Description/Phase2/description_extended_sde.md</p>
 
 
@@ -2142,12 +2170,14 @@
 
     <div class="doc doc-contents ">
 
-        <p>Начальное состояние для типичной раны (t=0).</p>
+        <p>Начальное состояние для типичной раны (t=0), v2.0.</p>
 <p>Начальные условия (Gurtner et al., Nature 2008):
 - P = P_max (максимальная активация тромбоцитов)
 - D = D0 (максимальный damage signal)
 - O2 = O2_blood (начальный кислород)
 - rho_fibrin = 1.0 (фибриновый сгусток)
+- C_SDF1 = 0.01 (базовый уровень, params.yaml; FIX-06, v2.0)
+- C_TIMP = 0.01 (базовый уровень, params.yaml; FIX-09, v2.0)
 - Остальные ≈ 0 или малые базовые значения</p>
 
 
@@ -2218,6 +2248,11 @@
         <p>Состояние 20-переменной SDE системы в момент времени t.</p>
 <p>Содержит все клеточные популяции, цитокины, ECM компоненты
 и вспомогательные переменные.</p>
+<p>Единицы (FIX-01):
+    - Клеточные плотности — cells/ml (v2.0 конвенция).
+    - Цитокины — нг/мл.
+    - Время — часы.
+    - O₂ — мм рт. ст.</p>
 
 
 <details class="подробное-описание" open="">
@@ -2258,11 +2293,11 @@
 
     <div class="doc doc-contents ">
 
-        <p>Конвертация состояния в numpy массив (20 элементов).</p>
+        <p>Конвертация состояния в numpy массив (22 элемента, v2.0).</p>
 <p>Порядок элементов соответствует StateIndex:
-[P, Ne, M1, M2, F, Mf, E, S, C_TNF, C_IL10, C_PDGF,
- C_VEGF, C_TGFb, C_MCP1, C_IL8, rho_collagen, C_MMP,
- rho_fibrin, D, O2]</p>
+[P, Ne, M1, M2, F, Mf, E, S,
+ C_TNF, C_IL10, C_PDGF, C_VEGF, C_TGFb, C_MCP1, C_IL8, C_SDF1,
+ C_TIMP, rho_collagen, C_MMP, rho_fibrin, D, O2]</p>
 
 
     <p><span class="doc-section-title">Returns:</span></p>
@@ -2280,7 +2315,7 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>np.ndarray shape (20,) с текущими значениями</p>
+                <p>np.ndarray shape (22,) с текущими значениями</p>
               </div>
             </td>
           </tr>
@@ -2292,6 +2327,76 @@
   <summary>Подробное описание</summary>
   <p>Description/Phase2/description_extended_sde.md#to_array</p>
 </details>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="src.core.extended_sde.ExtendedSDEState.update_in_place" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">update_in_place</span>
+
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">update_in_place</span><span class="p">(</span><span class="n">arr</span><span class="p">:</span> <span class="n">ndarray</span><span class="p">,</span> <span class="n">t</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Мутирует существующий state значениями из ndarray (без аллокации).</p>
+<p>Используется в горячем цикле simulate(), чтобы синхронизировать
+ExtendedSDEState (для drift-методов, которые читают атрибуты) с
+текущим вектором x без создания нового объекта на каждом шаге.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>arr</code>
+            </td>
+            <td>
+                  <code><span title="numpy.ndarray">ndarray</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Массив shape (22,) в порядке StateIndex (v2.0)</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>t</code>
+            </td>
+            <td>
+                  <code><span title="float">float</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Текущее время (ч)</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
 
     </div>
 
@@ -2339,7 +2444,7 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Массив shape (20,) в порядке StateIndex</p>
+                <p>Массив shape (22,) в порядке StateIndex (v2.0)</p>
               </div>
             </td>
             <td>
@@ -2409,7 +2514,7 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Если len(arr) != 20</p>
+                <p>Если len(arr) != 22</p>
               </div>
             </td>
           </tr>
@@ -2440,7 +2545,7 @@
     <div class="doc doc-contents ">
 
         <p>Конвертация в словарь {имя_переменной: значение}.</p>
-<p>Включает все 20 переменных и время t.</p>
+<p>Включает все 22 переменные (v2.0) и время t.</p>
 
 
     <p><span class="doc-section-title">Returns:</span></p>
@@ -2458,7 +2563,7 @@
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Словарь с 21 ключом (20 переменных + t)</p>
+                <p>Словарь с 23 ключами (22 переменные + t)</p>
               </div>
             </td>
           </tr>
@@ -2708,8 +2813,10 @@
 
 
 
-        <p>Индексы переменных в массиве состояния (20 переменных).</p>
-<p>Определяет порядок переменных в numpy-массиве для drift/diffusion.</p>
+        <p>Индексы переменных в массиве состояния (22 переменные, v2.0).</p>
+<p>Определяет порядок переменных в numpy-массиве для drift/diffusion.
+После FIX-06/FIX-09 (Phase 2): добавлены C_SDF1 (15) и C_TIMP (16).
+Индексы ECM/aux переменных сдвинуты на +2.</p>
 
 
 <details class="подробное-описание" open="">
