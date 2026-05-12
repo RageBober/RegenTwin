@@ -75,6 +75,11 @@ class ABMConfig:
     cytokine_diffusion: float = 10.0  # мкм²/час
     cytokine_decay: float = 0.1  # 1/час
 
+    # Если False — снапшоты сохраняют только мета (агенты, t),
+    # а 2D-поля cytokine/ECM хранятся как ссылка на финальное состояние.
+    # Снижает RAM/cost-сериализации при длинных прогонах с частыми снапшотами.
+    save_field_history: bool = True
+
     def validate(self) -> bool:
         """Валидация параметров конфигурации.
 
@@ -651,10 +656,7 @@ class Agent(ABC):
             return True
 
         # Случайная смерть с вероятностью
-        if self._rng.random() < self.DEATH_PROBABILITY * dt:
-            return True
-
-        return False
+        return self._rng.random() < self.DEATH_PROBABILITY * dt
 
     @abstractmethod
     def divide(self, new_id: int) -> "Agent | None":
@@ -1184,9 +1186,8 @@ class Fibroblast(Agent):
 
         # Активация при высоком уровне воспаления
         inflammation = environment.get("inflammation_level", 0.0)
-        if inflammation > 0.7 and not self.activated:
-            if self._rng.random() < 0.01 * dt:
-                self.activate()
+        if inflammation > 0.7 and not self.activated and self._rng.random() < 0.01 * dt:
+            self.activate()
 
         # Производство ECM (PRP → PDGF → ускоряет матричный синтез).
         ecm_amount = self.produce_ecm(dt, prp_boost=prp_boost)
@@ -1792,6 +1793,22 @@ class ABMModel:
         # Кэш среднего уровня воспаления (обновляется раз в шаг, не per-agent)
         self._inflammation_cache: float = 0.5
 
+        # Переиспользуемый env-dict, чтобы не аллоцировать словарь на каждого агента.
+        # Глобальные поля (терапии, воспаление) обновляются в step() раз на тик;
+        # координатные (cytokine_level, ecm_level, vegf_level) — внутри _get_environment.
+        self._env_buffer: dict[str, Any] = {
+            "cytokine_level": 0.0,
+            "ecm_level": 0.0,
+            "inflammation_level": 0.5,
+            "prp_active": False,
+            "pemf_active": False,
+            "prp_boost": 0.0,
+            "pemf_boost": 0.0,
+            "synergy": 1.0,
+            "pemf_polarization_shift": 0.0,
+            "vegf_level": 0.0,
+        }
+
         # Кэш neighbor-queries на тик (инвалидируется в step() после rebuild).
         # Key: (x, y, radius, id_of_exclude) → list[Agent].
         self._neighbor_cache: dict[tuple[float, float, float, int], list[Agent]] = {}
@@ -2028,6 +2045,16 @@ class ABMModel:
             if macros
             else 0.5
         )
+
+        env = self._env_buffer
+        env["inflammation_level"] = float(self._inflammation_cache)
+        env["prp_active"] = self._therapy_active["prp"]
+        env["pemf_active"] = self._therapy_active["pemf"]
+        env["prp_boost"] = self._therapy_mods["prp_boost"]
+        env["pemf_boost"] = self._therapy_mods["pemf_boost"]
+        env["synergy"] = self._therapy_mods["synergy"]
+        env["pemf_polarization_shift"] = self._therapy_mods["pemf_polarization_shift"]
+
         self._update_agents(dt, cancel_callback=cancel_callback)
 
         # 2. Эффероцитоз (макрофаги фагоцитируют апоптотических нейтрофилов)
@@ -2380,59 +2407,62 @@ class ABMModel:
 
         Подробное описание: Description/description_abm_model.md#ABMModel._update_ecm_field
         """
-        # Производство ECM фибробластами
-        for agent in self._agents:
-            if cancel_callback is not None:
-                cancel_callback()
+        if cancel_callback is not None:
+            cancel_callback()
 
+        res = self._config.grid_resolution
+        gx, gy = self._grid_shape
+
+        ecm_xs: list[int] = []
+        ecm_ys: list[int] = []
+        ecm_vals: list[float] = []
+
+        for agent in self._agents:
             if not isinstance(agent, Fibroblast) or not agent.alive:
                 continue
 
-            grid_x = int(agent.x / self._config.grid_resolution) % self._grid_shape[0]
-            grid_y = int(agent.y / self._config.grid_resolution) % self._grid_shape[1]
+            ecm_xs.append(int(agent.x / res) % gx)
+            ecm_ys.append(int(agent.y / res) % gy)
+            ecm_vals.append(float(agent.produce_ecm(dt)))
 
-            ecm_produced = agent.produce_ecm(dt)
-            self._ecm_field[grid_x, grid_y] += ecm_produced
+        if ecm_vals:
+            np.add.at(
+                self._ecm_field,
+                (np.asarray(ecm_xs), np.asarray(ecm_ys)),
+                np.asarray(ecm_vals, dtype=self._ecm_field.dtype),
+            )
 
         # Ограничение значений
-        self._ecm_field = np.clip(self._ecm_field, 0.0, 100.0)
+        np.clip(self._ecm_field, 0.0, 100.0, out=self._ecm_field)
 
     def _get_environment(self, x: float, y: float) -> dict[str, Any]:
         """Получить параметры окружения в точке.
+
+        Возвращает переиспользуемый ``self._env_buffer``: глобальные поля
+        обновляются в ``step()`` раз на тик, координатные обновляются здесь.
+        Потребители читают значения через ``environment.get(...)``
+        и не хранят ссылку, поэтому реюз безопасен.
 
         Args:
             x: Координата X
             y: Координата Y
 
         Returns:
-            Словарь с параметрами окружения
+            Общий буфер параметров окружения для текущей точки
 
         Подробное описание: Description/description_abm_model.md#ABMModel._get_environment
         """
-        # Вычисление индексов сетки
         grid_x = int(x / self._config.grid_resolution) % self._grid_shape[0]
         grid_y = int(y / self._config.grid_resolution) % self._grid_shape[1]
 
-        # Получение значений из полей
-        cytokine_level = self._cytokine_field[grid_x, grid_y]
-        ecm_level = self._ecm_field[grid_x, grid_y]
+        cytokine_level = float(self._cytokine_field[grid_x, grid_y])
 
-        # Уровень воспаления берём из кэша (обновляется в step() один раз на шаг)
-        inflammation_level = self._inflammation_cache
-
-        return {
-            "cytokine_level": float(cytokine_level),
-            "ecm_level": float(ecm_level),
-            "inflammation_level": float(inflammation_level),
-            "prp_active": self._therapy_active["prp"],
-            "pemf_active": self._therapy_active["pemf"],
-            "prp_boost": self._therapy_mods["prp_boost"],
-            "pemf_boost": self._therapy_mods["pemf_boost"],
-            "synergy": self._therapy_mods["synergy"],
-            "pemf_polarization_shift": self._therapy_mods["pemf_polarization_shift"],
-            # PRP увеличивает VEGF; используем cytokine_level как прокси + PRP-добавка.
-            "vegf_level": float(cytokine_level) + 0.1 * self._therapy_mods["prp_boost"],
-        }
+        env = self._env_buffer
+        env["cytokine_level"] = cytokine_level
+        env["ecm_level"] = float(self._ecm_field[grid_x, grid_y])
+        # PRP увеличивает VEGF; используем cytokine_level как прокси + PRP-добавка.
+        env["vegf_level"] = cytokine_level + 0.1 * env["prp_boost"]
+        return env
 
     def _get_cytokine_gradient(self, x: float, y: float) -> tuple[float, float]:
         """Вычисление градиента цитокинового поля методом центральных разностей.
@@ -2689,11 +2719,18 @@ class ABMModel:
         """
         agent_states = [agent.get_state() for agent in self._agents if agent.alive]
 
+        if self._config.save_field_history:
+            cytokine_field = self._cytokine_field.copy()
+            ecm_field = self._ecm_field.copy()
+        else:
+            cytokine_field = self._cytokine_field
+            ecm_field = self._ecm_field
+
         return ABMSnapshot(
             t=self._current_time,
             agents=agent_states,
-            cytokine_field=self._cytokine_field.copy(),
-            ecm_field=self._ecm_field.copy(),
+            cytokine_field=cytokine_field,
+            ecm_field=ecm_field,
         )
 
     def _create_agent(

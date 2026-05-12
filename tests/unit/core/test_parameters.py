@@ -220,11 +220,18 @@ class TestParameterSetToDict:
         assert result["n_hill"] == 2
 
     def test_to_dict_all_values_numeric(self):
-        """Все значения в словаре — float или int."""
+        """Все значения в словаре — float, int, bool или str (v2.0: расширенные типы).
+
+        FIX-16 добавил булевы флаги (multirate_subcycling, ecm_deterministic),
+        FIX-24 — строковую интерпретацию ("Ito"). Остальные поля по-прежнему
+        численные.
+        """
         ps = ParameterSet()
         result = ps.to_dict()
         for key, value in result.items():
-            assert isinstance(value, (float, int)), f"Значение {key}={value} не float/int"
+            assert isinstance(value, (float, int, bool, str)), (
+                f"Значение {key}={value!r} имеет неожиданный тип {type(value).__name__}"
+            )
 
     def test_to_dict_matches_fields(self):
         """Каждое значение в словаре совпадает с полем dataclass."""

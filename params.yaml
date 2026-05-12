@@ -1,0 +1,314 @@
+# RegenTwin Parameters v2.0
+# Source of truth for all model parameters.
+# Generated from RegenTwin_Mathematical_Framework_v2.md
+#
+# CRITICAL: ALL cell densities are in cells/ml (NOT cells/mkl)
+# This is FIX-01 — see framework document changelog.
+#
+# Usage in Python:
+#   import yaml
+#   with open("params.yaml") as f:
+#       params = yaml.safe_load(f)
+#
+# Each parameter has:
+#   value:       numerical value
+#   units:       physical units
+#   source:      literature reference or "model_estimate"
+#   fix_tag:     traceability to changelog (FIX-XX or REF-XX), if applicable
+#   description: human-readable description
+
+units_convention:
+  cells: "cells/ml"
+  cytokines: "ng/ml"
+  time: "h"
+  ECM: "normalized_units"
+  noise_interpretation: "Ito"
+
+# ============================================================
+# 8.1 Cell parameters
+# ============================================================
+
+cells:
+  # Platelets [FIX-02]
+  P_max:         {value: 5.0e9,  units: "cells/ml",       source: "Nurden_2008"}
+  tau_P:         {value: 1.5,    units: "h",              source: "Nurden_2008"}
+  k_deg_P:       {value: 0.15,   units: "1/h",            source: "Blair_Flaumenhaft_2009", fix_tag: "FIX-02"}
+
+  # Neutrophils [FIX-25]
+  R_Ne_max:      {value: 5.0e5,  units: "cells/(ml·h)",   source: "Kolaczkowska_2013"}
+  K_IL8:         {value: 5.0,    units: "ng/ml",          source: "Lippert_1998"}
+  n_IL8:         {value: 1.0,    units: "dimensionless",  source: "Chuntharapai_1995", fix_tag: "FIX-25"}
+  delta_Ne:      {value: 0.05,   units: "1/h",            source: "Kolaczkowska_2013"}
+  k_phag:        {value: 0.1,    units: "1/h",            source: "Serhan_Savill_2005"}
+  K_phag:        {value: 5.0e4,  units: "cells/ml",       source: "model_estimate"}
+
+  # Macrophages M1/M2 [FIX-21]
+  R_M_max:       {value: 1.0e5,  units: "cells/(ml·h)",   source: "Deshmane_2009"}
+  K_MCP1:        {value: 2.0,    units: "ng/ml",          source: "Deshmane_2009"}
+  k_switch:      {value: 0.02,   units: "1/h",            source: "Mantovani_2004"}
+  K_switch:      {value: 5.0,    units: "ng/ml",          source: "model_estimate"}
+  k_reverse:     {value: 0.005,  units: "1/h",            source: "Sindrilaru_2011"}
+  K_reverse:     {value: 20.0,   units: "ng/ml",          source: "model_estimate"}
+  delta_M:       {value: 0.01,   units: "1/h",            source: "Murray_2017"}
+  phi_baseline:  {value: 0.1,    units: "ng/ml",          source: "model_parameter", fix_tag: "FIX-21"}
+
+  # Fibroblasts [FIX-04, FIX-22]
+  r_F:                  {value: 0.03,    units: "1/h",                source: "Cumming_2010", fix_tag: "REF-05"}
+  K_F:                  {value: 5.0e8,   units: "cells/ml",           source: "model_estimate"}
+  K_PDGF_prolif:        {value: 2.0,     units: "ng/ml",              source: "Heldin_Westermark_1999"}
+  K_TGFb_prolif_low:    {value: 0.5,     units: "ng/ml",              source: "Battegay_1990"}
+  K_TGFb_prolif_high:   {value: 5.0,     units: "ng/ml",              source: "Battegay_1990"}
+  alpha_TGF:            {value: 0.5,     units: "dimensionless",      source: "Heldin_Westermark_1999"}
+  K_activ:              {value: 3.0,     units: "ng/ml",              source: "Hinz_2007"}
+  k_act:                {value: 0.01,    units: "1/h",                source: "Hinz_2007"}
+  k_diff_S:             {value: 0.005,   units: "1/h",                source: "Badiavas_2003"}
+  K_diff:               {value: 1.0,     units: "ng/ml",              source: "model_estimate"}
+  delta_F:              {value: 0.003,   units: "1/h",                source: "Hinz_2007"}
+  J_F_migration:        {value: 50.0,    units: "cells/(ml·h)",       source: "model_estimate", fix_tag: "FIX-22"}
+  K_chi:                {value: 1.0,     units: "ng/ml",              source: "Heldin_1999"}
+
+  # Myofibroblasts [FIX-03] CRITICAL
+  delta_Mf:      {value: 0.005,  units: "1/h",            source: "Hinz_2016"}
+  delta_floor:   {value: 0.1,    units: "dimensionless",  source: "model_parameter", fix_tag: "FIX-03"}
+  K_survival:    {value: 1.0,    units: "ng/ml",          source: "Hinz_2016"}
+
+  # Endothelial cells [FIX-05]
+  r_E:           {value: 0.02,   units: "1/h",            source: "Levine_2001", fix_tag: "REF-06"}
+  K_E:           {value: 5.0e7,  units: "cells/ml",       source: "model_estimate"}
+  K_VEGF:        {value: 1.0,    units: "ng/ml",          source: "Ferrara_2004"}
+  delta_E:       {value: 0.005,  units: "1/h",            source: "model_estimate"}
+  J_sprouting:   {value: 1.0,    units: "cells/(ml·h)",   source: "model_estimate", fix_tag: "FIX-05"}
+  K_xi:          {value: 0.5,    units: "ng/ml",          source: "Anderson_Chaplain_1998"}
+
+  # Stem cells [FIX-06]
+  r_S:               {value: 0.01,    units: "1/h",            source: "Badiavas_2003"}
+  K_S:               {value: 1.0e6,   units: "cells/ml",       source: "model_estimate"}
+  delta_S:           {value: 0.005,   units: "1/h",            source: "model_estimate"}
+  J_homing:          {value: 5.0,     units: "cells/(ml·h)",   source: "Janowska_Wieczorek_2001", fix_tag: "FIX-06"}
+  K_SDF1:            {value: 1.0,     units: "ng/ml",          source: "Ceradini_2004"}
+  alpha_PRP_homing:  {value: 2.0,     units: "dimensionless",  source: "Ranzato_2009"}
+
+# ============================================================
+# 8.2 Cytokine parameters [FIX-19]
+# ============================================================
+# CRITICAL: s_X parameters calibrated for cells in cells/ml.
+# At typical M1=1e6 cells/ml, these give physiological cytokine levels (1-20 ng/ml).
+
+cytokines:
+  # TNF-alpha [FIX-07]
+  s_TNF_M1:      {value: 5.0e-6,  units: "ng/(cells·h)", source: "Beutler_1985_calibrated"}
+  s_TNF_Ne:      {value: 2.0e-6,  units: "ng/(cells·h)", source: "Bradley_2008"}
+  gamma_TNF:     {value: 0.5,     units: "1/h",          source: "Bradley_2008"}
+  K_inhib:       {value: 1.0,     units: "ng/ml",        source: "Mosser_Zhang_2008"}
+  n_inhib:       {value: 1.5,     units: "dimensionless",source: "model_estimate", fix_tag: "FIX-07"}
+
+  # IL-10
+  s_IL10_M2:              {value: 4.0e-6, units: "ng/(cells·h)", source: "Mosser_2008"}
+  s_IL10_efferocytosis:   {value: 1.0e-5, units: "ng/(cells·h)", source: "Fadok_1998"}
+  gamma_IL10:             {value: 0.3,    units: "1/h",          source: "Mosser_2008"}
+
+  # PDGF
+  s_PDGF_P:      {value: 1.0e-5,  units: "ng/cell",      source: "Marx_2004"}
+  s_PDGF_M:      {value: 1.0e-6,  units: "ng/(cells·h)", source: "Heldin_1999"}
+  gamma_PDGF:    {value: 0.2,     units: "1/h",          source: "Heldin_1999"}
+  k_bind_F:      {value: 0.001,   units: "1/h",          source: "Heldin_1999"}
+  K_PDGF_bind:   {value: 0.1,     units: "ng/ml",        source: "Heldin_1999"}
+
+  # VEGF
+  s_VEGF_M2:     {value: 3.0e-6,  units: "ng/(cells·h)", source: "Ferrara_2003,Nucera_2011", fix_tag: "REF-02"}
+  s_VEGF_F:      {value: 1.0e-6,  units: "ng/(cells·h)", source: "Ferrara_2003"}
+  alpha_hypoxia: {value: 3.0,     units: "dimensionless",source: "Ferrara_2004"}
+  gamma_VEGF:    {value: 0.3,     units: "1/h",          source: "Ferrara_2004"}
+  k_bind_E:      {value: 0.01,    units: "1/h",          source: "Ferrara_2003"}
+  K_VEGF_bind:   {value: 0.5,     units: "ng/ml",        source: "Ferrara_2003"}
+
+  # TGF-beta [FIX-08]
+  s_TGF_P:       {value: 2.0e-5,  units: "ng/cell",      source: "Marx_2004"}
+  s_TGF_M2:      {value: 2.0e-6,  units: "ng/(cells·h)", source: "Leask_Abraham_2004"}
+  s_TGF_Mf:      {value: 5.0e-6,  units: "ng/(cells·h)", source: "Leask_2004"}
+  gamma_TGF:     {value: 0.15,    units: "1/h",          source: "Leask_2004"}
+  k_bind_TGF:    {value: 0.001,   units: "1/h",          source: "Hinz_2007", fix_tag: "FIX-08"}
+  K_TGF_bind:    {value: 0.5,     units: "ng/ml",        source: "Hinz_2007"}
+
+  # MCP-1
+  s_MCP1_damage: {value: 0.1,     units: "ng/(ml·h·D)",  source: "Deshmane_2009"}
+  s_MCP1_M1:     {value: 5.0e-6,  units: "ng/(cells·h)", source: "Deshmane_2009"}
+  gamma_MCP1:    {value: 0.4,     units: "1/h",          source: "Deshmane_2009"}
+
+  # IL-8
+  s_IL8_damage:  {value: 0.2,     units: "ng/(ml·h·D)",  source: "Kolaczkowska_2013"}
+  s_IL8_M1:      {value: 5.0e-6,  units: "ng/(cells·h)", source: "Kolaczkowska_2013"}
+  s_IL8_Ne:      {value: 1.0e-6,  units: "ng/(cells·h)", source: "Kolaczkowska_2013"}
+  gamma_IL8:     {value: 0.5,     units: "1/h",          source: "Kolaczkowska_2013"}
+
+  # SDF-1 [NEW EQUATION - FIX-06]
+  s_SDF1_F:        {value: 5.0e-7, units: "ng/(cells·h)",   source: "Ceradini_2004"}
+  s_SDF1_E:        {value: 2.0e-6, units: "ng/(cells·h)",   source: "Ceradini_2004"}
+  alpha_hypoxia_SDF: {value: 5.0,  units: "dimensionless",  source: "Ceradini_2004"}
+  gamma_SDF1:      {value: 0.2,    units: "1/h",            source: "Ceradini_2004"}
+
+# ============================================================
+# 8.3 ECM parameters [FIX-09, FIX-10]
+# ============================================================
+
+ecm:
+  # Collagen
+  q_F:           {value: 5.0e-9,  units: "unit/(cells·h)", source: "Cumming_2010"}
+  q_Mf:          {value: 1.5e-8,  units: "unit/(cells·h)", source: "Desmoulière_1995"}
+  rho_c_max:     {value: 1.0,     units: "unit",           source: "model_estimate"}
+  k_MMP:         {value: 0.02,    units: "1/h",            source: "Gill_2008"}
+  K_MMP_sub:     {value: 0.5,     units: "unit",           source: "Vempati_2010", fix_tag: "REF-01"}
+
+  # MMP
+  s_MMP_M1:      {value: 1.0e-8,  units: "unit/(cells·h)", source: "Gill_2008"}
+  s_MMP_M2:      {value: 5.0e-9,  units: "unit/(cells·h)", source: "Gill_2008"}
+  alpha_MMP_M2:  {value: 0.5,     units: "dimensionless",  source: "Gill_2008"}
+  s_MMP_F:       {value: 5.0e-9,  units: "unit/(cells·h)", source: "Gill_2008"}
+  k_TIMP:        {value: 0.5,     units: "1/(unit·h)",     source: "Gill_2008"}
+  gamma_MMP:     {value: 0.1,     units: "1/h",            source: "Gill_2008"}
+
+  # TIMP [NEW EQUATION - FIX-09]
+  s_TIMP_F:      {value: 2.0e-9,  units: "unit/(cells·h)", source: "Hall_2003", fix_tag: "FIX-09"}
+  s_TIMP_M2:     {value: 1.0e-9,  units: "unit/(cells·h)", source: "Hall_2003"}
+  alpha_TGF_TIMP: {value: 3.0,    units: "dimensionless",  source: "Hall_2003"}
+  K_TIMP:        {value: 1.0,     units: "ng/ml",          source: "Hall_2003"}
+  gamma_TIMP:    {value: 0.05,    units: "1/h",            source: "Gill_2008"}
+
+  # Fibrin [FIX-10]
+  k_fibrinolysis: {value: 0.05,   units: "1/(unit·h)",     source: "Cesarman-Maus_2005", fix_tag: "FIX-10"}
+  k_remodel:     {value: 1.0e-9,  units: "1/(cells·h)",    source: "Clark_2001"}
+  rho_f_initial: {value: 1.0,     units: "unit",           source: "model_estimate"}
+
+# ============================================================
+# 8.4 PRP, PEMF, auxiliary parameters
+# ============================================================
+
+prp:
+  D_PRP:         {value: 1.0,     units: "ml",  source: "Marx_2004"}
+  V_wound:       {value: 5.0,     units: "ml",  source: "model_estimate", fix_tag: "FIX-12"}
+
+  # PRP factor concentrations and kinetics
+  factors:
+    PDGF_AB:  {phi: 22.5, units: "ng/ml", tau_burst: 1.0, tau_sustained: 48.0, source: "Marx_2004"}
+    TGFb1:    {phi: 30.0, units: "ng/ml", tau_burst: 2.0, tau_sustained: 72.0, source: "Eppley_2006"}
+    VEGF:     {phi: 1.0,  units: "ng/ml", tau_burst: 1.0, tau_sustained: 24.0, source: "Everts_2006"}
+    EGF:      {phi: 0.2,  units: "ng/ml", tau_burst: 0.5, tau_sustained: 12.0, source: "Anitua_2004"}
+    SDF1:     {phi: 0.06, units: "ng/ml", tau_burst: 2.0, tau_sustained: 48.0, source: "Schar_2015"}
+
+pemf:  # [FIX-13]
+  # Low-frequency window (5-100 Hz, Ca2+/CaM/NO pathway)
+  f_LF:          {value: 75.0,    units: "Hz",   source: "Pilla_2013"}
+  sigma_LF:      {value: 30.0,    units: "Hz",   source: "Pilla_2013"}
+
+  # Radio-frequency window (~27.12 MHz, A2A adenosine pathway)
+  f_RF:          {value: 2.712e7, units: "Hz",   source: "Pilla_2013"}
+  sigma_RF_log:  {value: 0.3,     units: "log10(Hz)", source: "Pilla_2013"}
+
+  epsilon_LF_max: {value: 0.5,    units: "dimensionless", source: "Varani_2017"}
+  epsilon_RF_max: {value: 0.4,    units: "dimensionless", source: "Varani_2017"}
+  B_half:         {value: 0.5,    units: "mT",   source: "Pilla_2013"}
+  B_0:            {value: 0.1,    units: "mT",   source: "Pilla_2013"}
+
+  # Synergy [FIX-14]
+  beta_synergy:   {value: 1.5,    units: "dimensionless", source: "Wang_2024"}
+  Theta_PRP_ref:  {value: 1.0,    units: "ng/(ml·h)",      source: "model_normalization"}
+
+damage:
+  D_0:           {value: 1.0,     units: "normalized", source: "model_estimate"}
+  tau_damage:    {value: 36.0,    units: "h",          source: "Bianchi_2007"}
+
+oxygen:  # [FIX-11]
+  D_O2:          {value: 2.0e-5,  units: "cm²/s",   source: "Goldman_2008"}
+  L_0:           {value: 100.0,   units: "µm",      source: "Goldman_2008"}
+  alpha_E:       {value: 1.0,     units: "dimensionless", source: "model_estimate", fix_tag: "FIX-11"}
+  O2_blood:      {value: 95.0,    units: "mmHg",    source: "standard"}
+  K_O2:          {value: 5.0,     units: "mmHg",    source: "standard"}
+  K_O2_consume:  {value: 1.0,     units: "mmHg",    source: "Wagner_1996"}
+  k_consumption: {value: 1.0e-9,  units: "1/(cells·h)", source: "Wagner_1996"}
+
+  # Cell metabolic weights
+  weights:
+    w_Ne: 100
+    w_M:  10
+    w_F:  1
+    w_E:  5
+    w_S:  0.5
+
+# ============================================================
+# 8.5 Noise amplitudes [FIX-20]
+# ============================================================
+# CRITICAL: Without sigma values the SDE framework reduces to ODE.
+
+noise:
+  # Cell populations: ~10% relative noise
+  sigma_P:    0.1
+  sigma_Ne:   0.1
+  sigma_M1:   0.1
+  sigma_M2:   0.1
+  sigma_F:    0.1
+  sigma_Mf:   0.1
+  sigma_E:    0.1
+  sigma_S:    0.1
+
+  # Cytokines: ~20% relative noise (faster timescales)
+  sigma_TNF:   0.2
+  sigma_IL10:  0.2
+  sigma_PDGF:  0.2
+  sigma_VEGF:  0.2
+  sigma_TGF:   0.2
+  sigma_MCP1:  0.2
+  sigma_IL8:   0.2
+  sigma_SDF1:  0.2
+
+  # ECM: deterministic (no noise) — explicit modeling choice
+  ecm_deterministic: true
+
+# ============================================================
+# 8.6 Initial conditions
+# ============================================================
+
+initial_conditions:
+  P:   0          # Platelets mobilized via S_P(t)
+  Ne:  100        # Resident neutrophils
+  M1:  1.0e4      # Resident macrophages (predominantly M1 at injury)
+  M2:  5.0e3      # Resident M2 (low baseline)
+  F:   5.0e5      # Resident dermal fibroblasts
+  Mf:  0          # Appear later via activation
+  E:   5.0e5      # Capillaries at wound periphery
+  S:   1.0e3      # Low baseline CD34+
+
+  C_TNF:    0.01
+  C_IL10:   0.01
+  C_PDGF:   0.01
+  C_VEGF:   0.01
+  C_TGFb:   0.01
+  C_MCP1:   0.01
+  C_IL8:    0.01
+  C_SDF1:   0.01
+
+  rho_collagen: 0
+  C_MMP:        0.01
+  C_TIMP:       0.01
+  rho_fibrin:   1.0
+
+  D:   1.0     # Maximum damage signal
+  O2:  30.0    # Hypoxia in wound
+
+# ============================================================
+# Numerical scheme parameters [FIX-16]
+# ============================================================
+
+numerics:
+  scheme: "Euler-Maruyama"   # or "Milstein" for higher order
+  interpretation: "Ito"       # FIX-24
+  dt_fast: 0.02               # h, for cytokines (fast)
+  dt_slow: 1.0                # h, for cells (slow)
+  multirate_subcycling: true  # FIX-16
+  X_min: 1.0e-10              # Floor to prevent negative values
+
+  # For convergence tests
+  benchmark_GBM:
+    mu: 0.05
+    sigma: 0.2
+    X_0: 1.0
+    T_final: 10.0

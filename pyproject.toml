@@ -1,6 +1,6 @@
 [project]
 name = "regentwin"
-version = "0.1.6"
+version = "0.2.0"
 description = "Программный инструмент для симуляции регенерации тканей с использованием данных flow cytometry и моделирования терапий PRP/PEMF"
 readme = "README.md"
 license = { text = "MIT" }
@@ -70,6 +70,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pydantic-settings>=2.0.0",
     "aiofiles>=23.0.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

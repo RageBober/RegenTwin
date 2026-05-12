@@ -1,7 +1,17 @@
 export type SimulationMode = 'mvp' | 'extended' | 'abm' | 'integrated';
 export type SimulationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 export type ExportFormat = 'csv' | 'png' | 'svg' | 'pdf';
-export type AnalysisType = 'sensitivity' | 'estimation';
+export type AnalysisType = 'sensitivity' | 'estimation' | 'validation';
+export type MethodKind =
+  | 'sensitivity'
+  | 'sobol'
+  | 'morris'
+  | 'estimation'
+  | 'mcmc'
+  | 'optimization'
+  | 'validation'
+  | 'nSamples'
+  | 'targetVariable';
 
 export interface SimulationRequest {
   mode: SimulationMode;
@@ -357,4 +367,27 @@ export interface ParameterBoundItem {
 export interface ParameterBoundsResponse {
   bounds: ParameterBoundItem[];
   total: number;
+}
+
+// --- Validation ---
+
+export type ValidationDatasetId =
+  | 'literature-xue2009'
+  | 'literature-flegg2010'
+  | 'HPA-skin-baseline'
+  | 'GSE28914';
+
+export interface ValidationRequest {
+  dataset_id: ValidationDatasetId;
+  t_max: number;
+  dt: number;
+}
+
+export interface ValidationResponse {
+  dataset_id: string;
+  overall_score: number;
+  elapsed_seconds: number;
+  initial_conditions: Record<string, number>;
+  errors: string[];
+  validation?: Record<string, unknown> | null;
 }

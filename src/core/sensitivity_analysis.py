@@ -528,7 +528,8 @@ class SensitivityAnalyzer:
         t_start = time.time()
 
         param_names = [b.name for b in self.config.parameter_bounds]
-        base_dict = self.params.to_dict()
+        # v2.0: только численные поля; bool/str-поля для sensitivity не имеют смысла.
+        base_dict = self.params.to_numeric_dict()
         nominal_dict: dict[str, float] = {}
         for b in self.config.parameter_bounds:
             nominal_dict[b.name] = b.nominal if b.nominal is not None else float(base_dict[b.name])
@@ -687,9 +688,10 @@ class SensitivityAnalyzer:
             Description/Phase3/description_sensitivity_analysis.md#_auto_bounds
         """
         bounds: list[ParameterBounds] = []
-        param_dict = self.params.to_dict()
+        # v2.0: исключаем bool/str поля — для них bounds не имеют смысла.
+        param_dict = self.params.to_numeric_dict()
         for name, value in param_dict.items():
-            if isinstance(value, (int, float)) and value > 0:
+            if value > 0:
                 bounds.append(
                     ParameterBounds(
                         name=name,
@@ -956,10 +958,11 @@ def run_sensitivity_analysis(
     if config is None:
         bounds: list[ParameterBounds] = []
         if parameter_names:
-            param_dict = params.to_dict()
+            # v2.0: numeric_dict исключает bool/str (multirate_subcycling и др.)
+            param_dict = params.to_numeric_dict()
             for name in parameter_names:
                 val = param_dict.get(name)
-                if val is not None and isinstance(val, (int, float)) and val > 0:
+                if val is not None and val > 0:
                     bounds.append(
                         ParameterBounds(
                             name=name,

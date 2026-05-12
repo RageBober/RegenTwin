@@ -53,6 +53,9 @@ SAMPLE_BOUNDS = [
 ]
 DEFAULT_R_F = 0.03
 NUM_PARAMETER_SET_FIELDS = len(dataclasses.fields(ParameterSet))
+# v2.0: auto_bounds генерирует bounds только для положительных численных полей,
+# пропуская bool/str (multirate_subcycling, ecm_deterministic, interpretation) и нулевые.
+NUM_AUTO_BOUNDABLE_FIELDS = sum(1 for v in ParameterSet().to_numeric_dict().values() if v > 0)
 
 
 # =============================================================================
@@ -507,12 +510,12 @@ class TestSensitivityAnalyzerInit:
     ) -> None:
         """Тест что пустые bounds автоматически генерируются из ParameterSet.
 
-        ParameterSet содержит NUM_PARAMETER_SET_FIELDS полей, все положительные числа.
-        auto_bounds должен сгенерировать bounds для каждого.
+        v2.0: auto_bounds покрывает только положительные численные поля, пропуская
+        bool/str (multirate_subcycling, ecm_deterministic, interpretation).
         """
         config = SensitivityConfig(parameter_bounds=[])
         analyzer = SensitivityAnalyzer(mock_sde_model, base_params, config)
-        assert len(analyzer.config.parameter_bounds) == NUM_PARAMETER_SET_FIELDS
+        assert len(analyzer.config.parameter_bounds) == NUM_AUTO_BOUNDABLE_FIELDS
 
     def test_invalid_config_raises_valueerror(
         self,
@@ -729,10 +732,13 @@ class TestSensitivityAnalyzerAutoBounds:
         mock_sde_model: MagicMock,
         base_params: ParameterSet,
     ) -> None:
-        """Тест что auto_bounds генерирует bounds для всех полей ParameterSet."""
+        """Тест что auto_bounds генерирует bounds для всех положительных численных полей.
+
+        v2.0: bool/str-поля и нулевые исключаются (NUM_AUTO_BOUNDABLE_FIELDS).
+        """
         config = SensitivityConfig(parameter_bounds=[])
         analyzer = SensitivityAnalyzer(mock_sde_model, base_params, config)
-        assert len(analyzer.config.parameter_bounds) == NUM_PARAMETER_SET_FIELDS
+        assert len(analyzer.config.parameter_bounds) == NUM_AUTO_BOUNDABLE_FIELDS
 
     def test_bounds_are_50pct_to_200pct(
         self,

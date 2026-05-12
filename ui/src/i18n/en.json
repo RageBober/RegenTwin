@@ -138,8 +138,11 @@
   },
   "analysis": {
     "title": "Analysis",
+    "loadedSimulation": "Loaded simulation {{id}}",
+    "loadedSimulationHint": "Parameters were loaded from a completed simulation. You can now run sensitivity analysis on this configuration.",
+    "resetSimulation": "Reset",
     "sensitivity": {
-      "title": "Sensitivity Analysis",
+      "title": "Sensitivity",
       "method": "Method",
       "parameters": "Parameters",
       "nSamples": "Number of samples",
@@ -147,15 +150,132 @@
       "results": "Results",
       "s1": "First-order index (S1)",
       "st": "Total index (ST)",
-      "hint": "Sensitivity analysis uses the current simulation configuration as a forward model — no data upload is required."
+      "hint": "Sensitivity analysis uses the current simulation configuration as a forward model — no data upload is required.",
+      "intro": "Which model parameters most affect the result? The method runs the simulation N times, varying selected coefficients, and quantifies each contribution."
     },
     "estimation": {
       "title": "Parameter Estimation",
       "method": "Method",
       "targetVariable": "Target variable",
+      "nSamples": "Number of samples",
       "run": "Run Estimation",
       "needUpload": "Upload a time-series CSV to run parameter estimation.",
-      "dataFormatHint": "Requires a CSV with a `time` column (hours) and a target variable column (e.g. F, Ne, M1). FCS files contain a single snapshot and are only usable as initial conditions for simulation."
+      "dataFormatHint": "Requires a CSV with a `time` column (hours) and a target variable column (e.g. F, Ne, M1). FCS files contain a single snapshot and are only usable as initial conditions for simulation.",
+      "intro": "Fits model parameters to your experimental data. Returns point estimates and confidence intervals for each coefficient.",
+      "pointEstimates": "Point Estimates"
+    },
+    "validation": {
+      "title": "Validation",
+      "intro": "Compares model behavior against reference datasets from the literature. Helps confirm that the current parameterization reproduces known experiments.",
+      "dataset": "Reference dataset",
+      "tMax": "Duration (hours)",
+      "dt": "Time step (dt)",
+      "run": "Run Validation",
+      "results": "Validation Result",
+      "overallScore": "Overall score",
+      "elapsed": "Elapsed",
+      "initialConditions": "Initial conditions from dataset",
+      "errors": "Errors",
+      "metrics": "Quality metrics",
+      "noResult": "Run validation to see the result.",
+      "scoreHigh": "Good fit",
+      "scoreMid": "Moderate fit",
+      "scoreLow": "Weak fit"
+    },
+    "methods": {
+      "infoLabel": "Method details",
+      "close": "Close",
+      "sensitivity": {
+        "title": "What is sensitivity analysis",
+        "body": "Global analysis estimates how strongly the model output (e.g. final fibroblast count) depends on each parameter. High sensitivity = the parameter is critical and must be measured precisely. Low = the model is robust to it."
+      },
+      "sobol": {
+        "title": "Sobol method",
+        "body": "Variance-based: decomposes output variance into per-parameter contributions. Returns S1 (the parameter alone) and ST (full contribution including interactions). Accurate but expensive: typically n_samples >= 256 for <=10 parameters."
+      },
+      "morris": {
+        "title": "Morris (Elementary Effects)",
+        "body": "Screening method: quickly filters out non-influential parameters. mu* — mean effect magnitude, sigma — nonlinearity/interactions. Suitable for initial screening of 20+ parameters at n_samples = 64-128."
+      },
+      "estimation": {
+        "title": "What is parameter estimation",
+        "body": "Inverse problem: given a time series of observations, find model parameters that produce the trajectory closest to the data. Returns point estimates and confidence intervals."
+      },
+      "mcmc": {
+        "title": "MCMC (Markov Chain Monte Carlo)",
+        "body": "Bayesian sampling of the parameter posterior. Provides full uncertainty (posterior + convergence diagnostics R-hat, ESS). Slow — n_samples 500-2000."
+      },
+      "optimization": {
+        "title": "Optimization (MLE)",
+        "body": "Maximum Likelihood: finds parameters that maximize likelihood. Fast, but yields only point estimates and approximate CIs. Use when speed matters."
+      },
+      "validation": {
+        "title": "What is validation",
+        "body": "Runs the model on 4 reference scenarios from the literature and compares results to published data. Returns an aggregated score (0-1, higher is better) and error metrics. This is calibration verification, not optimization."
+      },
+      "nSamples": {
+        "title": "Number of samples (n_samples)",
+        "body": "Sobol: 256-1024 (grows fast). Morris: 64-256. MCMC: 500-2000 per chain. More = more accurate but slower."
+      },
+      "targetVariable": {
+        "title": "Target variable",
+        "body": "Which model variable to fit to your data. F — fibroblasts, Ne — neutrophils, M1/M2 — macrophages, P — platelets, E — endothelium."
+      }
+    },
+    "datasets": {
+      "literature-xue2009": {
+        "name": "Xue 2009",
+        "desc": "Fibroblast dynamics in a rat wound model (3-21 days). Classical benchmark."
+      },
+      "literature-flegg2010": {
+        "name": "Flegg 2010",
+        "desc": "Macrophage-angiogenesis interaction in hypoxic wounds. PDE model."
+      },
+      "HPA-skin-baseline": {
+        "name": "HPA Skin Baseline",
+        "desc": "Reference cellular concentrations in human skin (Human Protein Atlas). Starting point."
+      },
+      "GSE28914": {
+        "name": "GSE28914",
+        "desc": "Bulk RNA-seq of chronic diabetic wounds. Cytokine expression profile."
+      }
+    },
+    "parameters": {
+      "groups": {
+        "proliferation": "Proliferation",
+        "death": "Cell death",
+        "switching": "Switching/activation",
+        "capacity": "Carrying capacity",
+        "platelets": "Platelets",
+        "recruitment": "Recruitment",
+        "phagocytosis": "Phagocytosis",
+        "stem_cells": "Stem cells",
+        "fibroblasts": "Fibroblasts",
+        "myofibroblasts": "Myofibroblasts",
+        "angiogenesis": "Angiogenesis",
+        "prp": "PRP",
+        "macrophage_switching": "Macrophage polarization",
+        "cytokine_degradation": "Cytokine degradation",
+        "cytokine_secretion": "Cytokine secretion",
+        "inhibition": "Inhibition",
+        "ecm": "ECM (collagen, MMPs)",
+        "noise": "Stochastic noise",
+        "damage": "Damage",
+        "oxygen": "Oxygen",
+        "other": "Other"
+      },
+      "actions": {
+        "selectVisible": "Select visible",
+        "clearAll": "Clear",
+        "presets": "Presets",
+        "presetCytokines": "All cytokines",
+        "presetEcm": "ECM only",
+        "presetDefault": "Reset to default",
+        "search": "Search parameter…",
+        "selectGroup": "Select whole group",
+        "noParameters": "No parameters selected",
+        "selectAtLeastOne": "Select at least one parameter to run"
+      }
     }
   },
   "history": {
@@ -169,6 +289,7 @@
       "actions": "Actions"
     },
     "view": "View",
+    "analyze": "Analyze",
     "filterByStatus": "Filter by status",
     "all": "All",
     "clearAll": "Clear history",

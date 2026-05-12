@@ -6,6 +6,7 @@ import { useRunEstimation, useAnalysisStatus, usePosteriorViz, useConvergenceViz
 import { useSimulationStore } from '../../stores/simulationStore';
 import type { EstimationResult } from '../../types/api';
 import UploadFCS from '../Upload/UploadFCS';
+import MethodInfo from './MethodInfo';
 
 const TARGET_VARIABLES = ['F', 'Ne', 'M1', 'M2', 'P', 'E'] as const;
 const METHODS = ['mcmc', 'optimization'] as const;
@@ -57,10 +58,24 @@ export default function EstimationView() {
 
   return (
     <div className="space-y-5">
-      {/* Data format hint */}
-      <p className="text-xs text-primary-500/60 dark:text-primary-400/50">
-        {t('analysis.estimation.dataFormatHint')}
-      </p>
+      {/* Intro card */}
+      <div className="card p-4 border-primary-500/15 bg-primary-500/5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wider
+                           text-primary-700 dark:text-primary-300 mb-1.5">
+              {t('analysis.estimation.title')}
+            </h3>
+            <p className="text-xs leading-relaxed text-primary-700/80 dark:text-primary-300/70">
+              {t('analysis.estimation.intro')}
+            </p>
+          </div>
+          <MethodInfo kind="estimation" />
+        </div>
+        <p className="mt-2 text-2xs text-primary-500/60 dark:text-primary-400/50">
+          {t('analysis.estimation.dataFormatHint')}
+        </p>
+      </div>
 
       {/* No upload: inline upload widget */}
       {!uploadId && (
@@ -75,10 +90,13 @@ export default function EstimationView() {
       {/* Config */}
       <div className="grid grid-cols-3 gap-3">
         <div className="card p-4">
-          <label className="block text-xs font-semibold uppercase tracking-wider
-                           text-primary-500/60 dark:text-primary-400/50 mb-2">
-            {t('analysis.estimation.method')}
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold uppercase tracking-wider
+                              text-primary-500/60 dark:text-primary-400/50">
+              {t('analysis.estimation.method')}
+            </label>
+            <MethodInfo kind={method} />
+          </div>
           <select
             value={method}
             onChange={(e) => setMethod(e.target.value as typeof method)}
@@ -93,10 +111,13 @@ export default function EstimationView() {
         </div>
 
         <div className="card p-4">
-          <label className="block text-xs font-semibold uppercase tracking-wider
-                           text-primary-500/60 dark:text-primary-400/50 mb-2">
-            {t('analysis.estimation.targetVariable')}
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold uppercase tracking-wider
+                              text-primary-500/60 dark:text-primary-400/50">
+              {t('analysis.estimation.targetVariable')}
+            </label>
+            <MethodInfo kind="targetVariable" />
+          </div>
           <select
             value={targetVariable}
             onChange={(e) => setTargetVariable(e.target.value)}
@@ -111,10 +132,13 @@ export default function EstimationView() {
         </div>
 
         <div className="card p-4">
-          <label className="block text-xs font-semibold uppercase tracking-wider
-                           text-primary-500/60 dark:text-primary-400/50 mb-2">
-            {t('analysis.sensitivity.nSamples')}
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold uppercase tracking-wider
+                              text-primary-500/60 dark:text-primary-400/50">
+              {t('analysis.estimation.nSamples')}
+            </label>
+            <MethodInfo kind="nSamples" />
+          </div>
           <input
             type="number"
             value={nSamples}
@@ -179,7 +203,7 @@ export default function EstimationView() {
           <div className="card p-4">
             <h3 className="text-xs font-semibold uppercase tracking-wider
                           text-primary-500/60 dark:text-primary-400/50 mb-3">
-              {t('analysis.estimation.pointEstimates', 'Point Estimates')}
+              {t('analysis.estimation.pointEstimates')}
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-xs font-mono">

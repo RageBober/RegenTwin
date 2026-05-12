@@ -1,46 +1,54 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import Plot from 'react-plotly.js';
-import { useAnalysisStatus, useCancelAnalysis, useParameterBounds, useRunSensitivity, useSobolViz, useMorrisViz } from '../../hooks/useAnalysis';
+import {
+  useAnalysisStatus,
+  useCancelAnalysis,
+  useRunSensitivity,
+  useSobolViz,
+  useMorrisViz,
+} from '../../hooks/useAnalysis';
 import { useSimulationStore } from '../../stores/simulationStore';
-import type { SensitivityResult } from '../../types/api';
+import { useSimulationMeta } from '../../hooks/useResults';
+import { DEFAULT_SIMULATION_PARAMS } from '../../types/api';
+import type { SensitivityResult, SimulationRequest } from '../../types/api';
+import MethodInfo from './MethodInfo';
+import ParameterPicker from './ParameterPicker';
 
-export default function SensitivityView() {
+interface Props {
+  prefilledSimulationId?: string;
+}
+
+export default function SensitivityView({ prefilledSimulationId }: Props) {
   const { t } = useTranslation();
-  const simulationParams = useSimulationStore((s) => s.params);
+  const globalParams = useSimulationStore((s) => s.params);
   const [method, setMethod] = useState<'sobol' | 'morris'>('sobol');
   const [nSamples, setNSamples] = useState(256);
   const [selectedParams, setSelectedParams] = useState<string[]>([]);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
 
-  const { data: boundsData, isLoading: boundsLoading } = useParameterBounds();
+  // Локальный snapshot параметров: либо из готовой симуляции, либо из глобального стора
+  const [localParams, setLocalParams] = useState<SimulationRequest>(globalParams);
+  const { data: simMeta } = useSimulationMeta(prefilledSimulationId);
+
+  useEffect(() => {
+    if (prefilledSimulationId && simMeta?.params_json) {
+      setLocalParams(simMeta.params_json);
+    } else if (!prefilledSimulationId) {
+      setLocalParams(globalParams);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- следим за источником данных, не за самим объектом
+  }, [prefilledSimulationId, simMeta?.params_json]);
+
   const runMutation = useRunSensitivity();
   const cancelMutation = useCancelAnalysis();
   const { data: analysisData } = useAnalysisStatus(analysisId);
 
-  const availableParams = useMemo(
-    () => boundsData?.bounds.map((b) => b.name) ?? [],
-    [boundsData],
-  );
-  const filteredParams = useMemo(
-    () => availableParams.filter((param) => param.toLowerCase().includes(search.trim().toLowerCase())),
-    [availableParams, search],
-  );
-
-  // Дефолтный выбор первых 4 параметров при загрузке
-  useEffect(() => {
-    if (availableParams.length > 0 && selectedParams.length === 0) {
-      setSelectedParams(availableParams.slice(0, 4));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- инициализация только при первой загрузке bounds
-  }, [availableParams.length]);
-
   const handleRun = () => {
     runMutation.mutate(
       {
-        simulation_params: simulationParams,
+        simulation_params: localParams ?? DEFAULT_SIMULATION_PARAMS,
         parameters: selectedParams,
         method,
         n_samples: nSamples,
@@ -54,7 +62,6 @@ export default function SensitivityView() {
   const result = analysisData?.result as SensitivityResult | null;
   const isComplete = analysisData?.status === 'completed' && !!result;
 
-  // Серверные графики: запрашиваем Plotly-фигуру с бэкенда
   const sobolVizRequest = isComplete && result?.method === 'sobol' && analysisId
     ? { analysis_id: analysisId } : null;
   const morrisVizRequest = isComplete && result?.method === 'morris' && analysisId
@@ -68,18 +75,35 @@ export default function SensitivityView() {
 
   return (
     <div className="space-y-5">
-      {/* Hint — анализ не требует файла */}
-      <p className="text-xs text-primary-500/60 dark:text-primary-400/50">
-        {t('analysis.sensitivity.hint')}
-      </p>
+      {/* Intro card */}
+      <div className="card p-4 border-primary-500/15 bg-primary-500/5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <h3 className="text-xs font-semibold uppercase tracking-wider
+                           text-primary-700 dark:text-primary-300 mb-1.5">
+              {t('analysis.sensitivity.title')}
+            </h3>
+            <p className="text-xs leading-relaxed text-primary-700/80 dark:text-primary-300/70">
+              {t('analysis.sensitivity.intro')}
+            </p>
+          </div>
+          <MethodInfo kind="sensitivity" />
+        </div>
+        <p className="mt-2 text-2xs text-primary-500/60 dark:text-primary-400/50">
+          {t('analysis.sensitivity.hint')}
+        </p>
+      </div>
 
-      {/* Config */}
+      {/* Config: method + n_samples */}
       <div className="grid grid-cols-2 gap-3">
         <div className="card p-4">
-          <label className="block text-xs font-semibold uppercase tracking-wider
-                           text-primary-500/60 dark:text-primary-400/50 mb-2">
-            {t('analysis.sensitivity.method')}
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold uppercase tracking-wider
+                              text-primary-500/60 dark:text-primary-400/50">
+              {t('analysis.sensitivity.method')}
+            </label>
+            <MethodInfo kind={method} />
+          </div>
           <select
             value={method}
             onChange={(e) => setMethod(e.target.value as 'sobol' | 'morris')}
@@ -93,10 +117,13 @@ export default function SensitivityView() {
         </div>
 
         <div className="card p-4">
-          <label className="block text-xs font-semibold uppercase tracking-wider
-                           text-primary-500/60 dark:text-primary-400/50 mb-2">
-            {t('analysis.sensitivity.nSamples')}
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold uppercase tracking-wider
+                              text-primary-500/60 dark:text-primary-400/50">
+              {t('analysis.sensitivity.nSamples')}
+            </label>
+            <MethodInfo kind="nSamples" />
+          </div>
           <input
             type="number"
             value={nSamples}
@@ -111,78 +138,30 @@ export default function SensitivityView() {
         </div>
       </div>
 
-      {/* Parameters */}
-      <div className="card p-4">
-        <p className="mb-3 text-xs text-primary-500/50 dark:text-primary-400/45">
-          Это параметры математической модели. Выберите только коэффициенты, влияние которых нужно оценить, и при необходимости отфильтруйте список по имени.
-        </p>
-        <input
-          type="text"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Поиск параметра..."
-          className="mb-3 w-full rounded-lg border border-border bg-surface-1 px-3 py-2 text-sm font-mono text-left text-primary-800 dark:text-primary-200"
-        />
-        <label className="block text-xs font-semibold uppercase tracking-wider
-                         text-primary-500/60 dark:text-primary-400/50 mb-3">
-          {t('analysis.sensitivity.parameters')}
-          {boundsData && (
-            <span className="ml-2 text-primary-400/40 font-normal normal-case">
-              ({selectedParams.length} из {availableParams.length})
-            </span>
-          )}
-        </label>
-        {boundsLoading ? (
-          <div className="flex gap-2">
-            {[...Array(7)].map((_, i) => (
-              <div key={i} className="h-8 w-16 animate-pulse rounded-lg bg-surface-2" />
-            ))}
-          </div>
-        ) : (
-        <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-          {filteredParams.map((param) => {
-            const selected = selectedParams.includes(param);
-            return (
-              <button
-                key={param}
-                onClick={() => {
-                  if (selected) setSelectedParams(selectedParams.filter((v) => v !== param));
-                  else setSelectedParams([...selectedParams, param]);
-                }}
-                className={`rounded-lg border px-3 py-1.5 text-xs font-mono font-medium
-                           transition-all duration-150
-                           ${selected
-                             ? 'border-primary-500/25 bg-primary-500/8 text-primary-600 dark:text-primary-400 shadow-inner-glow'
-                             : 'border-border text-primary-900/30 dark:text-primary-100/20 hover:bg-surface-2'
-                           }`}
-              >
-                {param}
-              </button>
-            );
-          })}
-        </div>
-        )}
-      </div>
+      {/* Parameters picker (grouped + bulk + presets) */}
+      <ParameterPicker value={selectedParams} onChange={setSelectedParams} />
 
       {/* Run button */}
-      <button
-        onClick={handleRun}
-        disabled={selectedParams.length === 0 || runMutation.isPending || analysisData?.status === 'running'}
-        className="rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-medium text-white
-                   hover:bg-primary-600 shadow-glow-sm hover:shadow-glow
-                   transition-all duration-200 disabled:opacity-40 disabled:shadow-none"
-      >
-        {runMutation.isPending ? '...' : t('analysis.sensitivity.run')}
-      </button>
-      {analysisData?.status === 'running' && analysisId && (
+      <div className="flex items-center gap-3">
         <button
-          onClick={() => cancelMutation.mutate(analysisId)}
-          disabled={cancelMutation.isPending}
-          className="ml-3 rounded-xl border border-red-400/20 px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-500/5 transition-colors disabled:opacity-40"
+          onClick={handleRun}
+          disabled={selectedParams.length === 0 || runMutation.isPending || analysisData?.status === 'running'}
+          className="rounded-xl bg-primary-500 px-5 py-2.5 text-sm font-medium text-white
+                     hover:bg-primary-600 shadow-glow-sm hover:shadow-glow
+                     transition-all duration-200 disabled:opacity-40 disabled:shadow-none"
         >
-          {cancelMutation.isPending ? '...' : t('common.cancel')}
+          {runMutation.isPending ? '...' : t('analysis.sensitivity.run')}
         </button>
-      )}
+        {analysisData?.status === 'running' && analysisId && (
+          <button
+            onClick={() => cancelMutation.mutate(analysisId)}
+            disabled={cancelMutation.isPending}
+            className="rounded-xl border border-red-400/20 px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-500/5 transition-colors disabled:opacity-40"
+          >
+            {cancelMutation.isPending ? '...' : t('common.cancel')}
+          </button>
+        )}
+      </div>
 
       {/* Progress */}
       {analysisData?.status === 'running' && (

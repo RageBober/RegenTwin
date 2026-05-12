@@ -741,7 +741,7 @@ class ExtendedSDEState:
 16. Flegg, J.A. et al. (2015). Mathematical model of hyperbaric oxygen therapy applied to chronic diabetic wounds. *Bulletin of Mathematical Biology*, 77(10), 1901-1928.
 17. Gill, S.E. & Parks, W.C. (2008). Metalloproteinases and their inhibitors: regulators of wound healing. *International Journal of Biochemistry & Cell Biology*, 40(6-7), 1334-1347.
 18. Giusti, I. et al. (2009). Identification of an optimal concentration of platelet gel for promoting angiogenesis. *Transfusion*, 49(4), 771-778.
-18a. Hinz, B. (2016). Myofibroblasts. *Experimental Eye Research*, 142, 56-70.
+18a. Hinz, B. (2016). Myofibroblasts. Experimental Eye Research, 142, 56–70.
 18b. Kucia, M. et al. (2009). Evidence that platelet-derived microvesicles may transfer platelet-specific immunoreactive antigens to the surface of endothelial cells and CD34+ hematopoietic stem/progenitor cells. *Leukemia*, 23(8), 1545-1556.
 18c. Mazzucco, L. et al. (2009). Not every PRP-gel is born equal: evaluation of growth factor availability. *Vox Sanguinis*, 97(2), 116-121.
 18d. Nucera, S. et al. (2011). The interplay between macrophages and angiogenesis in development, tissue injury and regeneration. *International Journal of Developmental Biology*, 55, 495-503.
@@ -793,6 +793,7 @@ https://pubmed.ncbi.nlm.nih.gov/19170984/ — Giusti et al. (2009), platelet gel
 https://pubmed.ncbi.nlm.nih.gov/18480812/ — Gurtner et al. (2008), wound repair & regeneration
 https://pubmed.ncbi.nlm.nih.gov/10508235/ — Heldin & Westermark (1999), PDGF
 https://pubmed.ncbi.nlm.nih.gov/17525249/ — Hinz et al. (2007), myofibroblast
+https://pubmed.ncbi.nlm.nih.gov/26192991/ Hinz, B. (2016). Myofibroblasts. Experimental Eye Research, 142
 https://link.intlpress.com/JDetail/1805834100729438209 — Kevrekidis et al. (2003), equation-free computation
 https://link.springer.com/book/10.1007/978-3-662-12616-5 — Kloeden & Platen (1992), Stochastic Differential Equations
 https://pubmed.ncbi.nlm.nih.gov/23435331/ — Kolaczkowska & Kubes (2013), neutrophil recruitment
@@ -809,14 +810,14 @@ https://epubs.siam.org/doi/10.1137/09076636X — Rößler (2010), Runge-Kutta me
 https://pubmed.ncbi.nlm.nih.gov/16369558/ — Serhan & Savill (2005), resolution of inflammation
 https://pmc.ncbi.nlm.nih.gov/articles/PMC3049372/ — Sindrilaru et al. (2011), M1 macrophages and wound healing
 https://epubs.siam.org/doi/10.1137/0705041 — Strang (1968), difference schemes
-https://pubmed.ncbi.nlm.nih.gov/28255202/ — Varani et al. (2017), pulsed electromagnetic field
-https://pubmed.ncbi.nlm.nih.gov/24332926/ — Vempati et al. (2014), VEGF proteolytic release
+https://pubmed.ncbi.nlm.nih.gov/33467447/ — Varani et al. (2017), Pulsed Electromagnetic Field Stimulation in Osteogenesis and Chondrogenesis: Signaling Pathways and Therapeutic Implications
+ https://pubmed.ncbi.nlm.nih.gov/20686621/ — Vempati P., Mac Gabhann F., Popel A.S. «Quantifying the proteolytic release of extracellular matrix-sequestered VEGF with a computational model»
 https://pubmed.ncbi.nlm.nih.gov/15385756/ — Vodovotz et al. (2006), mathematical models of inflammation
 https://pmc.ncbi.nlm.nih.gov/articles/PMC2757812/ — Xue et al. (2009), ischemic cutaneous wounds model
 https://pubmed.ncbi.nlm.nih.gov/19392780/ — Mazzucco et al. (2009), PRP-gel growth factor availability
 https://pubmed.ncbi.nlm.nih.gov/25690170/ — Schär et al. (2015), platelet-rich concentrates release kinetics
 https://pubmed.ncbi.nlm.nih.gov/11988769/ — Tomasek et al. (2002), myofibroblasts and mechano-regulation
-https://journals.lww.com/md-journal/fulltext/2024/08300/the_combined_application_of_pulsed_electromagnetic.38.aspx — Wang et al. (2024), PRP+PEMF combined therapy
+ https://pubmed.ncbi.nlm.nih.gov/39213232/ — Xu R-D, Li J-H, Zhang H., Liang H-R, Duan S-Y, Sun M., Wen H., Zhou X-T, Liu H-F, Cai Z-C. «The combined application of pulsed electromagnetic fields and platelet-rich plasma in the treatment of early-stage knee osteoarthritis: A randomized clinical trial»
 ---
 
 *Документ подготовлен для проекта RegenTwin. Каждое уравнение обосновано ссылкой на рецензированную публикацию. Параметры, не имеющие прямого экспериментального источника, отмечены как модельные оценки. Документ может служить основой для раздела "Methods" препринта на bioRxiv.*

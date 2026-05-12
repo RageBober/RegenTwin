@@ -1,13 +1,20 @@
-"""Расширенная 20-переменная SDE модель регенерации тканей.
+"""Расширенная SDE модель регенерации тканей.
 
-Полная система стохастических дифференциальных уравнений:
+v1.0: 20 переменных (8 клеток + 7 цитокинов + 3 ECM + 2 aux).
+v2.0 (FIX-06, FIX-09): 22 переменные — добавлены C_SDF1 (8-й цитокин) и
+C_TIMP (4-й ECM-компонент). Уравнения для них вводятся пофазно:
+    Phase 2: state-структура (текущая правка). Drift = 0 (константные placeholder'ы).
+    Phase 3: FIX-09 — динамическое уравнение dC_TIMP.
+    Phase 4: FIX-06 — динамическое уравнение dC_SDF1.
+
+Полная система:
 - 8 клеточных популяций: P, Ne, M1, M2, F, Mf, E, S
-- 7 цитокинов: TNF-α, IL-10, PDGF, VEGF, TGF-β, MCP-1, IL-8
-- 3 ECM компонента: коллаген, MMP, фибрин
+- 8 цитокинов: TNF-α, IL-10, PDGF, VEGF, TGF-β, MCP-1, IL-8, SDF-1 (NEW)
+- 4 ECM компонента: коллаген, MMP, TIMP (NEW), фибрин
 - 2 вспомогательных: D (damage signal), O₂
 
 Численное интегрирование методом Эйлера-Маруямы.
-Математическое обоснование: Doks/RegenTwin_Mathematical_Framework.md §2
+Математическое обоснование: RegenTwin_Mathematical_Framework_v2.md §2
 
 Подробное описание: Description/Phase2/description_extended_sde.md
 """
@@ -25,9 +32,11 @@ from src.core.sde_model import TherapyProtocol
 
 
 class StateIndex(IntEnum):
-    """Индексы переменных в массиве состояния (20 переменных).
+    """Индексы переменных в массиве состояния (22 переменные, v2.0).
 
     Определяет порядок переменных в numpy-массиве для drift/diffusion.
+    После FIX-06/FIX-09 (Phase 2): добавлены C_SDF1 (15) и C_TIMP (16).
+    Индексы ECM/aux переменных сдвинуты на +2.
 
     Подробное описание:
         Description/Phase2/description_extended_sde.md#StateIndex
@@ -48,11 +57,13 @@ class StateIndex(IntEnum):
     C_TGFb = 12  # TGF-β
     C_MCP1 = 13  # MCP-1
     C_IL8 = 14  # IL-8
-    RHO_COLLAGEN = 15  # Плотность коллагена
-    C_MMP = 16  # MMP
-    RHO_FIBRIN = 17  # Плотность фибрина
-    D = 18  # Сигнал повреждения
-    O2 = 19  # Кислород
+    C_SDF1 = 15  # SDF-1/CXCL12 (FIX-06, NEW v2.0)
+    C_TIMP = 16  # TIMP — динамика добавляется в Phase 3 (FIX-09, NEW v2.0)
+    RHO_COLLAGEN = 17  # Плотность коллагена
+    C_MMP = 18  # MMP
+    RHO_FIBRIN = 19  # Плотность фибрина
+    D = 20  # Сигнал повреждения
+    O2 = 21  # Кислород
 
 
 VARIABLE_NAMES: list[str] = [
@@ -71,16 +82,24 @@ VARIABLE_NAMES: list[str] = [
     "C_TGFb",
     "C_MCP1",
     "C_IL8",
+    "C_SDF1",  # v2.0 (FIX-06)
+    "C_TIMP",  # v2.0 (FIX-09)
     "rho_collagen",
     "C_MMP",
     "rho_fibrin",
     "D",
     "O2",
 ]
-"""Имена всех 20 переменных в порядке StateIndex."""
+"""Имена всех 22 переменных в порядке StateIndex."""
 
-N_VARIABLES: int = 20
-"""Общее число переменных в расширенной SDE системе."""
+N_VARIABLES: int = 22
+"""Общее число переменных в расширенной SDE системе (v2.0)."""
+
+
+# Type alias для клеточных плотностей. FIX-01: целевая v2.0-конвенция — cells/ml.
+# В текущей реализации код всё ещё калиброван под cells/мкл; полный переход на
+# cells/ml идёт по фазам Phase 1..8 синхронно с FIX-19 (рекалибровка s_X, k_bind_*).
+CellDensity = float  # units: cells/ml (FIX-01 target)
 
 
 @dataclass
@@ -90,19 +109,25 @@ class ExtendedSDEState:
     Содержит все клеточные популяции, цитокины, ECM компоненты
     и вспомогательные переменные.
 
+    Единицы (FIX-01):
+        - Клеточные плотности — cells/ml (v2.0 конвенция).
+        - Цитокины — нг/мл.
+        - Время — часы.
+        - O₂ — мм рт. ст.
+
     Подробное описание:
         Description/Phase2/description_extended_sde.md#ExtendedSDEState
     """
 
-    # Клеточные популяции (клеток/мкл)
-    P: float = 0.0  # Тромбоциты
-    Ne: float = 0.0  # Нейтрофилы
-    M1: float = 0.0  # M1 макрофаги (провоспалительные)
-    M2: float = 0.0  # M2 макрофаги (репаративные)
-    F: float = 0.0  # Фибробласты
-    Mf: float = 0.0  # Миофибробласты
-    E: float = 0.0  # Эндотелиальные клетки
-    S: float = 0.0  # Стволовые/прогениторные (CD34+)
+    # Клеточные популяции (cells/ml — FIX-01)
+    P: CellDensity = 0.0  # Тромбоциты
+    Ne: CellDensity = 0.0  # Нейтрофилы
+    M1: CellDensity = 0.0  # M1 макрофаги (провоспалительные)
+    M2: CellDensity = 0.0  # M2 макрофаги (репаративные)
+    F: CellDensity = 0.0  # Фибробласты
+    Mf: CellDensity = 0.0  # Миофибробласты
+    E: CellDensity = 0.0  # Эндотелиальные клетки
+    S: CellDensity = 0.0  # Стволовые/прогениторные (CD34+)
 
     # Цитокины (нг/мл)
     C_TNF: float = 0.0  # TNF-α
@@ -112,10 +137,12 @@ class ExtendedSDEState:
     C_TGFb: float = 0.0  # TGF-β
     C_MCP1: float = 0.0  # MCP-1
     C_IL8: float = 0.0  # IL-8
+    C_SDF1: float = 0.0  # SDF-1/CXCL12 (v2.0, FIX-06; динамика в Phase 4)
 
     # ECM
     rho_collagen: float = 0.0  # Плотность коллагена
     C_MMP: float = 0.0  # Концентрация MMP
+    C_TIMP: float = 0.0  # TIMP (v2.0, FIX-09; динамика в Phase 3)
     rho_fibrin: float = 0.0  # Плотность фибрина
 
     # Вспомогательные
@@ -126,15 +153,15 @@ class ExtendedSDEState:
     t: float = 0.0  # Текущее время (ч)
 
     def to_array(self) -> np.ndarray:
-        """Конвертация состояния в numpy массив (20 элементов).
+        """Конвертация состояния в numpy массив (22 элемента, v2.0).
 
         Порядок элементов соответствует StateIndex:
-        [P, Ne, M1, M2, F, Mf, E, S, C_TNF, C_IL10, C_PDGF,
-         C_VEGF, C_TGFb, C_MCP1, C_IL8, rho_collagen, C_MMP,
-         rho_fibrin, D, O2]
+        [P, Ne, M1, M2, F, Mf, E, S,
+         C_TNF, C_IL10, C_PDGF, C_VEGF, C_TGFb, C_MCP1, C_IL8, C_SDF1,
+         C_TIMP, rho_collagen, C_MMP, rho_fibrin, D, O2]
 
         Returns:
-            np.ndarray shape (20,) с текущими значениями
+            np.ndarray shape (22,) с текущими значениями
 
         Подробное описание:
             Description/Phase2/description_extended_sde.md#to_array
@@ -156,6 +183,8 @@ class ExtendedSDEState:
                 self.C_TGFb,
                 self.C_MCP1,
                 self.C_IL8,
+                self.C_SDF1,
+                self.C_TIMP,
                 self.rho_collagen,
                 self.C_MMP,
                 self.rho_fibrin,
@@ -163,6 +192,41 @@ class ExtendedSDEState:
                 self.O2,
             ]
         )
+
+    def update_in_place(self, arr: np.ndarray, t: float) -> None:
+        """Мутирует существующий state значениями из ndarray (без аллокации).
+
+        Используется в горячем цикле simulate(), чтобы синхронизировать
+        ExtendedSDEState (для drift-методов, которые читают атрибуты) с
+        текущим вектором x без создания нового объекта на каждом шаге.
+
+        Args:
+            arr: Массив shape (22,) в порядке StateIndex (v2.0)
+            t: Текущее время (ч)
+        """
+        self.P = float(arr[0])
+        self.Ne = float(arr[1])
+        self.M1 = float(arr[2])
+        self.M2 = float(arr[3])
+        self.F = float(arr[4])
+        self.Mf = float(arr[5])
+        self.E = float(arr[6])
+        self.S = float(arr[7])
+        self.C_TNF = float(arr[8])
+        self.C_IL10 = float(arr[9])
+        self.C_PDGF = float(arr[10])
+        self.C_VEGF = float(arr[11])
+        self.C_TGFb = float(arr[12])
+        self.C_MCP1 = float(arr[13])
+        self.C_IL8 = float(arr[14])
+        self.C_SDF1 = float(arr[15])
+        self.C_TIMP = float(arr[16])
+        self.rho_collagen = float(arr[17])
+        self.C_MMP = float(arr[18])
+        self.rho_fibrin = float(arr[19])
+        self.D = float(arr[20])
+        self.O2 = float(arr[21])
+        self.t = t
 
     @classmethod
     def from_array(
@@ -173,14 +237,14 @@ class ExtendedSDEState:
         """Создание состояния из numpy массива.
 
         Args:
-            arr: Массив shape (20,) в порядке StateIndex
+            arr: Массив shape (22,) в порядке StateIndex (v2.0)
             t: Текущее время (ч)
 
         Returns:
             Новый ExtendedSDEState
 
         Raises:
-            ValueError: Если len(arr) != 20
+            ValueError: Если len(arr) != 22
 
         Подробное описание:
             Description/Phase2/description_extended_sde.md#from_array
@@ -203,21 +267,23 @@ class ExtendedSDEState:
             C_TGFb=float(arr[12]),
             C_MCP1=float(arr[13]),
             C_IL8=float(arr[14]),
-            rho_collagen=float(arr[15]),
-            C_MMP=float(arr[16]),
-            rho_fibrin=float(arr[17]),
-            D=float(arr[18]),
-            O2=float(arr[19]),
+            C_SDF1=float(arr[15]),
+            C_TIMP=float(arr[16]),
+            rho_collagen=float(arr[17]),
+            C_MMP=float(arr[18]),
+            rho_fibrin=float(arr[19]),
+            D=float(arr[20]),
+            O2=float(arr[21]),
             t=t,
         )
 
     def to_dict(self) -> dict[str, float]:
         """Конвертация в словарь {имя_переменной: значение}.
 
-        Включает все 20 переменных и время t.
+        Включает все 22 переменные (v2.0) и время t.
 
         Returns:
-            Словарь с 21 ключом (20 переменных + t)
+            Словарь с 23 ключами (22 переменные + t)
 
         Подробное описание:
             Description/Phase2/description_extended_sde.md#to_dict
@@ -238,6 +304,8 @@ class ExtendedSDEState:
             "C_TGFb": self.C_TGFb,
             "C_MCP1": self.C_MCP1,
             "C_IL8": self.C_IL8,
+            "C_SDF1": self.C_SDF1,
+            "C_TIMP": self.C_TIMP,
             "rho_collagen": self.rho_collagen,
             "C_MMP": self.C_MMP,
             "rho_fibrin": self.rho_fibrin,
@@ -334,7 +402,7 @@ class ExtendedSDEModel:
         Description/Phase2/description_extended_sde.md#ExtendedSDEModel
     """
 
-    N_VARIABLES: int = 20
+    N_VARIABLES: int = 22
 
     def __init__(
         self,
@@ -355,6 +423,39 @@ class ExtendedSDEModel:
         self.params = params if params is not None else ParameterSet()
         self.therapy = therapy
         self._rng = np.random.default_rng(rng_seed)
+
+        p = self.params
+        # 22-мерный вектор шума (v2.0). Порядок строго соответствует StateIndex.
+        # ECM-переменные (rho_collagen, C_MMP, C_TIMP, rho_fibrin) — детерминистически
+        # (FIX-20, ecm_deterministic=true), поэтому σ=0.
+        # Aux (D, O2) — также детерминистически.
+        self._sigma_vector = np.array(
+            [
+                p.sigma_P,
+                p.sigma_Ne,
+                p.sigma_M1,
+                p.sigma_M2,
+                p.sigma_F,
+                p.sigma_Mf,
+                p.sigma_E,
+                p.sigma_S,
+                p.sigma_TNF,
+                p.sigma_IL10,
+                p.sigma_PDGF,
+                p.sigma_VEGF,
+                p.sigma_TGF,
+                p.sigma_MCP1,
+                p.sigma_IL8,
+                p.sigma_SDF1,  # v2.0 (FIX-06, FIX-20)
+                0.0,  # C_TIMP — ECM, deterministic
+                0.0,  # rho_collagen
+                0.0,  # C_MMP
+                0.0,  # rho_fibrin
+                0.0,  # D
+                0.0,  # O2
+            ],
+            dtype=np.float64,
+        )
 
         # Инициализация механистической PRP-модели (если включена)
         self._prp_model = None
@@ -409,8 +510,13 @@ class ExtendedSDEModel:
         times = np.linspace(t_start, t_end, n_steps + 1)
 
         states: list[ExtendedSDEState] = []
-        current_state = initial_state
-        states.append(current_state)
+        states.append(initial_state)
+
+        # Hot-path работает на ndarray: единый мутируемый scratch-state
+        # синхронизируется через update_in_place(), а dataclass-копии создаются
+        # только при сохранении в states[].
+        x = initial_state.to_array()
+        scratch_state = ExtendedSDEState.from_array(x, t=times[0])
 
         # Интервал для вызова progress_callback (~50 раз за симуляцию)
         report_interval = max(1, n_steps // 50) if n_steps else 1
@@ -418,19 +524,23 @@ class ExtendedSDEModel:
         if cancel_callback is not None:
             cancel_callback()
 
+        # Cancel callback throttle: на длинных симуляциях слишком частые вызовы
+        # становятся узким местом. Адаптивный интервал — не реже чем progress_callback,
+        # но не чаще чем каждые 50 шагов на длинных пробегах. Для короткой симуляции
+        # (n_steps < 50) проверяем каждый шаг.
+        cancel_interval = min(50, max(1, report_interval))
         for i in range(n_steps):
-            if cancel_callback is not None:
+            if cancel_callback is not None and i % cancel_interval == 0:
                 cancel_callback()
 
-            drift = self._compute_drift(current_state)
-            diffusion = self._compute_diffusion(current_state)
+            drift = self._compute_drift(scratch_state)
+            diffusion = self._sigma_vector * x
             dW = self._rng.standard_normal(self.N_VARIABLES) * sqrt_dt
-            x = current_state.to_array()
-            x_new = x + drift * p.dt + diffusion * dW
-            new_state = ExtendedSDEState.from_array(x_new, t=times[i + 1])
-            new_state = self._apply_boundary_conditions(new_state)
-            states.append(new_state)
-            current_state = new_state
+            x = x + drift * p.dt + diffusion * dW
+            np.maximum(x, 0.0, out=x)
+            t_next = times[i + 1]
+            scratch_state.update_in_place(x, t_next)
+            states.append(ExtendedSDEState.from_array(x, t=t_next))
 
             if progress_callback and ((i + 1) % report_interval == 0 or i + 1 == n_steps):
                 progress_callback(i + 1, n_steps)
@@ -442,15 +552,17 @@ class ExtendedSDEModel:
         )
 
     def _compute_drift(self, state: ExtendedSDEState) -> np.ndarray:
-        """Вычисление 20-мерного вектора drift μ(X, t).
+        """Вычисление 22-мерного вектора drift μ(X, t) (v2.0).
 
-        Собирает drift из индивидуальных _drift_* компонентов.
+        Собирает drift из индивидуальных _drift_* компонентов. C_SDF1 и C_TIMP
+        в Phase 2 имеют нулевой drift (placeholder); реальная динамика добавляется
+        в Phase 4 (FIX-06) и Phase 3 (FIX-09).
 
         Args:
             state: Текущее состояние
 
         Returns:
-            np.ndarray shape (20,) — drift для каждой переменной
+            np.ndarray shape (22,) — drift для каждой переменной
 
         Подробное описание:
             Description/Phase2/description_extended_sde.md#_compute_drift
@@ -471,12 +583,34 @@ class ExtendedSDEModel:
         drift[StateIndex.C_TGFb] = self._drift_C_TGFb(state)
         drift[StateIndex.C_MCP1] = self._drift_C_MCP1(state)
         drift[StateIndex.C_IL8] = self._drift_C_IL8(state)
+        drift[StateIndex.C_SDF1] = self._drift_C_SDF1(state)
+        drift[StateIndex.C_TIMP] = self._drift_C_TIMP(state)
         drift[StateIndex.RHO_COLLAGEN] = self._drift_collagen(state)
         drift[StateIndex.C_MMP] = self._drift_MMP(state)
         drift[StateIndex.RHO_FIBRIN] = self._drift_fibrin(state)
         drift[StateIndex.D] = self._drift_damage(state)
         drift[StateIndex.O2] = self._drift_oxygen(state)
         return drift
+
+    def _drift_C_SDF1(self, state: ExtendedSDEState) -> float:  # noqa: ARG002
+        """Drift SDF-1/CXCL12 (placeholder для Phase 2; FIX-06 уравнение в Phase 4).
+
+        Phase 2: dC_SDF1/dt = 0 — C_SDF1 остаётся на IC до Phase 4.
+        Phase 4 заменит на:
+          dC_SDF1 = [s_SDF1_F·F + s_SDF1_E·E·(1+α_hypoxia_SDF·(1-θ_O2))
+                    + Θ_PRP_SDF - γ_SDF1·C_SDF1] dt
+        """
+        return 0.0
+
+    def _drift_C_TIMP(self, state: ExtendedSDEState) -> float:  # noqa: ARG002
+        """Drift TIMP (placeholder для Phase 2; FIX-09 уравнение в Phase 3).
+
+        Phase 2: dC_TIMP/dt = 0 — C_TIMP остаётся на IC до Phase 3.
+        Phase 3 заменит на:
+          dC_TIMP = [s_TIMP_F·F·(1+α_TGF_TIMP·C_TGFβ/(K_TIMP+C_TGFβ))
+                    + s_TIMP_M2·M2 - γ_TIMP·C_TIMP] dt
+        """
+        return 0.0
 
     def _compute_diffusion(
         self,
@@ -496,33 +630,8 @@ class ExtendedSDEModel:
         Подробное описание:
             Description/Phase2/description_extended_sde.md#_compute_diffusion
         """
-        p = self.params
         x = state.to_array()
-        sigmas = np.array(
-            [
-                p.sigma_P,
-                p.sigma_Ne,
-                p.sigma_M1,
-                p.sigma_M2,
-                p.sigma_F,
-                p.sigma_Mf,
-                p.sigma_E,
-                p.sigma_S,
-                p.sigma_TNF,
-                p.sigma_IL10,
-                p.sigma_PDGF,
-                p.sigma_VEGF,
-                p.sigma_TGF,
-                p.sigma_MCP1,
-                p.sigma_IL8,
-                0.0,
-                0.0,
-                0.0,  # ECM: collagen, MMP, fibrin
-                0.0,
-                0.0,  # auxiliary: D, O2
-            ]
-        )
-        return sigmas * x
+        return self._sigma_vector * x
 
     # ===== Drift клеточных популяций (§2.1) =====
 
@@ -1143,13 +1252,15 @@ class ExtendedSDEModel:
         return self.params.validate()
 
     def get_default_initial_state(self) -> ExtendedSDEState:
-        """Начальное состояние для типичной раны (t=0).
+        """Начальное состояние для типичной раны (t=0), v2.0.
 
         Начальные условия (Gurtner et al., Nature 2008):
         - P = P_max (максимальная активация тромбоцитов)
         - D = D0 (максимальный damage signal)
         - O2 = O2_blood (начальный кислород)
         - rho_fibrin = 1.0 (фибриновый сгусток)
+        - C_SDF1 = 0.01 (базовый уровень, params.yaml; FIX-06, v2.0)
+        - C_TIMP = 0.01 (базовый уровень, params.yaml; FIX-09, v2.0)
         - Остальные ≈ 0 или малые базовые значения
 
         Returns:
@@ -1172,5 +1283,8 @@ class ExtendedSDEModel:
             # C_IL8 = K_IL8 для 50% Hill-рекрутирования (немедленный DAMP ответ)
             C_IL8=p.K_IL8,
             C_MCP1=p.s_MCP1_damage * p.D0 / p.gamma_MCP1,
+            # v2.0 новые переменные (динамика появится в Phase 3/4)
+            C_SDF1=0.01,
+            C_TIMP=0.01,
             t=0.0,
         )

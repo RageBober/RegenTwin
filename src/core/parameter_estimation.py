@@ -422,7 +422,9 @@ class PriorBuilder:
         """
         if default_cv <= 0:
             raise ValueError("default_cv must be > 0")
-        param_dict = params.to_dict()
+        # v2.0: используем numeric_dict, чтобы не споткнуться о bool/str-поля
+        # (multirate_subcycling, ecm_deterministic, interpretation).
+        param_dict = params.to_numeric_dict()
         priors_list: list[PriorSpec] = []
         for name in estimated_names:
             if name not in param_dict:
@@ -1464,12 +1466,17 @@ def estimate_parameters(
     if not config.observed_variables:
         config.observed_variables = list(observed_data.values.keys())
 
-    # Default estimated params: exclude numerical/sigma fields
+    # Default estimated params: exclude numerical/sigma fields и нечисловые поля v2.0
+    # (multirate_subcycling, ecm_deterministic, interpretation, X_min, dt_fast/slow).
     if estimated_param_names is None:
-        exclude_prefixes = ("dt", "t_max", "epsilon", "sigma_")
+        exclude_prefixes = ("dt", "t_max", "epsilon", "sigma_", "X_min")
+        # v2.0: исключаем bool/str и явно нечисловые поля
+        numeric_names = set(base_params.to_numeric_dict().keys())
         all_names = [f.name for f in dataclasses.fields(ParameterSet)]
         estimated_param_names = [
-            n for n in all_names if not any(n.startswith(p) for p in exclude_prefixes)
+            n
+            for n in all_names
+            if n in numeric_names and not any(n.startswith(p) for p in exclude_prefixes)
         ]
 
     # Build components

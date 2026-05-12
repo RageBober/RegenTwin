@@ -8,6 +8,7 @@ import {
   ClockIcon,
   ArrowRightIcon,
   TrashIcon,
+  BeakerIcon,
 } from '@heroicons/react/24/outline';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient, API_V1 } from '../lib/api';
@@ -187,15 +188,26 @@ export default function History() {
                     </td>
                     <td className="px-4 py-3">
                       {sim.status === 'completed' && (
-                        <Link
-                          to={`/results/${sim.simulation_id}`}
-                          className="inline-flex items-center gap-1 text-xs font-medium
-                                     text-primary-500 hover:text-primary-600
-                                     dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
-                        >
-                          <EyeIcon className="h-3.5 w-3.5" />
-                          {t('history.view')}
-                        </Link>
+                        <div className="flex items-center gap-3">
+                          <Link
+                            to={`/results/${sim.simulation_id}`}
+                            className="inline-flex items-center gap-1 text-xs font-medium
+                                       text-primary-500 hover:text-primary-600
+                                       dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+                          >
+                            <EyeIcon className="h-3.5 w-3.5" />
+                            {t('history.view')}
+                          </Link>
+                          <Link
+                            to={`/analysis/${sim.simulation_id}`}
+                            className="inline-flex items-center gap-1 text-xs font-medium
+                                       text-accent-600 hover:text-accent-700
+                                       dark:text-accent-400 dark:hover:text-accent-300 transition-colors"
+                          >
+                            <BeakerIcon className="h-3.5 w-3.5" />
+                            {t('history.analyze')}
+                          </Link>
+                        </div>
                       )}
                     </td>
                   </tr>

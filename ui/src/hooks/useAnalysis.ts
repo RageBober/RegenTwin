@@ -10,6 +10,8 @@ import type {
   MorrisVizRequest,
   PosteriorVizRequest,
   ConvergenceVizRequest,
+  ValidationRequest,
+  ValidationResponse,
 } from '../types/api';
 
 export function useRunSensitivity() {
@@ -72,6 +74,18 @@ export function useCancelAnalysis() {
     mutationFn: async (id: string) => {
       const { data } = await apiClient.post<AnalysisResponse>(
         `${API_V1}/analysis/${id}/cancel`,
+      );
+      return data;
+    },
+  });
+}
+
+export function useRunValidation() {
+  return useMutation({
+    mutationFn: async (req: ValidationRequest) => {
+      const { data } = await apiClient.post<ValidationResponse>(
+        `${API_V1}/analysis/validation`,
+        req,
       );
       return data;
     },

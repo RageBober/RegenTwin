@@ -7,16 +7,55 @@
 - Параметры шума (sigma для всех переменных)
 - Вспомогательные (damage, oxygen)
 - Численные параметры (dt, t_max, epsilon)
+- v2.0 (FIX-01..FIX-25): добавлены carrying-capacity floors, sprouting/homing,
+  PEMF LF/RF, TIMP/SDF-1, метаболические веса, multirate subcycling.
 
 Подробное описание: Description/Phase2/description_parameters.md
+Phase 0 plan: C:\\Users\\dzume\\.claude\\plans\\keen-cuddling-tome.md
 """
 
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 from src.core.bounds import CURATED_BOUNDS, NUMERICAL_PARAMS, ParameterBounds
+
+
+def _coerce_field_value(raw: Any, field_type: Any) -> Any:
+    """Привести значение из YAML к типу dataclass-поля.
+
+    Поддерживаемые типы полей: `float`, `int`, `bool`, `str`. Для строкового
+    представления типа (когда `from __future__ import annotations` превращает
+    аннотацию в строку) сравнение делается по имени.
+
+    Если приведение не удалось — возвращаем raw без модификации; ошибку поймает
+    конструктор dataclass и упадёт с понятной TypeError.
+    """
+    type_name = (
+        field_type
+        if isinstance(field_type, str)
+        else getattr(field_type, "__name__", str(field_type))
+    )
+
+    # bool строго отличаем от int — оба isinstance(True, int) == True
+    if type_name == "bool":
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, str):
+            return raw.strip().lower() in {"true", "1", "yes", "on"}
+        return bool(raw)
+    if type_name == "str":
+        return str(raw)
+    if type_name == "int":
+        return int(raw)
+    if type_name == "float":
+        return float(raw)
+    # неизвестный тип — оставляем как есть
+    return raw
 
 
 @dataclass
@@ -48,7 +87,10 @@ class ParameterSet:
     k_reverse: float = 0.005  # M2→M1 обратное переключение
     k_act: float = 0.01  # F→Mf активация (Hinz 2007)
 
-    # ===== Carrying capacity (клеток/мкл) =====
+    # ===== Carrying capacity =====
+    # Текущие значения откалиброваны для cells/мкл (legacy v1.0).
+    # v2.0 целевые (params.yaml): K_F=5e8, K_E=5e7, K_S=1e6 cells/ml (FIX-01).
+    # Переход выполняется по фазам синхронно с рекалибровкой s_X / k_bind_* (FIX-19).
     K_F: float = 5e5  # Carrying capacity F+Mf (Flegg 2015)
     K_E: float = 1e5  # Carrying capacity E
     K_S: float = 1e4  # Carrying capacity S
@@ -179,6 +221,99 @@ class ParameterSet:
     dt: float = 0.01  # Шаг времени (ч)
     t_max: float = 720.0  # Макс. время (ч = 30 дней)
     epsilon: float = 1e-10  # Защита от деления на 0
+
+    # =================================================================
+    # v2.0 (FIX-01..FIX-25) — НОВЫЕ ПОЛЯ
+    # Значения по умолчанию совпадают с params.yaml. Используются
+    # уравнениями только после применения соответствующих фиксов в
+    # Phase 3..8. До тех пор живут как inert defaults — не влияют на
+    # текущую динамику.
+    # =================================================================
+
+    # ----- FIX-03: миофибробласты, floor смертности -----
+    delta_floor: float = 0.1  # Минимальная относительная смертность Mf при насыщающем TGF-β
+
+    # ----- FIX-21: дефолт M1 при базальных цитокинах -----
+    phi_baseline: float = 0.1  # ng/ml — смещение φ₁ в сторону M1 при C_TNF≈C_IL10≈0
+
+    # ----- FIX-22: миграция фибробластов -----
+    J_F_migration: float = 50.0  # cells/(ml·h)
+    K_chi: float = 1.0  # ng/ml — полунасыщение PDGF-хемотаксиса фибробластов
+
+    # ----- FIX-05: sprouting эндотелия -----
+    J_sprouting: float = 1.0  # cells/(ml·h)
+    K_xi: float = 0.5  # ng/ml — полунасыщение sprouting по VEGF
+
+    # ----- FIX-06: хоминг стволовых клеток -----
+    J_homing: float = 5.0  # cells/(ml·h) — поток CD34+ из костного мозга
+    K_SDF1: float = 1.0  # ng/ml — полунасыщение SDF-1/CXCR4
+    alpha_PRP_homing: float = 2.0  # коэффициент PRP-усиления хоминга
+
+    # ----- FIX-07: множитель ингибиции на источнике (n=1.5) -----
+    n_inhib: float = 1.5  # коэффициент Хилла для IL-10-ингибиции TNF/IL-8
+
+    # ----- FIX-08: рецепторное потребление TGF-β -----
+    k_bind_TGF: float = 0.001  # 1/h
+    K_TGF_bind: float = 0.5  # ng/ml
+
+    # ----- Дополнительные Kd рецепторного связывания -----
+    K_PDGF_bind: float = 0.1  # ng/ml (отдельно от K_PDGF_prolif)
+    K_VEGF_bind: float = 0.5  # ng/ml
+
+    # ----- SDF-1 (новое уравнение, FIX-06) -----
+    s_SDF1_F: float = 5.0e-7  # ng/(cells·h)
+    s_SDF1_E: float = 2.0e-6  # ng/(cells·h)
+    alpha_hypoxia_SDF: float = 5.0  # усиление SDF-1 гипоксией
+    gamma_SDF1: float = 0.2  # 1/h
+
+    # ----- TIMP (новое уравнение, FIX-09) -----
+    s_TIMP_F: float = 2.0e-9  # unit/(cells·h)
+    s_TIMP_M2: float = 1.0e-9  # unit/(cells·h)
+    alpha_TGF_TIMP: float = 3.0  # усиление TIMP TGF-β
+    K_TIMP: float = 1.0  # ng/ml — полунасыщение TGF-β для TIMP
+    gamma_TIMP: float = 0.05  # 1/h
+
+    # ----- PRP объём и нормализация Бэйтмена (FIX-12) -----
+    V_wound: float = 5.0  # ml — объём раны
+    D_PRP: float = 1.0  # ml — введённая доза PRP
+
+    # ----- PEMF, два частотных окна (FIX-13) -----
+    f_LF: float = 75.0  # Hz — центральная частота LF
+    sigma_LF: float = 30.0  # Hz — ширина LF-окна
+    f_RF: float = 2.712e7  # Hz — 27.12 MHz, центр RF
+    sigma_RF_log: float = 0.3  # log10(Hz) — ширина RF-окна
+    epsilon_LF_max: float = 0.5  # макс прирост пролиферации LF-PEMF
+    epsilon_RF_max: float = 0.4  # макс снижение TNF RF-PEMF
+    B_half: float = 0.5  # mT — полунасыщение по амплитуде B
+    B_0: float = 0.1  # mT — пороговая амплитуда
+
+    # ----- PRP+PEMF синергия (FIX-14) -----
+    beta_synergy: float = 1.5  # коэффициент синергии
+    Theta_PRP_ref: float = 1.0  # ng/(ml·h) — нормировка PRP
+
+    # ----- FIX-11: оксигенация, диффузия как функция E -----
+    alpha_E: float = 1.0  # уменьшение L диффузии с ростом E
+    # Метаболические веса (взвешенная сумма потребления O₂)
+    w_Ne: float = 100.0
+    w_M: float = 10.0
+    w_F: float = 1.0
+    w_E: float = 5.0
+    w_S: float = 0.5
+
+    # ----- FIX-20: шум SDF-1 (остальные σ уже есть) -----
+    sigma_SDF1: float = 0.2
+
+    # ----- FIX-16: multirate subcycling -----
+    dt_fast: float = 0.02  # ч — шаг цитокинов
+    dt_slow: float = 1.0  # ч — шаг клеток/ECM
+    multirate_subcycling: bool = True
+    X_min: float = 1.0e-10  # пол положительности
+
+    # ----- FIX-24: интерпретация SDE -----
+    interpretation: str = "Ito"  # "Ito" | "Stratonovich"
+
+    # ----- FIX-20: ECM детерминистично (без шума) -----
+    ecm_deterministic: bool = True
 
     def validate(self) -> bool:
         """Валидация физической осмысленности всех параметров.
@@ -321,8 +456,14 @@ class ParameterSet:
 
         return True
 
-    def to_dict(self) -> dict[str, float | int]:
+    def to_dict(self) -> dict[str, float | int | bool | str]:
         """Сериализация всех параметров в словарь.
+
+        v2.0: возвращает смешанные типы — float/int для численных параметров,
+        bool для флагов (multirate_subcycling, ecm_deterministic), str для
+        категориальных (interpretation). Для каллеров, требующих только
+        числовые значения (Bayesian inference, sensitivity bounds, прайор-построение),
+        используйте `to_numeric_dict()`.
 
         Returns:
             Словарь {имя_параметра: значение} для всех полей
@@ -332,11 +473,35 @@ class ParameterSet:
         """
         return {f.name: getattr(self, f.name) for f in dataclasses.fields(self)}
 
+    def to_numeric_dict(self) -> dict[str, float | int]:
+        """Сериализация только численных параметров (float/int).
+
+        v2.0: специализированная версия `to_dict`, отфильтровывающая bool- и
+        str-поля (multirate_subcycling, ecm_deterministic, interpretation).
+        Удобно для Bayesian priors, sensitivity analysis, parameter estimation —
+        там, где обработка нечисловых значений недопустима.
+
+        Returns:
+            Словарь {имя_параметра: значение} только для float/int полей.
+            bool явно исключён, хотя `isinstance(True, int)` истинно.
+        """
+        result: dict[str, float | int] = {}
+        for f in dataclasses.fields(self):
+            value = getattr(self, f.name)
+            # bool — подкласс int в Python; исключаем явно.
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, (int, float)):
+                result[f.name] = value
+        return result
+
     @classmethod
-    def from_dict(cls, data: dict[str, float | int]) -> ParameterSet:
+    def from_dict(cls, data: Mapping[str, float | int | bool | str]) -> ParameterSet:
         """Создание ParameterSet из словаря.
 
         Игнорирует неизвестные ключи, использует defaults для отсутствующих.
+        Поля типа `float`/`int` принимают только числовые значения; для полей
+        `bool` принимаются bool/числовое 0|1; для полей `str` принимается str.
 
         Args:
             data: Словарь с параметрами
@@ -345,20 +510,93 @@ class ParameterSet:
             Новый ParameterSet
 
         Raises:
-            TypeError: Если значения имеют некорректный тип
+            TypeError: Если значение несовместимо с типом поля (например, строка
+                     передана в `float`-поле).
 
         Подробное описание:
             Description/Phase2/description_parameters.md#ParameterSet.from_dict
         """
-        valid_fields = {f.name for f in dataclasses.fields(cls)}
-        filtered = {}
+        fields_by_name = {f.name: f for f in dataclasses.fields(cls)}
+        filtered: dict[str, Any] = {}
         for k, v in data.items():
-            if k not in valid_fields:
+            if k not in fields_by_name:
                 continue
-            if not isinstance(v, (int, float)):
-                raise TypeError(f"Значение для {k} должно быть числом, получено {type(v).__name__}")
-            filtered[k] = v
+            field_type = fields_by_name[k].type
+            type_name = (
+                field_type
+                if isinstance(field_type, str)
+                else getattr(field_type, "__name__", str(field_type))
+            )
+            if type_name in ("float", "int"):
+                # bool isinstance int — отвергаем; str — отвергаем
+                if isinstance(v, bool) or not isinstance(v, (int, float)):
+                    raise TypeError(
+                        f"Значение для {k} должно быть числом, получено {type(v).__name__}"
+                    )
+                filtered[k] = v
+            elif type_name == "bool":
+                if not isinstance(v, (bool, int, float)):
+                    raise TypeError(
+                        f"Значение для {k} должно быть bool, получено {type(v).__name__}"
+                    )
+                filtered[k] = bool(v)
+            elif type_name == "str":
+                if not isinstance(v, str):
+                    raise TypeError(
+                        f"Значение для {k} должно быть str, получено {type(v).__name__}"
+                    )
+                filtered[k] = v
+            else:
+                # неизвестный тип — пропускаем без приведения
+                filtered[k] = v
         return cls(**filtered)
+
+    @classmethod
+    def from_yaml(cls, path: Path | str = "params.yaml") -> ParameterSet:
+        """Создать `ParameterSet`, загрузив значения из params.yaml (v2.0 источник правды).
+
+        Подгружает `params.yaml` через `params_loader.load_params_yaml`, расплющивает
+        вложенные секции, и для каждого поля dataclass'а подставляет соответствующее
+        значение (с приведением к типу: float/bool/str). Поля, отсутствующие в YAML,
+        остаются с захардкоженным defaults — это гарантирует обратную совместимость
+        в Phase 0 (до применения FIX'ов на этих параметрах).
+
+        Если файл не найден — возвращается экземпляр со всеми текущими defaults
+        и пишется warning (поведение fallback).
+
+        Args:
+            path: путь к params.yaml. По умолчанию — `./params.yaml`.
+
+        Returns:
+            Новый ParameterSet с YAML-значениями там, где YAML их предоставляет.
+
+        Note:
+            В Phase 0 этот метод существует, но `ParameterSet()` по-прежнему
+            возвращает старые literature-defaults. Активный переход на YAML
+            будет в Phase 1 (FIX-01 units).
+        """
+        # Локальный import, чтобы избежать циклов и сделать pyyaml soft-dep.
+        from src.core.params_loader import flatten_for_parameter_set, load_params_yaml
+
+        try:
+            raw = load_params_yaml(path)
+        except FileNotFoundError:
+            import warnings
+
+            warnings.warn(
+                f"params.yaml не найден по пути {path!r}; возвращаются hardcoded defaults",
+                stacklevel=2,
+            )
+            return cls()
+
+        flat = flatten_for_parameter_set(raw)
+        valid_fields: dict[str, Any] = {f.name: f.type for f in dataclasses.fields(cls)}
+        kwargs: dict[str, Any] = {}
+        for name, raw_value in flat.items():
+            if name not in valid_fields:
+                continue
+            kwargs[name] = _coerce_field_value(raw_value, valid_fields[name])
+        return cls(**kwargs)
 
     @classmethod
     def get_literature_defaults(cls) -> ParameterSet:

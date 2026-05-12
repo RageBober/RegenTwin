@@ -521,8 +521,8 @@ class TestMilsteinComputeDiffusionDerivative:
     """Тесты численной производной диффузии."""
 
     def test_returns_correct_shape(self):
-        """σ' имеет shape (20,) и конечные значения."""
-        from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
+        """σ' имеет shape (N_VARIABLES,) и конечные значения (v2.0: 22)."""
+        from src.core.extended_sde import N_VARIABLES, ExtendedSDEModel, ExtendedSDEState
         from src.core.parameters import ParameterSet
 
         params = ParameterSet()
@@ -532,11 +532,15 @@ class TestMilsteinComputeDiffusionDerivative:
 
         sigma_prime = solver._compute_diffusion_derivative(model, state)
 
-        assert sigma_prime.shape == (20,)
+        assert sigma_prime.shape == (N_VARIABLES,)
         assert np.all(np.isfinite(sigma_prime))
 
     def test_gbm_diffusion_derivative(self):
-        """Для σ(X) = σ_i·X_i производная σ'_i ≈ σ_i."""
+        """Для σ(X) = σ_i·X_i производная σ'_i ≈ σ_i.
+
+        v2.0: цитокины — индексы 8..15 (включая SDF-1). ECM/aux — 16..21
+        (C_TIMP, collagen, MMP, fibrin, D, O2) — sigma=0 → σ'=0.
+        """
         from src.core.extended_sde import ExtendedSDEModel, ExtendedSDEState
         from src.core.parameters import ParameterSet
 
@@ -547,9 +551,8 @@ class TestMilsteinComputeDiffusionDerivative:
 
         sigma_prime = solver._compute_diffusion_derivative(model, state)
 
-        # Для первых 15 переменных (с ненулевым sigma): σ'_i ≈ σ_i
-        # Для ECM/auxiliary (индексы 15-19): sigma=0, σ'=0
-        for i in range(15, 20):
+        # ECM/auxiliary (индексы 16-21 в v2.0): sigma=0, σ'=0
+        for i in range(16, 22):
             assert sigma_prime[i] == pytest.approx(0.0, abs=1e-4)
 
 
@@ -587,21 +590,21 @@ class TestIMEXSplitterInit:
     """Тесты инициализации IMEXSplitter."""
 
     def test_default_fast_indices(self):
-        """fast_indices по умолчанию = [8..14] (цитокины)."""
+        """fast_indices по умолчанию = [8..15] (8 цитокинов с SDF-1 в v2.0)."""
         splitter = IMEXSplitter()
 
-        assert splitter._fast_indices == list(range(8, 15))
+        assert splitter._fast_indices == list(range(8, 16))
 
     def test_default_slow_indices(self):
-        """slow_indices по умолчанию = [0..7] + [15..19]."""
+        """slow_indices по умолчанию = [0..7] + [16..21] (v2.0, 22 vars total)."""
         splitter = IMEXSplitter()
 
-        assert splitter._slow_indices == list(range(0, 8)) + list(range(15, 20))
+        assert splitter._slow_indices == list(range(0, 8)) + list(range(16, 22))
 
     def test_custom_indices(self):
         """Пользовательские fast/slow индексы сохраняются."""
         fast = [0, 1, 2]
-        slow = list(range(3, 20))
+        slow = list(range(3, 22))
         splitter = IMEXSplitter(fast_indices=fast, slow_indices=slow)
 
         assert splitter._fast_indices == fast
@@ -611,18 +614,20 @@ class TestIMEXSplitterInit:
 class TestIMEXSplitterConstants:
     """Тесты модульных констант FAST_INDICES / SLOW_INDICES."""
 
-    def test_fast_plus_slow_cover_all_20(self):
-        """fast_indices union slow_indices == {0..19}."""
-        assert set(FAST_INDICES) | set(SLOW_INDICES) == set(range(20))
+    def test_fast_plus_slow_cover_all_vars(self):
+        """fast_indices union slow_indices == {0..N_VARIABLES-1} (v2.0: 22)."""
+        from src.core.extended_sde import N_VARIABLES
+
+        assert set(FAST_INDICES) | set(SLOW_INDICES) == set(range(N_VARIABLES))
 
     def test_fast_slow_no_overlap(self):
         """fast_indices intersect slow_indices == empty."""
         assert set(FAST_INDICES) & set(SLOW_INDICES) == set()
 
-    def test_fast_count_7_slow_count_13(self):
-        """7 быстрых (цитокины) + 13 медленных."""
-        assert len(FAST_INDICES) == 7
-        assert len(SLOW_INDICES) == 13
+    def test_fast_count_8_slow_count_14(self):
+        """8 быстрых (цитокины с SDF-1) + 14 медленных (клетки+ECM+aux), v2.0."""
+        assert len(FAST_INDICES) == 8
+        assert len(SLOW_INDICES) == 14
 
 
 class TestIMEXSplitterSplitMerge:
@@ -630,8 +635,10 @@ class TestIMEXSplitterSplitMerge:
 
     def test_split_merge_roundtrip(self):
         """merge(split(state)) == state."""
+        from src.core.extended_sde import N_VARIABLES
+
         splitter = IMEXSplitter()
-        state = np.arange(20, dtype=float)
+        state = np.arange(N_VARIABLES, dtype=float)
 
         fast, slow = splitter._split_state(state)
         merged = splitter._merge_state(fast, slow)
@@ -639,22 +646,26 @@ class TestIMEXSplitterSplitMerge:
         np.testing.assert_array_equal(merged, state)
 
     def test_split_fast_shape(self):
-        """Split возвращает fast с shape (7,)."""
+        """Split возвращает fast с shape (len(FAST_INDICES),) — 8 в v2.0."""
+        from src.core.extended_sde import N_VARIABLES
+
         splitter = IMEXSplitter()
-        state = np.ones(20)
+        state = np.ones(N_VARIABLES)
 
         fast, _ = splitter._split_state(state)
 
-        assert fast.shape == (7,)
+        assert fast.shape == (len(FAST_INDICES),)
 
     def test_split_slow_shape(self):
-        """Split возвращает slow с shape (13,)."""
+        """Split возвращает slow с shape (len(SLOW_INDICES),) — 14 в v2.0."""
+        from src.core.extended_sde import N_VARIABLES
+
         splitter = IMEXSplitter()
-        state = np.ones(20)
+        state = np.ones(N_VARIABLES)
 
         _, slow = splitter._split_state(state)
 
-        assert slow.shape == (13,)
+        assert slow.shape == (len(SLOW_INDICES),)
 
 
 class TestIMEXSplitterStep:
@@ -662,12 +673,14 @@ class TestIMEXSplitterStep:
 
     def test_nonstiff_system_approx_em(self):
         """Нестиффная система (малый drift) -> результат примерно как EM."""
+        from src.core.extended_sde import N_VARIABLES
+
         splitter = IMEXSplitter()
-        state = np.full(20, 10.0)
-        drift = np.full(20, 0.01)  # малый drift
-        diffusion = np.full(20, 0.1)
+        state = np.full(N_VARIABLES, 10.0)
+        drift = np.full(N_VARIABLES, 0.01)  # малый drift
+        diffusion = np.full(N_VARIABLES, 0.1)
         dt = 0.01
-        dW = np.full(20, 0.1)
+        dW = np.full(N_VARIABLES, 0.1)
 
         result = splitter.step(state, drift, diffusion, dt=dt, dW=dW)
 
@@ -677,13 +690,18 @@ class TestIMEXSplitterStep:
 
     def test_only_fast_nonzero(self):
         """Состояние только в цитокинах -> только implicit шаг активен."""
+        from src.core.extended_sde import N_VARIABLES
+
         splitter = IMEXSplitter()
-        state = np.zeros(20)
-        state[8:15] = 5.0  # только цитокины
-        drift = np.zeros(20)
-        drift[8:15] = -0.5  # деградация цитокинов
-        diffusion = np.zeros(20)
-        dW = np.zeros(20)
+        state = np.zeros(N_VARIABLES)
+        # v2.0: цитокины — индексы 8..15 (включая SDF-1)
+        for i in FAST_INDICES:
+            state[i] = 5.0
+        drift = np.zeros(N_VARIABLES)
+        for i in FAST_INDICES:
+            drift[i] = -0.5  # деградация цитокинов
+        diffusion = np.zeros(N_VARIABLES)
+        dW = np.zeros(N_VARIABLES)
 
         result = splitter.step(state, drift, diffusion, dt=0.1, dW=dW)
 
@@ -693,13 +711,15 @@ class TestIMEXSplitterStep:
 
     def test_only_slow_nonzero(self):
         """Состояние только в клетках -> только explicit шаг активен."""
+        from src.core.extended_sde import N_VARIABLES
+
         splitter = IMEXSplitter()
-        state = np.zeros(20)
+        state = np.zeros(N_VARIABLES)
         state[0:8] = 100.0  # только клетки
-        drift = np.zeros(20)
+        drift = np.zeros(N_VARIABLES)
         drift[0:8] = 1.0
-        diffusion = np.zeros(20)
-        dW = np.zeros(20)
+        diffusion = np.zeros(N_VARIABLES)
+        dW = np.zeros(N_VARIABLES)
 
         result = splitter.step(state, drift, diffusion, dt=0.1, dW=dW)
 
@@ -720,8 +740,10 @@ class TestIMEXImplicitStep:
         params.dt = 0.01
         model = ExtendedSDEModel(params=params, rng_seed=0)
         splitter = IMEXSplitter()
-        state_fast = np.full(7, 1.0)
-        state_slow = np.zeros(13)
+        n_fast = len(FAST_INDICES)
+        n_slow = len(SLOW_INDICES)
+        state_fast = np.full(n_fast, 1.0)
+        state_slow = np.zeros(n_slow)
 
         result = splitter._implicit_step(state_fast, state_slow, dt=0.01, model=model, t=0.0)
 
@@ -734,10 +756,11 @@ class TestIMEXExplicitStep:
     def test_explicit_step_euler_maruyama(self):
         """_explicit_step() вычисляет state + drift*dt + diffusion*dW."""
         splitter = IMEXSplitter()
-        state_slow = np.full(13, 100.0)
-        drift_slow = np.full(13, 1.0)
-        diffusion_slow = np.full(13, 0.5)
-        dW_slow = np.full(13, 0.3)
+        n_slow = len(SLOW_INDICES)
+        state_slow = np.full(n_slow, 100.0)
+        drift_slow = np.full(n_slow, 1.0)
+        diffusion_slow = np.full(n_slow, 0.5)
+        dW_slow = np.full(n_slow, 0.3)
 
         result = splitter._explicit_step(
             state_slow,
@@ -805,8 +828,8 @@ class TestIMEXBackwardEuler:
         model = ExtendedSDEModel(params=params, rng_seed=0)
 
         imex = IMEXSplitter()
-        state_fast = np.ones(7)  # цитокины (индексы 8-14)
-        state_slow = np.zeros(13)  # клетки + ECM → нет продукции, чистый decay
+        state_fast = np.ones(len(FAST_INDICES))  # цитокины (v2.0: 8 элементов 8-15)
+        state_slow = np.zeros(len(SLOW_INDICES))  # клетки + ECM → нет продукции
 
         result_be = imex._implicit_step(state_fast, state_slow, params.dt, model, t=0.0)
 
@@ -845,17 +868,19 @@ class TestIMEXBackwardEuler:
             C_TGFb=1.0,
             C_MCP1=4.0,
             C_IL8=3.0,
+            C_SDF1=2.0,  # v2.0: 8-й цитокин
         )
         imex = IMEXSplitter()
         traj_be = imex.simulate(model_be, initial_state, params)
-        final_be = traj_be.states[-1].to_array()[8:15]  # только цитокины
+        # только цитокины (v2.0: индексы 8..15 включают SDF-1)
+        final_be = traj_be.states[-1].to_array()[FAST_INDICES]
 
         # Forward Euler через _run_simulation_loop (вызывает step())
         from src.core.sde_numerics import _run_simulation_loop
 
         model_fe = ExtendedSDEModel(params=params, rng_seed=7)
         traj_fe = _run_simulation_loop(imex, model_fe, initial_state, params)
-        final_fe = traj_fe.states[-1].to_array()[8:15]
+        final_fe = traj_fe.states[-1].to_array()[FAST_INDICES]
 
         # Backward Euler ≠ Forward Euler для цитокинов при γdt = 0.5
         assert not np.allclose(final_be, final_fe, rtol=1e-6), (
@@ -1189,7 +1214,9 @@ class TestSRKSimulateMilsteinCorrection:
         k2 = model_heun._compute_drift(state_hat)
         l2 = model_heun._compute_diffusion(state_hat)
 
-        dW = model_heun._rng.standard_normal(20) * sqrt_dt
+        from src.core.extended_sde import N_VARIABLES
+
+        dW = model_heun._rng.standard_normal(N_VARIABLES) * sqrt_dt
         x_heun = x + 0.5 * (k1 + k2) * params.dt + 0.5 * (l1 + l2) * dW
         x_heun = np.maximum(x_heun, 0.0)  # boundary conditions
 
@@ -1225,7 +1252,9 @@ class TestSRKSimulateMilsteinCorrection:
         k2 = model2._compute_drift(state_hat)
         l2 = model2._compute_diffusion(state_hat)
 
-        dW = model2._rng.standard_normal(20) * sqrt_dt
+        from src.core.extended_sde import N_VARIABLES
+
+        dW = model2._rng.standard_normal(N_VARIABLES) * sqrt_dt
         correction = 0.5 * (l2 - l1) * (dW**2 - params.dt) / sqrt_dt
         x_expected = x + 0.5 * (k1 + k2) * params.dt + 0.5 * (l1 + l2) * dW + correction
         x_expected = np.maximum(x_expected, 0.0)

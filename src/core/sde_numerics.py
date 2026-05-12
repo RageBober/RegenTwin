@@ -439,11 +439,11 @@ class MilsteinSolver:
 # ---------------------------------------------------------------------------
 
 
-# Индексы быстрых (стиффных) переменных: цитокины
-FAST_INDICES: list[int] = list(range(8, 15))  # C_TNF..C_IL8 (StateIndex 8..14)
+# Индексы быстрых (стиффных) переменных: 8 цитокинов (включая SDF-1 после FIX-06 v2.0)
+FAST_INDICES: list[int] = list(range(8, 16))  # C_TNF..C_SDF1 (StateIndex 8..15)
 
-# Индексы медленных переменных: клетки + ECM + вспомогательные
-SLOW_INDICES: list[int] = list(range(0, 8)) + list(range(15, 20))
+# Индексы медленных переменных: клетки + C_TIMP + ECM + aux (v2.0, 22 vars total)
+SLOW_INDICES: list[int] = list(range(0, 8)) + list(range(16, 22))
 
 
 class IMEXSplitter:
